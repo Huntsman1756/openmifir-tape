@@ -20,6 +20,10 @@ from ..sources.base import DiscoveredObject, HttpGetter, SourceDiscoveryError, S
 _DATA_FILE_RE = re.compile(r"\.(json|zip|csv|txt)(\?|$)", re.IGNORECASE)
 _POSTTRADE_HINT_RE = re.compile(r"post[-_ ]?trade|transparenc|mifir", re.IGNORECASE)
 _URL_RE = re.compile(r"""(?:href|src)=["']([^"']+)["']""")
+# AEM SPA components advertise their own content path; probing it as
+# <path>.model.json is a runtime discovery hook (no fabricated URL - the path
+# comes from the page itself).
+_COMPONENT_PATH_RE = re.compile(r"""data-six-component-path=["']([^"']+)["']""")
 
 SOURCE_ID = "bme_apa"
 
@@ -64,6 +68,28 @@ def discover(conf: dict[str, Any], http_get: HttpGetter) -> list[DiscoveredObjec
         if is_file and (is_hint or url.endswith((".json", ".zip", ".csv"))):
             key = url.split("/")[-1].split("?")[0]
             candidates.append((url, key))
+
+    # Runtime discovery of client-rendered listings: probe each advertised AEM
+    # component path as a model. Skipped on failure (fail closed, never guessed).
+    for comp_path in _COMPONENT_PATH_RE.findall(html):
+        for sel in (".model.json", ".json"):
+            probe_url = comp_path + sel
+            try:
+                body = http_get(probe_url).decode("utf-8", "replace")
+            except Exception:  # noqa: BLE001 - optional probe, fail closed
+                continue
+            for raw in _URL_RE.findall(body):
+                url = _absolute(raw, comp_path)
+                if not _DATA_FILE_RE.search(url):
+                    continue
+                key = url.split("/")[-1].split("?")[0]
+                if key:
+                    candidates.append((url, key))
+            for quoted in re.findall(r'"([^"]+\.(?:json|zip|csv|txt))"', body, re.IGNORECASE):
+                url = _absolute(quoted, comp_path)
+                key = url.split("/")[-1].split("?")[0]
+                if key:
+                    candidates.append((url, key))
 
     seen: set[str] = set()
     objects: list[DiscoveredObject] = []

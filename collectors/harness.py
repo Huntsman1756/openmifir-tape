@@ -144,9 +144,9 @@ def write_evidence(evidence_dir: Path, source_id: str, result: SourceRunResult, 
     log_path = evidence_dir / f"{run_id}__{source_id}__run.log"
     import yaml
 
-    with open(manifest_path, "w", encoding="utf-8") as fh:
+    with open(manifest_path, "w", encoding="utf-8", newline="\n") as fh:
         yaml.safe_dump(manifest, fh, sort_keys=False)
-    with open(log_path, "w", encoding="utf-8") as fh:
+    with open(log_path, "w", encoding="utf-8", newline="\n") as fh:
         for line in result.log:
             fh.write(f"{line}\n")
     return manifest_path

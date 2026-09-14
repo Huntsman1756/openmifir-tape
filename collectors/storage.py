@@ -149,7 +149,7 @@ class RawStore:
             meta.update(extra)
 
         if not meta_path.exists():
-            with open(meta_path, "w", encoding="utf-8") as fh:
+            with open(meta_path, "w", encoding="utf-8", newline="\n") as fh:
                 yaml.safe_dump(meta, fh, sort_keys=False)
 
         record = CaptureRecord(

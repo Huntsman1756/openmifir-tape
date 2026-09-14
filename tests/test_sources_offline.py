@@ -82,3 +82,16 @@ def test_bme_discover_no_file_raises():
 def test_bme_discover_no_entrypoint_raises():
     with pytest.raises(SourceDiscoveryError):
         bme_apa.discover({"source_id": "bme_apa", "entrypoint": {"base_doc": ""}}, lambda u: b"")
+
+
+def test_bme_discover_probes_component_path():
+    comp = "https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data/_jcr_content/root/containers/container/grid/container0/assetstaxonomyfilter"
+    page = f'<html><div data-six-component-path="{comp}"></div></html>'.encode()
+    model = b'{"items":[{"url":"/content/dam/bme/posttrade/2026-09-14_equity.json"}]}'
+    getter = _fake_getter({
+        BME_DOC: page,
+        comp + ".model.json": model,
+    })
+    objects = bme_apa.discover(BME_CONF, getter)
+    assert objects
+    assert objects[0].object_key == "2026-09-14_equity.json"

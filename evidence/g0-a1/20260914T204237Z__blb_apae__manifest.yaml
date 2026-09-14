@@ -1,0 +1,28 @@
+run_id: 20260914T204237Z
+source_id: blb_apae
+attempted: true
+status: SUCCEEDED
+observed_at: '2026-09-14T20:42:37.046488+00:00'
+object_count: 1
+results:
+  source_id: blb_apae
+  attempted: true
+  status: SUCCEEDED
+  observed_at: '2026-09-14T20:42:37.046488+00:00'
+  object_count: 1
+  created_count: 1
+  already_present_count: 0
+  objects:
+  - source_id: blb_apae
+    object_key: BAPA-POST2-20260914-20:28:55.836-02.csv
+    filename: BAPA-POST2-20260914-20_28_55.836-02.csv
+    raw_sha256: c0ca67cf197757fa94fdfe3ca8e96b803363f4963fd3967ac72aacd7bf43324c
+    observation_utc: '2026-09-14T20:42:37.046488+00:00'
+    publication_timestamp: 20260914-20:28:55.836-02
+    provenance_url: https://www.bloombergapa.com/download?key=BAPA-POST2-20260914-20:28:55.836-02.csv
+    size_bytes: 1681
+    status: CREATED
+  errors: []
+  log:
+  - 'blb_apae: discovered 1, selecting 1'
+  - 'blb_apae: CREATED BAPA-POST2-20260914-20:28:55.836-02.csv sha256=c0ca67cf197757fa94fdfe3ca8e96b803363f4963fd3967ac72aacd7bf43324c'

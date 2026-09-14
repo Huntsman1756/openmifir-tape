@@ -1,0 +1,67 @@
+# evidence/g0-a1/G0-A1_summary_manifest.yaml
+# Metadata-only evidence for the G0-A1 first acquisition run.
+# NEVER contains provider payload bytes. Reviewed: 2026-09-14.
+
+run:
+  id: G0-A1-first-acquisition
+  date: "2026-09-14"
+  profile: es-corporate-bonds
+  corpus: fixtures/universe/universe_manifest.yaml
+  corpus_sample_sha256: ad666760bc525e9f48b203ab6f5166645458756069d000866879c3e810040d04
+  sources_attempted: 2
+  sources_succeeded: 1
+
+results:
+  bme_apa:
+    attempted: true
+    status: NOT_RUN
+    reason: "DISCOVERY_UNRESOLVED"
+    object_count: 0
+    detail: >-
+      Canonical page verified (https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html)
+      and confirms free JSON post-trade data. However the per-file machine feed
+      URLs are client-rendered (AEM/JS SPA): not present in static HTML, and the
+      advertised data-six-component-path model probes returned 404
+      (assetstaxonomyfilter.model.json / .json). entrypoint.status=PARTIAL.
+      Adapter FAILS CLOSED and did not guess a URL. Operator must set
+      config/sources/bme_apa.yaml entrypoint.base_url (or provide a resolvable
+      listing) before BME can be acquired.
+    evidence_file: evidence/g0-a1/20260914T204237Z__bme_apa__manifest.yaml
+
+  blb_apae:
+    attempted: true
+    status: SUCCEEDED
+    object_count: 1
+    detail: >-
+      Bloomberg EU APA public delayed post-trade CSV acquired unauthenticated
+      (https://www.bloombergapa.com/). Raw object stored immutably; raw_sha256
+      recorded; observation timestamp recorded.
+    raw_sha256: c0ca67cf197757fa94fdfe3ca8e96b803363f4963fd3967ac72aacd7bf43324c
+    object_key: BAPA-POST2-20260914-20:28:55.836-02.csv
+    raw_object: data/raw/blb_apae/2026-09-14/BAPA-POST2-20260914-20_28_55.836-02.csv
+    evidence_file: evidence/g0-a1/20260914T204237Z__blb_apae__manifest.yaml
+
+findings:
+  - id: F-001
+    title: BME machine feed URL not resolvable (client-rendered listing)
+    severity: BLOCKER
+    detail: >-
+      BME APA post-trade file links are rendered by a client-side AEM/JS
+      component and are not in static HTML; the advertised content component
+      endpoint returns 404. G0-A1 cannot acquire BME without an operator-supplied
+      entrypoint.base_url or a resolvable machine listing. No URL was guessed.
+  - id: F-002
+    title: Bloomberg regenerates content for a stable file name
+    severity: G0-A2_FINDING
+    detail: >-
+      Two consecutive runs discovered the same object_key
+      (BAPA-POST2-<interval>.csv) but observed different byte content. The
+      write-once store preserved the original bytes (zero state change on disk)
+      and recorded a WriteOnceConflict. This indicates capture identity may need
+      to include the content hash, or the source object is live-updating at a
+      stable name. Relevant to SECOND_RUN_IDEMPOTENT (G0-A2).
+
+hygiene:
+  provider_payloads_tracked: false
+  raw_directory_tracked: false
+  secrets_detected: false
