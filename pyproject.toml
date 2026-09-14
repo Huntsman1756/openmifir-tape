@@ -1,0 +1,9 @@
+[project]
+name = "openmifir-tape"
+version = "0.0.1"
+description = "OpenMiFIR Tape - reproducible, auditable post-trade transparency lab for MiFIR bond data"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
