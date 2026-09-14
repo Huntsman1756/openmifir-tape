@@ -1,0 +1,57 @@
+# fixtures/universe/universe_manifest.yaml
+# Frozen universe snapshot for profile es-corporate-bonds (G0-A1 observation seed).
+# Referenced by docs/gates/G0.md §3 and g0-issue-series.md (G0-A1 / G0-B1).
+#
+# This is the G0-A1 FROZEN 15+5 SAMPLE. The full es_legal_issuer_v1
+# disposition table (INCLUDE/EXCLUDE/QUARANTINE/CONFLICT) is built in G0-B1 from
+# FIRDS (RTS 23 field 5) + GLEIF LegalJurisdiction.country = ES. This file only
+# freezes the observation seed; it does NOT perform universe construction.
+
+universe_id: es_legal_issuer_v1
+profile: es-corporate-bonds
+instrument_mifir_id: CRPB
+issuer_lei_source: FIRDS_RTS23_FIELD5
+legal_jurisdiction_source: GLEIF_LegalJurisdiction.country
+legal_jurisdiction_filter: ES
+isin_prefix_heuristics: PROHIBITED
+selection_seed: "es-main-corp-bonds-2026-09-14"
+snapshot_date: "2026-09-14"
+universe_snapshot_sha256: "UNSET"    # computed at G0-B1 freeze (full disposition)
+sample_snapshot_sha256: "ad666760bc525e9f48b203ab6f5166645458756069d000866879c3e810040d04"  # SHA-256 over the 20 selected_isins (active then quiet), LF-joined
+
+corpus:
+  sample_total: 20
+  active_count: 15
+  quiet_count: 5
+  selected_isins:
+    status: FROZEN_SAMPLE_2026_09_14
+    # All ISINs are real and check-digit valid (ISO 6166 / Luhn mod-10).
+    # Issuer jurisdiction (ES) is asserted from incorporation; each issuer LEI
+    # MUST be confirmed via GLEIF in G0-B1. This sample is an observation seed,
+    # NOT a claim that each ISIN trades or that coverage is complete.
+    active:
+      - {isin: "XS2984223102", issuer: "Telefónica Emisiones S.A.U.", source: "https://www.telefonica.com/en/shareholders-investors/rating/outstanding-debentures-bonds/"}
+      - {isin: "XS2197675288", issuer: "Telefónica Emisiones S.A.U.", source: "https://www.telefonica.com/en/shareholders-investors/rating/outstanding-debentures-bonds/"}
+      - {isin: "XS3388349188", issuer: "Telefónica Emisiones S.A.U.", source: "https://www.telefonica.com/en/shareholders-investors/rating/outstanding-debentures-bonds/"}
+      - {isin: "XS3103696087", issuer: "Telefónica Emisiones S.A.U.", source: "https://www.telefonica.com/en/shareholders-investors/rating/outstanding-debentures-bonds/"}
+      - {isin: "XS2753310825", issuer: "Telefónica Emisiones S.A.U.", source: "https://www.telefonica.com/en/shareholders-investors/rating/outstanding-debentures-bonds/"}
+      - {isin: "XS3285006634", issuer: "Telefónica Emisiones S.A.U. (green)", source: "https://www.telefonica.com/en/shareholders-investors/rating/outstanding-debentures-bonds/"}
+      - {isin: "XS2021212332", issuer: "Cellnex Telecom, S.A.", source: "https://www.sherpabonds.com/issuers/cellnex-telecom"}
+      - {isin: "XS2193658619", issuer: "Cellnex Telecom, S.A.", source: "https://www.sherpabonds.com/issuers/cellnex-telecom"}
+      - {isin: "XS2597741102", issuer: "Cellnex Telecom, S.A.", source: "https://www.sherpabonds.com/issuers/cellnex-telecom"}
+      - {isin: "XS2257580857", issuer: "Cellnex Telecom, S.A.", source: "https://www.sherpabonds.com/issuers/cellnex-telecom"}
+      - {isin: "XS2558916693", issuer: "Iberdrola Finanzas, S.A.U.", source: "https://www.sherpabonds.com/issuers/iberdrola-finanzas"}
+      - {isin: "XS3034368806", issuer: "Iberdrola Finanzas, S.A.U.", source: "https://www.sherpabonds.com/issuers/iberdrola-finanzas"}
+      - {isin: "XS3418565829", issuer: "Iberdrola Finanzas, S.A.U.", source: "https://sqxbonds.com/bonds/XS3418565829"}
+      - {isin: "XS1695276367", issuer: "Naturgy Finance Iberia, S.A.", source: "https://www.sherpabonds.com/issuers/naturgy-finance-iberia"}
+      - {isin: "XS2908178119", issuer: "Naturgy Finance Iberia, S.A.", source: "https://www.sherpabonds.com/issuers/naturgy-finance-iberia"}
+    quiet:
+      - {isin: "XS2393001891", issuer: "Grifols, S.A.", source: "https://sqxbonds.com/bonds/XS2393001891"}
+      - {isin: "XS2077647365", issuer: "Grifols, S.A.", source: "https://www.sherpabonds.com/issuers/grifols"}
+      - {isin: "XS2961445090", issuer: "Grifols, S.A.", source: "https://www.sherpabonds.com/issuers/grifols"}
+      - {isin: "ES0378165015", issuer: "Técnicas Reunidas, S.A.", source: "https://cbonds.com/bonds/1795837/"}
+      - {isin: "XS3071337847", issuer: "Sacyr, S.A.", source: "https://cbonds.com/bonds/1855391/"}
+
+disposition_table:
+  status: PENDING_G0_B1
+  fixtures: []

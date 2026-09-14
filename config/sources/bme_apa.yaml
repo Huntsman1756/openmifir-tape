@@ -1,0 +1,66 @@
+# config/sources/bme_apa.yaml
+# Canonical source interface descriptor for the BME APA post-trade source.
+# Referenced by docs/gates/G0.md §1 (source_id = bme_apa). Facts, not semantics.
+# Reviewed: 2026-09-14. Verified against the live BME public page.
+
+source_id: bme_apa
+display: BME APA
+kind: post-trade transparency
+publication_format: json
+mic: BMEA
+
+entrypoint:
+  status: PARTIAL
+  # The BME post-trade data is confirmed to be freely accessible JSON files.
+  # The canonical product page (provider-owned) is:
+  base_doc: https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html
+  # VERIFIED FACT: the page states data is delivered as individual JSON files,
+  # freely accessible and free of charge, mechanically readable.
+  # OBSERVED LIMITATION: the actual per-file download links are rendered by a
+  # client-side AEM/JS component and are not present in the static HTML. The
+  # exact machine feed base URL MUST be resolved by the collector at runtime from
+  # the page data component, or supplied by the operator as `base_url`. Do NOT
+  # invent a URL here. This is why status = PARTIAL.
+  base_url: ""            # MUST be filled by operator or resolved at runtime
+  retrieval_note: "Daily post-trade JSON files; discover the current file URL from the page's data component."
+
+access_mode: PUBLIC_HTTP_GET
+
+publication_timestamp_semantics:
+  # publication_timestamp semantics per source. Set precisely by operator.
+  # Placeholder; do NOT assume until confirmed.
+  status: UNRESOLVED
+  note: "Semantics of publication_timestamp for BME APA JSON must be confirmed against the actual payload before freeze."
+
+retrieval_interval:
+  poll_max_seconds: 3600       # <= 1 hour
+  overlap_min_seconds: 7200    # >= 2 hours
+  rescan:
+    daily_window_hours: 24     # previous 24h, keyed on publication_timestamp
+    rolling_days: 7
+
+retry_policy:
+  status: PARTIAL
+  max_attempts: 3
+  backoff_seconds: [10, 60, 300]
+  note: "Fail closed on descriptor resolution; never rewrite history on retry. Confirm exact policy with operator."
+
+capture_identity_fields:
+  # The source-defined fields that make a publication unique for this source.
+  status: UNRESOLVED
+  fields: []
+  note: "Must be confirmed against the BME JSON schema. No heuristics. Dedup is G0-D scope."
+
+terms_of_use:
+  status: VERIFIED
+  summary: >-
+    BME states the data is owned by the Company and may only be downloaded,
+    copied and printed for personal use; the information is intended
+    exclusively for internal use. Any commercial use and/or non-free
+    redistribution to third parties requires prior express authorisation of
+    BME Market Data (marketdata@grupobme.es).
+  artifact_classes:            # preliminary mapping; finalized in G0-L1
+    local_archival: "UNRESOLVED"
+    free_delayed_redistribution: "UNRESOLVED"
+    historical_archive_republication: "UNRESOLVED"
+  source_url: https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html

@@ -1,0 +1,37 @@
+# Provider data lives only in the local raw data directory.
+# The public repository must NEVER contain provider payloads.
+data/
+
+# Secrets, credentials, session material
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.crt
+*.pem.key
+secrets/
+credentials/
+*.token
+*.cookie
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local scratch outside the workspace
+local-scratch/
