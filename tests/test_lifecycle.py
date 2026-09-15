@@ -17,7 +17,7 @@ def _bme(**overrides):
     rec = {
         "instrument_identification_code": "ES0000000001",
         "venue_of_execution": "XOFF",
-        "mifir_identifier": "CRPB",
+        "mifir_identifier": "BOND",
         "price_currency": "EUR",
         "price_notation": "PERC",
         "notation_of_the_quantity_in_measurement_unit": "UNIT",
@@ -272,3 +272,38 @@ def test_chain_reconstruction_groups_by_trade():
     ]
     chains = reconstruct_chains(build_ledger(recs))
     assert len(chains) == 2
+
+
+def test_unknown_deferral_code_fails_closed():
+    # A post_trade_deferral value outside the frozen BME table must NOT be
+    # treated as deferral-by-non-emptiness: undetermined -> UNRESOLVED.
+    rec = _norm(_bme(transaction_identification_code="TX-U",
+                     post_trade_deferral="ZZ9", flags=""))
+    entries = build_ledger([rec])
+    assert entries[0].state == "UNRESOLVED"
+    assert "STATE_UNRESOLVED" in entries[0].markers
+
+
+def test_partial_type_mnemonic_in_deferral_field():
+    # Historical BME usage: a Level 4.2 non-full type in post_trade_deferral.
+    rec = _norm(_bme(transaction_identification_code="TX-PL",
+                     post_trade_deferral="LMTF", flags=""))
+    entries = build_ledger([rec])
+    assert entries[0].state == "PARTIALLY_PUBLISHED"
+
+
+def test_full_type_mnemonic_is_deferred_not_partial():
+    # FULF = full details of an earlier limited-details publication: deferred,
+    # and NOT partial even when the quantity block is absent.
+    raw = _bme(transaction_identification_code="TX-F",
+               post_trade_deferral="FULF", flags="")
+    del raw["quantity"], raw["notional_amount"], raw["quantity_in_measurement_unit"]
+    entries = build_ledger([_norm(raw)])
+    assert entries[0].state == "DEFERRED"
+
+
+def test_deferral_reason_boolean_field():
+    # Dedicated RTS 2 deferral-reason booleans (lrgs/ilqd/size) drive deferral.
+    rec = _norm(_bme(transaction_identification_code="TX-LRGS", lrgs="true"))
+    entries = build_ledger([rec])
+    assert entries[0].state == "DEFERRED"
