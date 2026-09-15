@@ -1,11 +1,15 @@
 """BME APA post-trade JSON -> normalized record (G0-C).
 
 Lossless: every raw field is preserved in ``raw_fields``. Source quirks are not
-"corrected". Quantity/notional and timestamps follow the shared guardrails.
+"corrected". BME encodes decimals as ``{"Mantissa":..., "Exponent":...}``; the
+canonical normalized quantity/price/notional fields map these to a decimal string
+(``Mantissa * 10**Exponent``), while the raw dict is preserved verbatim in
+``raw_fields``. Quantity/notional and timestamps follow the shared guardrails.
 """
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from ..model import NormalizedRecord
@@ -33,6 +37,18 @@ _FIELD_MAP = {
 }
 
 
+def _decimal_str(val: Any) -> Any:
+    """Map a BME Mantissa/Exponent dict to a decimal string; otherwise pass through."""
+    if isinstance(val, dict) and "Mantissa" in val:
+        try:
+            mant = Decimal(str(val["Mantissa"]))
+            exp = Decimal(str(val.get("Exponent", 0)))
+            return str(mant * (Decimal(10) ** int(exp)))
+        except (InvalidOperation, ValueError):
+            return val  # fail closed: preserve the raw value
+    return val
+
+
 def _flags(raw: dict[str, Any]) -> list[str]:
     val = raw.get("flags")
     if isinstance(val, list):
@@ -40,6 +56,20 @@ def _flags(raw: dict[str, Any]) -> list[str]:
     if isinstance(val, str) and val:
         return [f.strip() for f in val.split(",") if f.strip()]
     return []
+
+
+def _bool(val: Any) -> bool | None:
+    """Parse string booleans ('true'/'false') without coercing arbitrary text."""
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        v = val.strip().lower()
+        if v == "true":
+            return True
+        if v == "false":
+            return False
+        return None
+    return None
 
 
 def normalize(rec: dict[str, Any]) -> NormalizedRecord:
@@ -61,16 +91,16 @@ def normalize(rec: dict[str, Any]) -> NormalizedRecord:
         price_currency=raw.get("price_currency"),
         price_notation=raw.get("price_notation"),
         notation_of_quantity_measurement_unit=raw.get("notation_of_the_quantity_in_measurement_unit"),
-        price=raw.get("price"),
-        quantity=raw.get("quantity"),
+        price=_decimal_str(raw.get("price")),
+        quantity=_decimal_str(raw.get("quantity")),
         quantity_in_measurement_unit=raw.get("quantity_in_measurement_unit"),
-        notional_amount=raw.get("notional_amount"),
+        notional_amount=_decimal_str(raw.get("notional_amount")),
         notional_currency=raw.get("notional_currency"),
         transaction_identification_code=raw.get("transaction_identification_code"),
         trading_datetime=td,
         publication_datetime=pd,
         flags=_flags(raw),
-        deferral=bool(raw.get("post_trade_deferral")) if raw.get("post_trade_deferral") is not None else None,
+        deferral=_bool(raw.get("post_trade_deferral")),
         raw_fields=raw,
         rts2_mapping=dict(_FIELD_MAP),
         sanity=sanity,

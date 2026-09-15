@@ -27,3 +27,23 @@ note: Metadata only. Raw provider content is NOT included; only counts, parse/sa
 hygiene:
   provider_payloads_in_repo: false
   raw_directory_tracked: false
+
+findings:
+  - id: F-006
+    title: C1/D1 composition proof (raw -> normalized -> ledger reproducible)
+    status: CLOSED
+    deadline: before D1 is VERIFIED
+    cause: >-
+      The G0-C completion criterion (docs/gates/G0.md sec.4) requires
+      "raw -> normalized -> ledger reproducible", but G0-C1's allowed scope ends
+      at normalized (no ledger, by design). The ledger/event representation and
+      the composition proof belong to G0-D1.
+    resolved_by: G0-D1
+    proof: >-
+      G0-D1 provides the composition proof: same raw inputs -> deterministic
+      normalized records -> deterministic ledger semantic digest
+      (f0b65d4a7b0c4b9e06e0b986faecc4978dce54131d0b0c73f32e91b15032e489),
+      repeat execution identical. Ledger append-only, NO_HEURISTIC_DELETION.
+    note: >-
+      G0-C is now satisfied end-to-end: G0-C1 normalization implementation
+      verified + G0-D1 composition proof.

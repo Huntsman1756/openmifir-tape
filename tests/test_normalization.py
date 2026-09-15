@@ -139,6 +139,19 @@ def test_sanity_non_perc():
     assert s.status == "PASS"
 
 
+def test_bme_mantissa_exponent_maps_to_decimal_preserving_raw():
+    raw = _bme_record(quantity={"Mantissa": 2000000, "Exponent": 0},
+                      price={"Mantissa": 9775, "Exponent": -2},
+                      notional_amount={"Mantissa": 1955000, "Exponent": -2})
+    n = normalize_record("bme_apa", raw)
+    assert n.quantity == "2000000"
+    assert n.price == "97.75"
+    assert n.notional_amount == "19550.00"
+    # raw preserved verbatim (lossless), not overwritten by the decimal mapping
+    assert n.raw_fields["quantity"] == {"Mantissa": 2000000, "Exponent": 0}
+    assert n.raw_fields["price"] == {"Mantissa": 9775, "Exponent": -2}
+
+
 def test_non_aggressive_no_value_filling():
     raw = _bme_record(quantity="", notional_amount="", price="")
     n = normalize_record("bme_apa", raw)

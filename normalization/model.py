@@ -25,7 +25,7 @@ class SanityResult:
 class TimestampValue:
     source_value: str          # exact value as published by the source
     canonical_utc: str | None  # parsed ISO-8601 UTC, or None if unparseable
-    parse_status: str          # PARSED | UNPARSED | ABSENT
+    parse_status: str          # PARSED | UNPARSED | UNPARSED_NO_TZ | ABSENT
 
 
 @dataclass

@@ -1,0 +1,19 @@
+gate: G0-D
+issue_id: G0-D1
+date: '2026-09-15'
+ledger_semantic_digest: f0b65d4a7b0c4b9e06e0b986faecc4978dce54131d0b0c73f32e91b15032e489
+entry_count: 969
+chain_count: 963
+states_observed:
+- FULLY_PUBLISHED
+source_exact_duplicate_count: 0
+economic_duplicate_candidate_groups: 9
+no_heuristic_deletion: true
+append_only: true
+f006_composition_proof:
+  raw_to_normalized: true
+  raw_to_ledger_digest: f0b65d4a7b0c4b9e06e0b986faecc4978dce54131d0b0c73f32e91b15032e489
+  deterministic: true
+hygiene:
+  provider_payloads_in_repo: false
+  raw_directory_tracked: false
