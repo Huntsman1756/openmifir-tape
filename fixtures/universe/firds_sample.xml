@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC FIRDS subset for G0-B1 offline adapter tests. NOT provider data. -->
+<!-- RTS 23 field 5 = issuer LEI, carried in <Issr>. Field values are fake. -->
+<Envelope>
+  <FinInstrm>
+    <FinInstrmGnlAttrbts>
+      <Id>XS0000000101</Id>
+      <FinInstrmTp>CRPB</FinInstrmTp>
+      <NtnlCcy>EUR</NtnlCcy>
+    </FinInstrmGnlAttrbts>
+    <Issr>00000000000000000101</Issr>
+    <FinInstrmRptgRprtSts>SYNTH-RPT-0001</FinInstrmRptgRprtSts>
+  </FinInstrm>
+  <FinInstrm>
+    <FinInstrmGnlAttrbts>
+      <Id>XS0000000102</Id>
+      <FinInstrmTp>CRPB</FinInstrmTp>
+      <NtnlCcy>EUR</NtnlCcy>
+    </FinInstrmGnlAttrbts>
+    <!-- Missing issuer LEI (field 5): must QUARANTINE in the resolver. -->
+    <Issr></Issr>
+  </FinInstrm>
+  <FinInstrm>
+    <FinInstrmGnlAttrbts>
+      <Id>XS0000000103</Id>
+      <FinInstrmTp>SHRS</FinInstrmTp>
+      <NtnlCcy>EUR</NtnlCcy>
+    </FinInstrmGnlAttrbts>
+    <Issr>00000000000000000103</Issr>
+  </FinInstrm>
+</Envelope>

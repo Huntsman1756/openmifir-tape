@@ -1,0 +1,110 @@
+# evidence/g0-l1/G0-L1_summary_manifest.yaml
+# Metadata-only evidence for G0-L1 (Legal / ToU classification).
+# NEVER contains provider payload bytes and NEVER contains verbatim ToS text:
+# URLs, dates, hashes, counts, statuses and summaries only.
+# Snapshot date: 2026-09-15.
+
+issue:
+  id: G0-L1
+  gate: G0-L
+  authority: docs/gates/G0.md#G0-L
+
+run:
+  id: G0-L1-terms-classification
+  date: "2026-09-15"
+  profile: es-corporate-bonds
+  sources_expected: 2
+  source_terms_snapped: 2                 # SOURCE_TERMS_SNAPSHOTTED = 2/2
+  linked_tos_body_resolved: 1             # BME yes; Bloomberg exact ToS body unresolved
+
+term_snapshots:
+  bme_apa:
+    source: BME APA
+    source_id: bme_apa
+    snapshot_ref: docs/legal/bme_apa_terms.md
+    canonical_url: https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html
+    fetched: "2026-09-15"
+    urls_fetched:
+      - url: https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html
+        status: 200
+      - url: https://www.bolsasymercados.es/en/legal/legal-notice.html
+        status: 200
+    status: SNAPSHOTTED
+  blb_apae:
+    source: Bloomberg APAE
+    source_id: blb_apae
+    snapshot_ref: docs/legal/bloomberg_apae_terms.md
+    canonical_url: https://www.bloombergapa.com/
+    fetched: "2026-09-15"
+    urls_fetched:
+      - url: https://www.bloombergapa.com/
+        status: 200
+      - url: https://www.bloombergapa.com/contactus
+        status: 200
+      - url: https://www.bloombergapa.com/historyfiles
+        status: 200
+      - url: https://www.bloomberg.com/tos/
+        status: 403
+    status: SNAPSHOTTED
+    linked_tos_content: UNRESOLVED
+
+classification:
+  table_ref: docs/legal/artifact_classification.yaml
+  statuses:
+    bme_apa:
+      local_archival: PASS
+      free_delayed_redistribution: UNRESOLVED
+      historical_archive_republication: FAIL
+    blb_apae:
+      local_archival: UNRESOLVED
+      free_delayed_redistribution: UNRESOLVED
+      historical_archive_republication: UNRESOLVED
+  cells_total: 6
+  pass: 1
+  fail: 1
+  unresolved: 4
+  # every artifact class carries an explicit status (no blank cells)
+
+unresolved_items:
+  - id: U-001
+    item: blb_apae.linked_tos_content
+    why: >-
+      The page confirms Transparency Data is subject to a linked Terms of Use, but
+      the linked page (https://www.bloomberg.com/tos/) returned HTTP 403 to the
+      automated fetch on 2026-09-15. Exact ToS body is therefore UNRESOLVED, which
+      propagates to the blb_apae redistribution classes and local-archival rights.
+  - id: U-002
+    item: bme_apa.free_delayed_redistribution
+    why: >-
+      The data notice conditions authorisation on commercial use and/or non-free
+      redistribution, while the website-wide Legal Disclaimer forbids redistribution
+      without prior written consent. Conflict; no explicit free-redistribution grant.
+  - id: U-003
+    item: blb_apae.local_archival
+    why: >-
+      Unauthenticated public file availability is not a licence; local-archival
+      rights cannot be confirmed without the inaccessible ToS body.
+
+findings:
+  - id: F-001
+    title: BME free JSON availability confirmed (availability, not redistribution licence)
+    severity: RESOLVED
+    detail: >-
+      The BME post-trade page states the JSON is freely accessible and free of
+      charge. That is an availability statement; the terms also restrict use to
+      personal/internal purposes and gate commercial and non-free redistribution.
+      Local archival PASS; redistribution classes flagged above.
+  - id: F-002
+    title: Bloomberg ToS link blocked
+    severity: UNRESOLVED
+    detail: >-
+      bloomberg.com/tos returns HTTP 403 (bot-blocked). The page-level disclaimer
+      with the EU Regulation 600/2014 consistency clause is captured; the ToS body
+      is not. Revisit by a browser-capable fetch if the ToS is needed for a
+      redistribution decision.
+
+hygiene:
+  provider_payloads_in_repo: false
+  verbatim_tos_in_repo: false
+  raw_directory_tracked: false
+  notes: "docs/legal/ and evidence/g0-l1/ hold summaries, URLs, dates and statuses only."

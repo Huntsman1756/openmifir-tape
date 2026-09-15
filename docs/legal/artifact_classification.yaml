@@ -1,0 +1,103 @@
+# docs/legal/artifact_classification.yaml
+# G0-L1 artifact classification table. Authority: docs/gates/G0.md#G0-L.
+# Snapshot date: 2026-09-15. Statuses: PASS | FAIL | UNRESOLVED.
+# This file contains NO provider data and NO verbatim ToS text: statuses, bases,
+# URLs and dates only. See docs/legal/*_terms.md for the term summaries.
+
+issue: G0-L1
+gate: G0-L
+snapshot_date: "2026-09-15"
+
+# Scope note that conditions the classification:
+# The public repository holds only metadata, SHA-256 hashes, manifests, counts,
+# timestamps, logs and documentation. Raw provider payloads are stored locally
+# (data/, gitignored) and are never published. LOCAL_ARCHIVAL therefore describes
+# private local storage; FREE_DELAYED_REDISTRIBUTION and
+# HISTORICAL_ARCHIVE_REPUBLICATION describe publishing provider-derived data to
+# third parties, which the project does NOT do.
+artifact_classes:
+  local_archival: "Storing captured source objects locally for research (private; no third-party disclosure)"
+  free_delayed_redistribution: "Publishing or redistributing the delayed/free data to third parties at no charge"
+  historical_archive_republication: "Republishing historical data (an archive of captured objects) to third parties"
+
+sources:
+
+  bme_apa:
+    display: BME APA
+    source_id: bme_apa
+    terms_snapshot: docs/legal/bme_apa_terms.md
+    terms_urls:
+      - url: https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html
+        fetched: "2026-09-15"
+      - url: https://www.bolsasymercados.es/en/legal/legal-notice.html
+        fetched: "2026-09-15"
+    classes:
+      local_archival: PASS
+      free_delayed_redistribution: UNRESOLVED
+      historical_archive_republication: FAIL
+    bases:
+      local_archival: >-
+        The data-service notice expressly permits downloading, copying and
+        printing for personal use and states the information is for internal use.
+        Storing raw objects privately for internal research falls within this
+        grant; no third-party disclosure occurs.
+      free_delayed_redistribution: >-
+        The data-service notice conditions prior authorisation on commercial use
+        and/or redistribution "in a non-free manner", which arguably leaves
+        gratis, non-commercial redistribution ungated. The website-wide Legal
+        Disclaimer instead forbids any copy, duplication, redistribution or
+        electronic reproduction without prior written consent. The two conflict;
+        no explicit free-redistribution licence is granted, so the class is
+        UNRESOLVED. The project does not perform this class.
+      historical_archive_republication: >-
+        Publishing a historical archive of BME content to third parties is a
+        redistribution of the Company's content. The Legal Disclaimer prohibits
+        redistribution, electronic reproduction and marketing of the content
+        without prior written consent of the Company, and no such authorisation
+        is held. Not permitted as-is.
+
+  blb_apae:
+    display: Bloomberg APAE
+    source_id: blb_apae
+    terms_snapshot: docs/legal/bloomberg_apae_terms.md
+    terms_urls:
+      - url: https://www.bloombergapa.com/
+        fetched: "2026-09-15"
+      - url: https://www.bloombergapa.com/contactus
+        fetched: "2026-09-15"
+      - url: https://www.bloombergapa.com/historyfiles
+        fetched: "2026-09-15"
+      - url: https://www.bloomberg.com/tos/
+        fetched: "2026-09-15"
+        result: "HTTP 403 (bot-blocked); exact ToS body NOT retrieved"
+    linked_tos_content_status: UNRESOLVED
+    classes:
+      local_archival: UNRESOLVED
+      free_delayed_redistribution: UNRESOLVED
+      historical_archive_republication: UNRESOLVED
+    bases:
+      local_archival: >-
+        The page-level disclaimer confirms Transparency Data is subject to a
+        linked ToS, but the ToS body is inaccessible (403) and no source-specific
+        archival grant is exposed. Public unauthenticated availability is not a
+        licence, so local-archival rights cannot be confirmed.
+      free_delayed_redistribution: >-
+        Cannot be determined without the ToS text. The disclaimer's EU Regulation
+        600/2014 consistency clause may override inconsistent provisions, but it
+        cannot be applied to unknown text and does not itself grant redistribution.
+      historical_archive_republication: >-
+        Cannot be determined without the ToS text; same reasoning as
+        free_delayed_redistribution.
+
+summary:
+  sources_classified: 2
+  source_terms_snapped: 2
+  cells_total: 6
+  pass: 1
+  fail: 1
+  unresolved: 4
+  unresolved_cells:
+    - bme_apa.free_delayed_redistribution
+    - blb_apae.local_archival
+    - blb_apae.free_delayed_redistribution
+    - blb_apae.historical_archive_republication

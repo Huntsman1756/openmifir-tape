@@ -1,0 +1,32 @@
+{
+  "_comment": "SYNTHETIC GLEIF LEI-CDF/API subset for G0-B1 offline adapter tests. NOT provider data.",
+  "data": [
+    {
+      "id": "00000000000000000101",
+      "attributes": {
+        "lei": "00000000000000000101",
+        "entity": {
+          "legalJurisdiction": "ES"
+        }
+      }
+    },
+    {
+      "id": "00000000000000000103",
+      "attributes": {
+        "lei": "00000000000000000103",
+        "entity": {
+          "legalJurisdiction": "FR"
+        }
+      }
+    },
+    {
+      "id": "00000000000000000999",
+      "attributes": {
+        "lei": "00000000000000000999",
+        "entity": {
+          "legalJurisdiction": "US"
+        }
+      }
+    }
+  ]
+}
