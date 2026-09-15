@@ -1,0 +1,40 @@
+run_id: 20260915T022307Z
+source_id: bme_apa
+attempted: true
+status: SUCCEEDED
+observed_at: '2026-09-15T02:23:08.298352+00:00'
+object_count: 2
+results:
+  source_id: bme_apa
+  attempted: true
+  status: SUCCEEDED
+  observed_at: '2026-09-15T02:23:08.298352+00:00'
+  object_count: 2
+  created_count: 2
+  already_present_count: 0
+  objects:
+  - source_id: bme_apa
+    source_object_id: 2026-09-11-bmea-posttrade.json
+    capture_version: 45f4e2225d0b651dcb160744c1f290b2db43b5ac5c8bd85c6f65f75eec9f9cba
+    filename: 45f4e2225d0b651dcb160744c1f290b2db43b5ac5c8bd85c6f65f75eec9f9cba
+    raw_sha256: 45f4e2225d0b651dcb160744c1f290b2db43b5ac5c8bd85c6f65f75eec9f9cba
+    observation_utc: '2026-09-15T02:23:08.298352+00:00'
+    publication_timestamp: '2026-09-10T22:00:00+00:00'
+    provenance_url: https://www.bolsasymercados.es/dam/descargas/servicios-regulatorios/bme-post-trade/2026-09-11-bmea-posttrade.json
+    size_bytes: 674753
+    status: CREATED
+  - source_id: bme_apa
+    source_object_id: 2026-09-14-bmea-posttrade.json
+    capture_version: 7485228059831da09dc2c3c46b0eac3f8bc01611747d23a1370957fd4253740a
+    filename: 7485228059831da09dc2c3c46b0eac3f8bc01611747d23a1370957fd4253740a
+    raw_sha256: 7485228059831da09dc2c3c46b0eac3f8bc01611747d23a1370957fd4253740a
+    observation_utc: '2026-09-15T02:23:08.298352+00:00'
+    publication_timestamp: '2026-09-13T22:00:00+00:00'
+    provenance_url: https://www.bolsasymercados.es/dam/descargas/servicios-regulatorios/bme-post-trade/2026-09-14-bmea-posttrade.json
+    size_bytes: 285303
+    status: CREATED
+  errors: []
+  log:
+  - 'bme_apa: discovered 125, selecting 2'
+  - 'bme_apa: CREATED 2026-09-11-bmea-posttrade.json sha256=45f4e2225d0b651dcb160744c1f290b2db43b5ac5c8bd85c6f65f75eec9f9cba'
+  - 'bme_apa: CREATED 2026-09-14-bmea-posttrade.json sha256=7485228059831da09dc2c3c46b0eac3f8bc01611747d23a1370957fd4253740a'

@@ -1,18 +1,23 @@
 """BME APA post-trade JSON source adapter.
 
-Per config/sources/bme_apa.yaml the entrypoint status is PARTIAL: the BME
-post-trade data is confirmed to be freely accessible JSON files, but the
-per-file links are rendered client-side and are not present in static HTML.
-This adapter therefore FAILS CLOSED (G0-A.6): it discovers machine-readable
-file URLs from the canonical page when present, and if it cannot resolve a
-machine feed URL it raises SourceDiscoveryError rather than guessing.
+Per config/sources/bme_apa.yaml the entrypoint is RESOLVED. The deterministic
+machine listing was discovered by inspecting the official page's own JS bundle:
+the AEM taxonomy-filter component fetches ``${componentPath}.results.json``,
+which returns ``{"results":[{"url":..., "publicationDate":<epoch-millis>},...]}``
+of daily ``<YYYY-MM-DD>-bmea-posttrade.json`` files.
+
+Discovery prefers the frozen ``entrypoint.listing_url``. If it is absent it
+falls back to parsing the canonical page's static HTML / advertised component
+path. In all cases the adapter FAILS CLOSED (G0-A.6): it never guesses a URL.
 
 No trade normalization. No universe logic.
 """
 
 from __future__ import annotations
 
+import json
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 from ..sources.base import DiscoveredObject, HttpGetter, SourceDiscoveryError, SourceFetchError
@@ -20,12 +25,21 @@ from ..sources.base import DiscoveredObject, HttpGetter, SourceDiscoveryError, S
 _DATA_FILE_RE = re.compile(r"\.(json|zip|csv|txt)(\?|$)", re.IGNORECASE)
 _POSTTRADE_HINT_RE = re.compile(r"post[-_ ]?trade|transparenc|mifir", re.IGNORECASE)
 _URL_RE = re.compile(r"""(?:href|src)=["']([^"']+)["']""")
-# AEM SPA components advertise their own content path; probing it as
-# <path>.model.json is a runtime discovery hook (no fabricated URL - the path
-# comes from the page itself).
 _COMPONENT_PATH_RE = re.compile(r"""data-six-component-path=["']([^"']+)["']""")
 
 SOURCE_ID = "bme_apa"
+
+
+def _epoch_ms_to_iso(ms: Any) -> str:
+    """Convert a Unix epoch milliseconds value to UTC ISO-8601.
+
+    Fail closed on malformed input (never guess); raises SourceDiscoveryError.
+    """
+    try:
+        ms_val = float(ms)
+    except (TypeError, ValueError) as exc:
+        raise SourceDiscoveryError(f"bme_apa: non-numeric publicationDate: {ms!r}") from exc
+    return datetime.fromtimestamp(ms_val / 1000.0, tz=timezone.utc).isoformat()
 
 
 def _absolute(url: str, base: str) -> str:
@@ -34,7 +48,6 @@ def _absolute(url: str, base: str) -> str:
     if url.startswith("//"):
         return "https:" + url
     if url.startswith("/"):
-        # derive scheme+host from base
         from urllib.parse import urlparse
 
         parts = urlparse(base)
@@ -44,21 +57,56 @@ def _absolute(url: str, base: str) -> str:
     return urljoin(base, url)
 
 
-def discover(conf: dict[str, Any], http_get: HttpGetter) -> list[DiscoveredObject]:
-    """Resolve BME post-trade JSON file URLs from the canonical page."""
-    entry = conf.get("entrypoint", {})
-    base_url = entry.get("base_url") or ""
-    base_doc = entry.get("base_doc") or ""
-    if not base_url and not base_doc:
-        raise SourceDiscoveryError("bme_apa: no entrypoint.base_url and no entrypoint.base_doc configured")
+def _discover_from_listing(listing_url: str, http_get: HttpGetter) -> list[DiscoveredObject]:
+    """Fetch the results.json listing and build DiscoveredObjects."""
+    try:
+        body = http_get(listing_url)
+    except Exception as exc:  # noqa: BLE001
+        raise SourceDiscoveryError(f"bme_apa: listing fetch failed: {exc}") from exc
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise SourceDiscoveryError(f"bme_apa: listing is not valid JSON: {exc}") from exc
 
-    if base_url:
-        # Operator-resolved machine feed; treat base_url as a listing.
-        html = http_get(base_url).decode("utf-8", "replace")
-    else:
-        html = http_get(base_doc).decode("utf-8", "replace")
+    results = payload.get("results") if isinstance(payload, dict) else None
+    if not isinstance(results, list):
+        raise SourceDiscoveryError("bme_apa: listing JSON has no 'results' array")
 
-    candidates: list[tuple[str, str]] = []  # (url, key)
+    objects: list[DiscoveredObject] = []
+    seen: set[str] = set()
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        url = item.get("url")
+        if not isinstance(url, str) or not url:
+            continue
+        key = url.split("/")[-1].split("?")[0]
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        pub = item.get("publicationDate")
+        pub_iso = _epoch_ms_to_iso(pub) if pub not in (None, "") else ""
+        objects.append(
+            DiscoveredObject(
+                source_id=SOURCE_ID,
+                object_key=key,
+                url=url,
+                publication_timestamp=pub_iso,
+            )
+        )
+    if not objects:
+        raise SourceDiscoveryError("bme_apa: listing returned no usable post-trade file URLs")
+    # The listing is newest-first; return ascending by publication_timestamp so
+    # the newest object is LAST (harness selects the tail).
+    objects.sort(key=lambda o: o.publication_timestamp)
+    return objects
+
+
+def _discover_from_page(base_url: str, base_doc: str, http_get: HttpGetter) -> list[DiscoveredObject]:
+    """Fallback: parse static HTML links and advertised AEM component paths."""
+    html = http_get(base_url or base_doc).decode("utf-8", "replace")
+
+    candidates: list[tuple[str, str]] = []
     for raw in _URL_RE.findall(html):
         url = _absolute(raw, base_url or base_doc)
         if not url:
@@ -69,10 +117,8 @@ def discover(conf: dict[str, Any], http_get: HttpGetter) -> list[DiscoveredObjec
             key = url.split("/")[-1].split("?")[0]
             candidates.append((url, key))
 
-    # Runtime discovery of client-rendered listings: probe each advertised AEM
-    # component path as a model. Skipped on failure (fail closed, never guessed).
     for comp_path in _COMPONENT_PATH_RE.findall(html):
-        for sel in (".model.json", ".json"):
+        for sel in (".results.json", ".model.json", ".json"):
             probe_url = comp_path + sel
             try:
                 body = http_get(probe_url).decode("utf-8", "replace")
@@ -97,20 +143,29 @@ def discover(conf: dict[str, Any], http_get: HttpGetter) -> list[DiscoveredObjec
         if key in seen:
             continue
         seen.add(key)
-        objects.append(
-            DiscoveredObject(
-                source_id=SOURCE_ID,
-                object_key=key,
-                url=url,
-                publication_timestamp="",  # resolved from the object if present
-            )
-        )
+        objects.append(DiscoveredObject(source_id=SOURCE_ID, object_key=key, url=url, publication_timestamp=""))
+    return objects
 
+
+def discover(conf: dict[str, Any], http_get: HttpGetter) -> list[DiscoveredObject]:
+    """Resolve BME post-trade JSON file URLs (listing URL first, then page fallback)."""
+    entry = conf.get("entrypoint", {})
+    listing_url = entry.get("listing_url") or ""
+    base_url = entry.get("base_url") or ""
+    base_doc = entry.get("base_doc") or ""
+
+    if listing_url:
+        return _discover_from_listing(listing_url, http_get)
+
+    if not base_url and not base_doc:
+        raise SourceDiscoveryError("bme_apa: no entrypoint.listing_url and no base_url/base_doc configured")
+
+    objects = _discover_from_page(base_url, base_doc, http_get)
     if not objects:
         raise SourceDiscoveryError(
             "bme_apa: no machine feed URL resolved from the canonical page; "
             "file links are client-rendered (entrypoint.status=PARTIAL). "
-            "Operator must set entrypoint.base_url or a resolvable listing."
+            "Operator must set entrypoint.listing_url or a resolvable listing."
         )
     return objects
 

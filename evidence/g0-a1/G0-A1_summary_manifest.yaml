@@ -1,32 +1,36 @@
 # evidence/g0-a1/G0-A1_summary_manifest.yaml
 # Metadata-only evidence for the G0-A1 first acquisition run.
-# NEVER contains provider payload bytes. Reviewed: 2026-09-14.
+# NEVER contains provider payload bytes. Reviewed: 2026-09-15.
 
 run:
   id: G0-A1-first-acquisition
-  date: "2026-09-14"
+  date: "2026-09-15"
   profile: es-corporate-bonds
   corpus: fixtures/universe/universe_manifest.yaml
   corpus_sample_sha256: ad666760bc525e9f48b203ab6f5166645458756069d000866879c3e810040d04
   sources_attempted: 2
-  sources_succeeded: 1
+  sources_succeeded: 2
 
 results:
   bme_apa:
     attempted: true
-    status: NOT_RUN
-    reason: "DISCOVERY_UNRESOLVED"
-    object_count: 0
+    status: SUCCEEDED
+    object_count: 2
     detail: >-
-      Canonical page verified (https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html)
-      and confirms free JSON post-trade data. However the per-file machine feed
-      URLs are client-rendered (AEM/JS SPA): not present in static HTML, and the
-      advertised data-six-component-path model probes returned 404
-      (assetstaxonomyfilter.model.json / .json). entrypoint.status=PARTIAL.
-      Adapter FAILS CLOSED and did not guess a URL. Operator must set
-      config/sources/bme_apa.yaml entrypoint.base_url (or provide a resolvable
-      listing) before BME can be acquired.
-    evidence_file: evidence/g0-a1/20260914T204237Z__bme_apa__manifest.yaml
+      BME APA post-trade JSON acquired from the deterministic free listing.
+      Resolved by inspecting the official page's own JS bundle: the AEM
+      taxonomy-filter component fetches `${componentPath}.results.json`, which
+      returns daily <YYYY-MM-DD>-bmea-posttrade.json URLs with publicationDate
+      (epoch millis). Newest two daily files captured. Source publication
+      timestamp recorded as UTC (from publicationDate).
+    objects:
+      - source_object_id: 2026-09-14-bmea-posttrade.json
+        raw_sha256: 7485228059831da09dc2c3c46b0eac3f8bc01611747d23a1370957fd4253740a
+        publication_timestamp: "2026-09-13T22:00:00+00:00"
+      - source_object_id: 2026-09-11-bmea-posttrade.json
+        raw_sha256: 45f4e2225d0b651dcb160744c1f290b2db43b5ac5c8bd85c6f65f75eec9f9cba
+        publication_timestamp: "2026-09-10T22:00:00+00:00"
+    evidence_file: evidence/g0-a1/20260915T022307Z__bme_apa__manifest.yaml
 
   blb_apae:
     attempted: true
@@ -36,32 +40,45 @@ results:
       Bloomberg EU APA public delayed post-trade CSV acquired unauthenticated
       (https://www.bloombergapa.com/). Raw object stored immutably; raw_sha256
       recorded; observation timestamp recorded.
-    raw_sha256: c0ca67cf197757fa94fdfe3ca8e96b803363f4963fd3967ac72aacd7bf43324c
-    object_key: BAPA-POST2-20260914-20:28:55.836-02.csv
-    raw_object: data/raw/blb_apae/2026-09-14/BAPA-POST2-20260914-20_28_55.836-02.csv
-    evidence_file: evidence/g0-a1/20260914T204237Z__blb_apae__manifest.yaml
+    objects:
+      - source_object_id: BAPA-POST2-20260915-02:05:56.012-01.csv
+        raw_sha256: 66f8b51ec09c86fe144fc54c0253d6b71f5c40353434e92dfd802b7d73b83979
+        publication_timestamp: "20260915-02:05:56.012-01"
+    evidence_file: evidence/g0-a1/20260915T022307Z__blb_apae__manifest.yaml
 
 findings:
   - id: F-001
-    title: BME machine feed URL not resolvable (client-rendered listing)
-    severity: BLOCKER
+    title: BME free-JSON listing resolved (was a blocker, now RESOLVED)
+    severity: RESOLVED
     detail: >-
-      BME APA post-trade file links are rendered by a client-side AEM/JS
-      component and are not in static HTML; the advertised content component
-      endpoint returns 404. G0-A1 cannot acquire BME without an operator-supplied
-      entrypoint.base_url or a resolvable machine listing. No URL was guessed.
+      The BME delayed/free post-trade JSON listing is now a deterministic,
+      observed machine route: the page's own JS bundle fetches
+      `${componentPath}.results.json`. Frozen into
+      config/sources/bme_apa.yaml entrypoint.listing_url with provenance. No URL
+      was guessed. BME acquired successfully.
   - id: F-002
-    title: Bloomberg regenerates content for a stable file name
-    severity: G0-A2_FINDING
+    title: Windows raw-capture byte corruption (O_BINARY) - FIXED
+    severity: FIXED
     detail: >-
-      Two consecutive runs discovered the same object_key
-      (BAPA-POST2-<interval>.csv) but observed different byte content. The
-      write-once store preserved the original bytes (zero state change on disk)
-      and recorded a WriteOnceConflict. This indicates capture identity may need
-      to include the content hash, or the source object is live-updating at a
-      stable name. Relevant to SECOND_RUN_IDEMPOTENT (G0-A2).
+      On Windows, os.open defaults to text mode without O_BINARY, causing
+      os.write to translate LF->CRLF and inflate/alter the exact captured bytes
+      (observed 1992B -> 2008B, sha mismatch). This initially masqueraded as a
+      "source regenerates content" conflict. Fixed by adding os.O_BINARY
+      (no-op on POSIX); covered by a byte-exactness regression test. Raw objects
+      are now verified byte-for-byte (file sha == recorded raw_sha256).
+  - id: F-003
+    title: Storage identity model separates source_object_id from capture_version
+    severity: DESIGN
+    detail: >-
+      Raw layout is now
+      data/raw/<source_id>/<publication_date>/<source_object_id>/<capture_version>
+      with invariants (same id+same bytes -> ALREADY_PRESENT; same id+different
+      bytes -> new immutable version, original preserved; same version+different
+      bytes -> WriteOnceConflict). Keeps SOURCE REOBSERVATION (G0-A1) distinct
+      from INGEST IDEMPOTENCE (G0-A2).
 
 hygiene:
   provider_payloads_tracked: false
   raw_directory_tracked: false
   secrets_detected: false
+  byte_integrity_verified: true

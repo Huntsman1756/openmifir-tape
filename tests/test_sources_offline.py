@@ -1,5 +1,7 @@
 """Offline, synthetic-fixture tests for the source adapters (NO network)."""
 
+import json
+
 import pytest
 
 from collectors.sources import bme_apa, bloomberg_apae
@@ -95,3 +97,25 @@ def test_bme_discover_probes_component_path():
     objects = bme_apa.discover(BME_CONF, getter)
     assert objects
     assert objects[0].object_key == "2026-09-14_equity.json"
+
+
+def test_bme_discover_from_listing_results_json():
+    listing = "https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data/_jcr_content/root/containers/container/grid/container0/assetstaxonomyfilter.results.json"
+    file_url = "https://www.bolsasymercados.es/dam/descargas/servicios-regulatorios/bme-post-trade/2026-09-14-bmea-posttrade.json"
+    payload = {"results": [{"title": "BME APA post-trade", "url": file_url, "publicationDate": 1789336800000}]}
+    conf = {"source_id": "bme_apa", "entrypoint": {"listing_url": listing}}
+    getter = _fake_getter({listing: json.dumps(payload).encode()})
+    objects = bme_apa.discover(conf, getter)
+    assert objects
+    assert objects[0].object_key == "2026-09-14-bmea-posttrade.json"
+    assert objects[0].url == file_url
+    # publicationDate 1789336800000 ms = 2026-09-13T22:00:00Z (local-midnight CEST)
+    assert objects[0].publication_timestamp == "2026-09-13T22:00:00+00:00"
+
+
+def test_bme_discover_listing_non_json_raises():
+    listing = "https://example.test/listing.json"
+    conf = {"source_id": "bme_apa", "entrypoint": {"listing_url": listing}}
+    getter = _fake_getter({listing: b"<html>not json</html>"})
+    with pytest.raises(SourceDiscoveryError):
+        bme_apa.discover(conf, getter)

@@ -60,7 +60,8 @@ def test_harness_success_with_duplicate_idempotence(tmp_path: Path):
     assert r2.succeeded
     assert r2.objects[0].status == "ALREADY_PRESENT"
     # object bytes unchanged after second run
-    assert (tmp_path / FAKE_ID / "2026-09-14" / "obj.json").read_bytes() == b'{"fake": "payload"}'
+    v = r1.objects[0].capture_version
+    assert (tmp_path / FAKE_ID / "2026-09-14" / "obj.json" / v).read_bytes() == b'{"fake": "payload"}'
 
 
 def test_harness_discover_fail_closed(tmp_path: Path):
