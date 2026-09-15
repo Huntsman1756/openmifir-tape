@@ -1,0 +1,13 @@
+run_id: 20260915T024316Z
+gate: G0-A2
+result:
+  before_digest: f107cce62a8148aa43a78fbd152661853d261bc7d826d62c0dd33f5c3b42648b
+  after_digest: f107cce62a8148aa43a78fbd152661853d261bc7d826d62c0dd33f5c3b42648b
+  created_raw_objects: 0
+  modified_raw_objects: 0
+  deleted_raw_objects: 0
+  new_metadata_records: 0
+  changed_metadata: 0
+  unexpected_state_diff: false
+  replay_statuses:
+    ALREADY_PRESENT: 3

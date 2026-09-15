@@ -95,4 +95,7 @@ hygiene:
   provider_payloads_tracked: false
   raw_directory_tracked: false
   secrets_detected: false
-  byte_integrity_verified: true
+  byte_integrity:
+    live_acquisition_os: windows
+    live_byte_integrity_verified: true     # file sha == recorded raw_sha256 (Windows live run)
+    ci_portability: windows_ubuntu_pass    # storage portability + byte-exact regression (CI), NOT a second live acquisition

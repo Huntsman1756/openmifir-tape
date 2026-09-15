@@ -163,6 +163,7 @@ class RawStore:
             "source_object_id": object_key,
             "capture_version": digest,
             "filename": str(version_file.name),
+            "collection_date": collection_date,
             "raw_sha256": digest,
             "size_bytes": len(data),
             "observation_utc": obs,
