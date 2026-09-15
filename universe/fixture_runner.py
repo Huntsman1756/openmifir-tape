@@ -51,6 +51,7 @@ class CaseResult:
     expected_reason: str
     passed: bool
     instrument_mifir_id: str | None
+    instrument_bond_type: str | None
     issuer_lei: str | None
     legal_jurisdiction_country: str | None
     note: str = ""
@@ -65,6 +66,7 @@ class CaseResult:
             "passed": self.passed,
             "input": {
                 "instrument_mifir_id": self.instrument_mifir_id,
+                "instrument_bond_type": self.instrument_bond_type,
                 "issuer_lei": self.issuer_lei,
                 "legal_jurisdiction_country": self.legal_jurisdiction_country,
             },
@@ -92,7 +94,9 @@ class FixtureRunResult:
         return {
             "universe_id": "es_legal_issuer_v1",
             "profile": "es-corporate-bonds",
-            "instrument_mifir_id": "CRPB",
+            "instrument_mifir_id": "BOND",
+            "instrument_bond_type": "CRPB",
+            "bond_type_source": "ESMA_FITRS_auth045_ISINAndSubClss",
             "legal_jurisdiction_filter": "ES",
             "synthetic_fixtures_only": True,
             "case_count": self.case_count,
@@ -125,6 +129,7 @@ def _load_record_fields(raw: dict[str, Any]) -> SecurityRecord:
 
     return SecurityRecord(
         instrument_mifir_id=record_raw.get("instrument_mifir_id"),
+        instrument_bond_type=record_raw.get("instrument_bond_type"),
         issuer_lei=record_raw.get("issuer_lei"),
         gleif_legal_jurisdiction_country=record_raw.get("gleif_legal_jurisdiction_country"),
         gleif_resolved=gleif_resolved,
@@ -186,6 +191,7 @@ def run_fixture_cases(path: Path = DEFAULT_UNIVERSE_FIXTURE) -> FixtureRunResult
                 passed=disp.branch.value == case.expected_branch
                 and disp.reason.value == case.expected_reason,
                 instrument_mifir_id=disp.instrument_mifir_id,
+                instrument_bond_type=disp.instrument_bond_type,
                 issuer_lei=disp.issuer_lei,
                 legal_jurisdiction_country=disp.legal_jurisdiction_country,
                 note=case.note,

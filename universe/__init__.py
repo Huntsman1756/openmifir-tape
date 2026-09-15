@@ -19,6 +19,7 @@ from .fixture_runner import (
     run_fixture_cases,
 )
 from .firds import FirdsInstrument, fetch as firds_fetch, parse_firds
+from .fitrs import FitrsRecord, parse_fitrs
 from .gleif import GleifEntity, fetch as gleif_fetch, parse_gleif, resolve_legal_jurisdiction
 from .model import Branch, Disposition, Reason, SecurityRecord
 from .resolver import (
@@ -33,6 +34,7 @@ __all__ = [
     "Branch",
     "Disposition",
     "FirdsInstrument",
+    "FitrsRecord",
     "FixtureCase",
     "FixtureRunResult",
     "GleifEntity",
@@ -44,6 +46,7 @@ __all__ = [
     "gleif_fetch",
     "load_disposition_cases",
     "parse_firds",
+    "parse_fitrs",
     "parse_gleif",
     "resolve_disposition",
     "resolve_legal_jurisdiction",

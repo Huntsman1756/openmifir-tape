@@ -9,14 +9,16 @@
 
 universe_id: es_legal_issuer_v1
 profile: es-corporate-bonds
-instrument_mifir_id: CRPB
+instrument_mifir_id: BOND
+instrument_bond_type: CRPB
+bond_type_source: ESMA_FITRS_auth045_ISINAndSubClss   # F-008: RTS 2 field 9 lives in FITRS (DLTNCR/FULNCR), not FIRDS
 issuer_lei_source: FIRDS_RTS23_FIELD5
 legal_jurisdiction_source: GLEIF_LegalJurisdiction.country
 legal_jurisdiction_filter: ES
 isin_prefix_heuristics: PROHIBITED
 selection_seed: "es-main-corp-bonds-2026-09-14"
 snapshot_date: "2026-09-14"
-universe_snapshot_sha256: "UNSET"    # computed at G0-B1 freeze (full disposition)
+universe_snapshot_sha256: "ededb97695f1ee837b9dcd747cd8333d17269a028e32f1cb9e986593c32bbeeb"  # fixture disposition table (F-008 corrected semantics)
 sample_snapshot_sha256: "ad666760bc525e9f48b203ab6f5166645458756069d000866879c3e810040d04"  # SHA-256 over the 20 selected_isins (active then quiet), LF-joined
 
 corpus:
@@ -53,5 +55,14 @@ corpus:
       - {isin: "XS3071337847", issuer: "Sacyr, S.A.", source: "https://cbonds.com/bonds/1855391/"}
 
 disposition_table:
-  status: PENDING_G0_B1
-  fixtures: []
+  status: FIXTURE_VERIFIED
+  fixtures:
+    - fixtures/universe/disposition_cases.yaml   # synthetic branch coverage (F-008 semantics)
+    - fixtures/universe/firds_sample.xml         # synthetic FIRDS auth.036 shape
+    - fixtures/universe/fitrs_sample.xml         # synthetic FITRS auth.045 shape
+    - fixtures/universe/gleif_sample.json        # synthetic GLEIF v1 response
+  note: >-
+    The disposition snapshot is over synthetic fixtures only (contract
+    conformance), NOT a real universe. Real es_legal_issuer_v1 construction
+    requires live FIRDS (field 5 LEI) + FITRS auth.045 (MiFIR ID + Bond Type)
+    + GLEIF (LegalJurisdiction) acquisition — post-G0 scope.

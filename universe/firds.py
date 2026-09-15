@@ -16,8 +16,9 @@ in ``<ClssfctnTp>``.
 Verified against a live ``auth.036.001.03`` DLTINS payload during F-005:
 ``FinInstrm`` wraps a record-kind element (``NewRcrd``/``ModfdRcrd``/
 ``TermntdRcrd``) that carries ``FinInstrmGnlAttrbts`` and ``Issr`` as direct
-children; there is NO ``FinInstrmTp`` element in that schema (instrument type
-must be derived from the CFI code or confirmed against the FULINS schema).
+children; there is NO ``FinInstrmTp`` element in that schema. Per F-008, the
+MiFIR ID / Bond Type classification comes from ESMA FITRS non-equity
+transparency data (``universe/fitrs.py``, auth.045), NEVER guessed from CFI.
 """
 
 from __future__ import annotations
@@ -27,8 +28,6 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
-
-from .model import INSTRUMENT_MIFIR_ID
 
 FIELD_ISSUER_LEI = 5  # RTS 23 field number for issuer LEI
 
@@ -42,7 +41,6 @@ class FirdsParseError(Exception):
 @dataclass(frozen=True)
 class FirdsInstrument:
     instrument_isin: str
-    instrument_mifir_id: str
     issuer_lei: str
     cfi_code: str | None = None
     source_report_id: str | None = None
@@ -112,13 +110,10 @@ def parse_firds(xml_bytes: bytes) -> list[FirdsInstrument]:
             issuer_lei = _direct_child_text(wrapper, "Issr")
         isin = _direct_child_text(gnl, "Id") if gnl is not None else ""
         cfi = _direct_child_text(gnl, "ClssfctnTp") if gnl is not None else None
-        mifir_id = _direct_child_text(gnl, "FinInstrmTp") if gnl is not None else None
-        mifir_id = mifir_id or ""
         report_id = _child_text(element, "FinInstrmRptgRprtSts") or _child_text(element, "RptgRef")
         instruments.append(
             FirdsInstrument(
                 instrument_isin=isin or "",
-                instrument_mifir_id=mifir_id,
                 issuer_lei=issuer_lei or "",
                 cfi_code=cfi,
                 source_report_id=report_id,
@@ -160,7 +155,3 @@ def cache_raw(
         size_bytes=len(raw_bytes),
         created=created,
     )
-
-
-def is_crpb(instrument: FirdsInstrument) -> bool:
-    return instrument.instrument_mifir_id.strip().upper() == INSTRUMENT_MIFIR_ID

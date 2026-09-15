@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC FITRS non-equity transparency subset for G0-B1 offline tests.   -->
+<!-- NOT provider data. Shape mirrors live auth.045 DLTNCR: each             -->
+<!-- NonEqtyTrnsprncyData carries Id/ISINAndSubClss with ISIN,               -->
+<!-- DerivSubClss/Desc (bond type label) + SgmttnCrit SACL (BOND1..BOND6),   -->
+<!-- and FinInstrmClssfctn (MiFIR ID). Verified live during F-008.           -->
+<FinInstrmRptgNonEqtyTradgActvtyRslt>
+  <NonEqtyTrnsprncyData>
+    <TechRcrdId>1001</TechRcrdId>
+    <Id>
+      <ISINAndSubClss>
+        <ISIN>XS0000000201</ISIN>
+        <DerivSubClss>
+          <Desc>Corporate bond</Desc>
+          <SgmttnCrit><CritNm>SACL</CritNm><CritVal>BOND5</CritVal></SgmttnCrit>
+        </DerivSubClss>
+        <FinInstrmClssfctn>BOND</FinInstrmClssfctn>
+      </ISINAndSubClss>
+    </Id>
+    <Lqdty>false</Lqdty>
+  </NonEqtyTrnsprncyData>
+  <NonEqtyTrnsprncyData>
+    <TechRcrdId>1002</TechRcrdId>
+    <Id>
+      <ISINAndSubClss>
+        <ISIN>XS0000000202</ISIN>
+        <DerivSubClss>
+          <Desc>Sovereign bond</Desc>
+          <SgmttnCrit><CritNm>SACL</CritNm><CritVal>BOND1</CritVal></SgmttnCrit>
+        </DerivSubClss>
+        <FinInstrmClssfctn>BOND</FinInstrmClssfctn>
+      </ISINAndSubClss>
+    </Id>
+    <Lqdty>true</Lqdty>
+  </NonEqtyTrnsprncyData>
+  <NonEqtyTrnsprncyData>
+    <TechRcrdId>1003</TechRcrdId>
+    <Id>
+      <ISINAndSubClss>
+        <ISIN>XS0000000203</ISIN>
+        <DerivSubClss>
+          <Desc>Swaptions</Desc>
+          <SgmttnCrit><CritNm>SACL</CritNm><CritVal>IRD05</CritVal></SgmttnCrit>
+        </DerivSubClss>
+        <FinInstrmClssfctn>DERV</FinInstrmClssfctn>
+      </ISINAndSubClss>
+    </Id>
+    <Lqdty>true</Lqdty>
+  </NonEqtyTrnsprncyData>
+  <!-- Bond with a label not in the frozen mapping -> bond_type None (fail closed). -->
+  <NonEqtyTrnsprncyData>
+    <TechRcrdId>1004</TechRcrdId>
+    <Id>
+      <ISINAndSubClss>
+        <ISIN>XS0000000204</ISIN>
+        <DerivSubClss>
+          <Desc>Unrecognized bond label</Desc>
+          <SgmttnCrit><CritNm>SACL</CritNm><CritVal>BOND6</CritVal></SgmttnCrit>
+        </DerivSubClss>
+        <FinInstrmClssfctn>BOND</FinInstrmClssfctn>
+      </ISINAndSubClss>
+    </Id>
+    <Lqdty>false</Lqdty>
+  </NonEqtyTrnsprncyData>
+  <!-- Bond with no DerivSubClss at all -> label None -> bond_type None. -->
+  <NonEqtyTrnsprncyData>
+    <TechRcrdId>1005</TechRcrdId>
+    <Id>
+      <ISINAndSubClss>
+        <ISIN>XS0000000205</ISIN>
+        <FinInstrmClssfctn>BOND</FinInstrmClssfctn>
+      </ISINAndSubClss>
+    </Id>
+    <Lqdty>false</Lqdty>
+  </NonEqtyTrnsprncyData>
+</FinInstrmRptgNonEqtyTradgActvtyRslt>

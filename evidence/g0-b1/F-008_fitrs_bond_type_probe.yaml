@@ -1,0 +1,67 @@
+# F-008 resolution: real bond classification contract probe
+# Metadata-only evidence. Payload bytes live in gitignored data/esma_fitrs/.
+# Probed live on 2026-09-15.
+finding: F-008
+status: RESOLVED
+spec_correction: >-
+  Frozen spec errata corrected via PR (docs/gates/G0.md §3): the profile is
+  instrument MiFIR ID = BOND (RTS 2 Annex IV Table 2 field 3) AND Bond Type =
+  CRPB (field 9, "Corporate Bond"). CRPB was never a MiFIR ID. Bond Type is
+  transparency reference data — its primary source is ESMA FITRS non-equity
+  data, NOT a FIRDS field and NEVER derived by guessing from the FIRDS CFI
+  code (ClssfctnTp).
+fitrs:
+  listing_endpoint: registers.esma.europa.eu solr esma_registers_fitrs_files
+  file_family: DLTNCR / FULNCR (non-equity transparency reference data)
+  schema: auth.045.001.03
+  probed_files:
+    - file: DLTNCR_20260914_1of8.zip
+      zip_sha256: 46097d0557696bfb3fe0a284a28d9bcf9f259a1cc59a44270eeb22afeb0cca3b
+      zip_bytes: 17561376
+      note: all-DERV part file; structure verified
+    - file: DLTNCR_20260914_2of8.zip
+      zip_sha256: 7eb55760ebb5a8b9ed93a5fa880eea2cf2f3c61652fa954f68964b5e6eb791ce
+      zip_bytes: 18003217
+      records_scanned: 72785   # first 150MB stream window of the part file
+  contract:
+    isin_path: NonEqtyTrnsprncyData/Id/ISINAndSubClss/ISIN
+    mifir_id_path: NonEqtyTrnsprncyData/Id/ISINAndSubClss/FinInstrmClssfctn
+    bond_type_path: NonEqtyTrnsprncyData/Id/ISINAndSubClss/DerivSubClss/Desc
+    sub_asset_class_criterion: SgmttnCrit[CritNm=SACL]/CritVal
+    record_id: NonEqtyTrnsprncyData/TechRcrdId
+  observed_vocabulary:
+    FinInstrmClssfctn: [DERV, SDRV, BOND]
+    bond_Desc_taxonomy:                     # Desc label <-> SACL, observed live
+      Sovereign bond: BOND1
+      Public bond: BOND2
+      Convertible bond: BOND3
+      Covered Bond: BOND4
+      Corporate bond: BOND5
+      Other bonds: BOND6
+    bond_type_code_mapping:                 # frozen in universe/fitrs.py
+      Corporate bond: CRPB
+      Convertible bond: CVTB
+      Covered Bond: CVDB
+      Sovereign bond: EUSB
+      Public bond: OEPB
+      Other bonds: OTHR
+    unmapped_label_behavior: bond_type=None -> resolver QUARANTINE (MISSING_BOND_TYPE)
+  external_confirmation:
+    - "ICMA RTS 2 non-equity transparency response: BOND1..BOND6 = sovereign/
+      public/convertible/covered/corporate/other — matches the observed SACL
+      ordering exactly."
+    - "Euronext/Borsa Italiana reference data spec publishes the RTS 2 field 9
+      code list EUSB/OEPB/CVTB/CVDB/CRPB/OTHR used for the mapping."
+resolver_changes:
+  - "SecurityRecord carries instrument_mifir_id (field 3) + instrument_bond_type
+    (field 9) separately; precedence: non-BOND -> EXCLUDE/NOT_BOND; BOND with
+    undetermined bond type -> QUARANTINE/MISSING_BOND_TYPE; known non-CRPB bond
+    type -> EXCLUDE/NOT_CRPB; then identity checks as before."
+  - "fixtures/universe/firds_sample.xml: FinInstrmTp removed (not in the real
+    auth.036 schema); fixtures/universe/fitrs_sample.xml added mirroring the
+    live auth.045 structure; disposition fixtures carry BOND+CRPB."
+note: >-
+  universe_snapshot_sha256 remains the hash of the frozen SYNTHETIC fixture
+  corpus — a contract-conformance artifact, NOT a real es_legal_issuer_v1
+  universe. Materializing the real universe requires scheduled FITRS/FIRDS
+  acquisition (post-G0 scope).
