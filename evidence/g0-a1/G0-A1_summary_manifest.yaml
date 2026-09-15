@@ -80,16 +80,16 @@ findings:
       from INGEST IDEMPOTENCE (G0-A2).
   - id: F-004
     title: BME publicationDate semantics
-    status: NEEDS_CONFIRMATION_BEFORE_G0-A3
+    status: RESOLVED
     detail: >-
-      observed: publicationDate (source-provided epoch millis) resolves to a
-      local-midnight boundary in CEST, e.g. 2026-09-14 file ->
-      2026-09-13T22:00:00Z. known: it is a source-provided epoch-millis value.
-      NOT PROVEN: whether it represents the exact public-availability timestamp
-      or only the daily publication/catalogue date. G0-A1 only preserves the
-      observed semantics and provenance. G0-A3's 24h/7-day rescan keys on
-      publication_timestamp, so this MUST be confirmed before G0-A3; do not
-      "fix" it blindly now.
+      Resolved 2026-09-15 (see evidence/g0-a1/F-004_publicationDate_resolution.yaml):
+      publicationDate is a daily catalogue date (local-midnight boundary,
+      Europe/Madrid), NOT the exact availability instant. Proof: 679/679 and
+      287/287 captured records carry publication_date_and_time AFTER the listing
+      timestamp, and the 2026-09-15 file was fetched mid-session already
+      containing intraday records. The daily file mutates intraday under a fixed
+      source_object_id; re-fetch yields a new immutable capture_version.
+      G0-A3 rescan must re-fetch the current-day file on each poll.
 
 hygiene:
   provider_payloads_tracked: false

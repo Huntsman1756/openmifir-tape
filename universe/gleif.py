@@ -8,9 +8,12 @@ Caching is write-once and content-addressed under a caller-supplied ``cache_dir`
 the repository tree.
 
 GLEIF LEI-CDF/API record shape handled: ``data[].attributes.entity.
-legalJurisdiction`` (a ISO 3166-1 alpha-2 code). ``legalJurisdiction`` may be a
-bare code or an object carrying a ``country`` code. Unresolvable LEIs are
-returned with ``resolved=False`` (fail closed; never guessed).
+legalJurisdiction`` (LEI-CDF name) OR ``data[].attributes.entity.jurisdiction``
+(the name used by the live api.gleif.org v1 payload, verified against a live
+response during F-005). The value is an ISO 3166 code and may carry a
+subdivision (e.g. ``US-CA``); the country component is the alpha-2 prefix.
+Unresolvable LEIs are returned with ``resolved=False`` (fail closed; never
+guessed).
 """
 
 from __future__ import annotations
@@ -50,6 +53,13 @@ def _stringify(code) -> str | None:
     return None
 
 
+def _country_of(jurisdiction: str | None) -> str | None:
+    """Country component of an ISO 3166 jurisdiction code (``US-CA`` -> ``US``)."""
+    if not jurisdiction:
+        return None
+    return jurisdiction.split("-", 1)[0] or None
+
+
 def parse_gleif(payload: bytes) -> dict[str, GleifEntity]:
     """Return ``{LEI: GleifEntity}`` for a GLEIF LEI-CDF/API payload."""
     try:
@@ -70,8 +80,9 @@ def parse_gleif(payload: bytes) -> dict[str, GleifEntity]:
             return
         attributes = raw.get("attributes") or {}
         entity = attributes.get("entity") or {}
-        jurisdiction = entity.get("legalJurisdiction", attributes.get("legalJurisdiction"))
-        country = _stringify(jurisdiction)
+        jurisdiction = entity.get("legalJurisdiction") or entity.get("jurisdiction") \
+            or attributes.get("legalJurisdiction") or attributes.get("jurisdiction")
+        country = _country_of(_stringify(jurisdiction))
         entities[lei] = GleifEntity(
             lei=lei,
             legal_jurisdiction_country=country,

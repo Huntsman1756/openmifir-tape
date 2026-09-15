@@ -1,0 +1,57 @@
+# F-004 resolution: BME listing publicationDate semantics
+# Metadata-only. No provider payload. Resolved 2026-09-15.
+finding: F-004
+status: RESOLVED
+question: >-
+  Whether the listing's publicationDate (source-provided epoch millis) is the
+  exact public-availability timestamp of the file or a daily catalogue date.
+resolution: >-
+  publicationDate is a DAILY CATALOGUE DATE (local-midnight boundary,
+  Europe/Madrid), not the exact availability instant. The daily JSON file is
+  available intraday and its content accumulates records while the trading day
+  is still in progress.
+evidence:
+  captured_objects:
+    - source_object_id: 2026-09-11-bmea-posttrade.json
+      listing_publication_timestamp: "2026-09-10T22:00:00+00:00"   # = 2026-09-11 00:00 CEST
+      record_count: 679
+      record_publication_range_utc: ["2026-09-11T06:00:00.643962Z", "2026-09-11T17:00:00.574385Z"]
+      records_after_listing_ts: 679
+    - source_object_id: 2026-09-14-bmea-posttrade.json
+      listing_publication_timestamp: "2026-09-13T22:00:00+00:00"   # = 2026-09-14 00:00 CEST
+      record_count: 287
+      record_publication_range_utc: ["2026-09-14T06:10:24.555247Z", "2026-09-14T16:25:41.236477Z"]
+      records_after_listing_ts: 287
+    - source_object_id: 2026-09-15-bmea-posttrade.json
+      listing_publication_timestamp: "2026-09-14T22:00:00+00:00"   # = 2026-09-15 00:00 CEST
+      record_count: 313
+      record_publication_range_utc: ["2026-09-15T06:13:55.406099Z", "2026-09-15T17:00:00.327307Z"]
+      fetched_utc: "2026-09-15T19:59Z"
+      note: >-
+        Fetched while the trading day was still in progress; the file already
+        contained records published 06:13-17:00 UTC. Direct proof that the file
+        is available and mutating intraday under a fixed source_object_id.
+      raw_sha256: 0c5c84e7087b8f08e38ab2dd3852f8d4df46498e20e8634ec2357d9f9d9bd1a7
+      size_bytes: 311557
+interpretation:
+  - >-
+    Every record in each file carries a publication_date_and_time LATER than the
+    listing publicationDate (679/679 and 287/287). If publicationDate were the
+    exact availability instant, no record could post-date it. It is the nominal
+    date of the daily file, rendered as local midnight (22:00 UTC during CEST).
+  - >-
+    The same source_object_id (daily file) is re-served with growing content
+    during the day; the listing timestamp does not track last-update.
+consequences_for_g0_a3:
+  - >-
+    Daily rescan keyed on publication_timestamp continues to work: the key is a
+    stable catalogue date. The rescan MUST re-fetch the current-day file on each
+    poll (<= 1h), not only newly-appearing listing entries.
+  - >-
+    Intraday re-fetch of the same source_object_id yields different bytes ->
+    RawStore records a NEW immutable capture_version (same id + different
+    bytes); originals are preserved. This is already the enforced invariant.
+  - >-
+    Record-level recency for gap analysis must use the record's own
+    publication_date_and_time, never the file-level publicationDate (already
+    enforced in normalization/timestamp.py).

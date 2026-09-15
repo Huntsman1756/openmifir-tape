@@ -1,0 +1,57 @@
+# F-005 resolution: FIRDS/GLEIF live contract probe
+# Metadata-only evidence. Payload bytes cached under gitignored data/cache/.
+# Probed live on 2026-09-15.
+finding: F-005
+status: RESOLVED
+gleif:
+  endpoint: api.gleif.org/api/v1/lei-records/{lei}
+  observations:
+    - lei: K8MS7FD7N5Z2WQ51AZ71
+      resolved_country: ES
+      payload_sha256: 48ffd95208a09519  # prefix; full hash in local cache path
+    - lei: 5493006QMFDDMYWIAM13
+      resolved_country: ES
+      payload_sha256: 573334d3398dafe8
+    - lei: HWUPKR0MPOU8FGXBT394
+      resolved_country: US              # source value US-CA (subdivision)
+      payload_sha256: 9335205c51d649bf
+    - lei: ZZZZZZZZZZZZZZZZZZZZZZ
+      outcome: HTTP 404 (unresolvable LEI fails closed)
+  contract_fix:
+    - >-
+      Live API field is ``entity.jurisdiction``, not ``entity.legalJurisdiction``
+      (LEI-CDF name). parse_gleif now accepts both; the ISO 3166 country
+      component is taken before any subdivision suffix (US-CA -> US).
+firds:
+  listing_endpoint: registers.esma.europa.eu solr esma_registers_firds_files
+  file: DLTINS_20260914_01of01.zip
+  schema: auth.036.001.03
+  zip_sha256: 8431a24205754ec0ef58d9fdc06363b02a35662b9b757f8420e50d1a4b39a7ca
+  zip_bytes: 39064
+  record_count: 620
+  record_kinds: {NewRcrd: 223, ModfdRcrd: 10, TermntdRcrd: 387}
+  field5_issuer_lei:
+    element: FinInstrm/<record-kind>/Issr
+    extracted: 620
+    missing: 0
+  isin:
+    element: FinInstrmGnlAttrbts/Id
+    extracted: 620
+    malformed: 0
+  instrument_type:
+    element_present: false
+    detail: >-
+      No FinInstrmTp element exists in the auth.036 delta schema. Instrument
+      classification is carried as ClssfctnTp (CFI, ISO 10962); parse_firds now
+      extracts it into FirdsInstrument.cfi_code and hardens ISIN/LEI extraction
+      to direct-child selection (nested venue/underlying ids never match).
+  fail_closed:
+    - record kinds NewRcrd/ModfdRcrd/TermntdRcrd all parsed
+    - missing Issr -> empty LEI -> resolver QUARANTINE (unchanged semantics)
+open_gap_for_real_universe:
+  - >-
+    instrument_mifir_id is never populated from a DLTINS payload (no such
+    element). CRPB membership for a real es_legal_issuer_v1 universe requires a
+    documented derivation (CFI class -> MiFIR identifier) or confirmation of a
+    type field in the FULINS schema. Recorded as F-008; the fixture-derived
+    universe_snapshot_sha256 must not be cited as a real universe until then.

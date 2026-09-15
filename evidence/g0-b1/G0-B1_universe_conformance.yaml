@@ -186,15 +186,27 @@ samples:
 findings:
   - id: F-005
     title: FIRDS/GLEIF live contract probe
+    status: RESOLVED
+    resolved: '2026-09-15'
+    evidence: evidence/g0-b1/F-005_live_contract_probe.yaml
+    must_prove:
+      - real FIRDS field-5 (issuer LEI) extraction   # PROVEN: 620/620 Issr extracted
+      - real GLEIF LegalJurisdiction path resolution # PROVEN; live field is entity.jurisdiction
+      - schema compatibility against a live payload  # PROVEN: auth.036 DLTINS parsed
+      - fail-closed on actual payload variants       # PROVEN: record kinds + 404
+    note: >-
+      Probe exposed two live-contract divergences, both fixed: GLEIF uses
+      entity.jurisdiction (with subdivision codes like US-CA); FIRDS auth.036 has
+      NO FinInstrmTp element (type is ClssfctnTp/CFI). The
+      universe_snapshot_sha256 (0a29b1f1...) remains the hash of the frozen
+      fixture corpus, NOT a real universe. See F-008.
+  - id: F-008
+    title: CRPB membership derivation on real FIRDS
     status: OPEN
     deadline: before any result that claims a real es_legal_issuer_v1 universe
-    blocking: false           # does NOT block G0-C1 normalization
-    must_prove:
-      - real FIRDS field-5 (issuer LEI) extraction
-      - real GLEIF LegalJurisdiction path resolution
-      - schema compatibility against a live payload
-      - fail-closed on actual payload variants
-    note: >-
-      The universe_snapshot_sha256 (0a29b1f1...) is the deterministic hash of the
-      frozen disposition/fixture corpus, NOT a materialized FIRDS->GLEIF market
-      universe. Do not cite it as a real universe snapshot until F-005 is closed.
+    blocking: false
+    detail: >-
+      The auth.036 FIRDS schema carries no literal MiFIR instrument identifier
+      (no FinInstrmTp). CRPB membership must be derived from ClssfctnTp (CFI,
+      ISO 10962) under a documented mapping, or a type field must be confirmed
+      in the FULINS schema. Until then, no real universe may be claimed.

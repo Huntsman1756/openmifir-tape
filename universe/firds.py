@@ -9,10 +9,15 @@ directory, ``data/``); this module NEVER writes provider bytes into the
 repository tree. Cache metadata is a SHA-256 identity, never a payload dump.
 
 The XML subset parsed here mirrors the ESMA FIRDS instrument record: issuer LEI
-lives in the ``<Issr>`` element (RTS 23 field 5), the ISIN in ``<Id>`` and the
-instrument type in ``<FinInstrmTp>``. The exact live FIRDS shape MUST be
-re-verified against a real download during operational acquisition (out of
-scope for G0-B1, which is fixture-based and offline).
+lives in the ``<Issr>`` element (RTS 23 field 5), the ISIN in
+``FinInstrmGnlAttrbts/<Id>`` and the instrument classification (CFI, ISO 10962)
+in ``<ClssfctnTp>``.
+
+Verified against a live ``auth.036.001.03`` DLTINS payload during F-005:
+``FinInstrm`` wraps a record-kind element (``NewRcrd``/``ModfdRcrd``/
+``TermntdRcrd``) that carries ``FinInstrmGnlAttrbts`` and ``Issr`` as direct
+children; there is NO ``FinInstrmTp`` element in that schema (instrument type
+must be derived from the CFI code or confirmed against the FULINS schema).
 """
 
 from __future__ import annotations
@@ -39,6 +44,7 @@ class FirdsInstrument:
     instrument_isin: str
     instrument_mifir_id: str
     issuer_lei: str
+    cfi_code: str | None = None
     source_report_id: str | None = None
 
 
@@ -61,6 +67,20 @@ def _child_text(element: ET.Element, name: str) -> str | None:
     return None
 
 
+def _direct_child(element: ET.Element, name: str) -> ET.Element | None:
+    for child in element:
+        if _local_name(child.tag) == name:
+            return child
+    return None
+
+
+def _direct_child_text(element: ET.Element, name: str) -> str | None:
+    child = _direct_child(element, name)
+    if child is not None and child.text:
+        return child.text.strip()
+    return None
+
+
 def parse_firds(xml_bytes: bytes) -> list[FirdsInstrument]:
     """Parse a FIRDS XML subset into instruments with field 5 issuer LEI.
 
@@ -76,15 +96,31 @@ def parse_firds(xml_bytes: bytes) -> list[FirdsInstrument]:
     for element in root.iter():
         if _local_name(element.tag) != "FinInstrm":
             continue
-        isin = _child_text(element, "Id") or ""
-        mifir_id = _child_text(element, "FinInstrmTp") or ""
-        issuer_lei = _child_text(element, "Issr") or ""
+        # The record wrapper (NewRcrd/ModfdRcrd/TermntdRcrd in auth.036, or a
+        # direct FinInstrmGnlAttrbts in the synthetic fixture) carries
+        # FinInstrmGnlAttrbts; Issr (RTS 23 field 5) is a direct child of the
+        # record element — never descend into nested instrument structures.
+        wrapper = next((c for c in element if isinstance(c.tag, str)), None)
+        if wrapper is None:
+            gnl = _direct_child(element, "FinInstrmGnlAttrbts")
+            issuer_lei = _direct_child_text(element, "Issr")
+        elif _local_name(wrapper.tag) == "FinInstrmGnlAttrbts":
+            gnl = wrapper
+            issuer_lei = _direct_child_text(element, "Issr")
+        else:
+            gnl = _direct_child(wrapper, "FinInstrmGnlAttrbts")
+            issuer_lei = _direct_child_text(wrapper, "Issr")
+        isin = _direct_child_text(gnl, "Id") if gnl is not None else ""
+        cfi = _direct_child_text(gnl, "ClssfctnTp") if gnl is not None else None
+        mifir_id = _direct_child_text(gnl, "FinInstrmTp") if gnl is not None else None
+        mifir_id = mifir_id or ""
         report_id = _child_text(element, "FinInstrmRptgRprtSts") or _child_text(element, "RptgRef")
         instruments.append(
             FirdsInstrument(
-                instrument_isin=isin,
+                instrument_isin=isin or "",
                 instrument_mifir_id=mifir_id,
-                issuer_lei=issuer_lei,
+                issuer_lei=issuer_lei or "",
+                cfi_code=cfi,
                 source_report_id=report_id,
             )
         )

@@ -24,7 +24,7 @@
       "attributes": {
         "lei": "00000000000000000999",
         "entity": {
-          "legalJurisdiction": "US"
+          "jurisdiction": "US-CA"
         }
       }
     }
