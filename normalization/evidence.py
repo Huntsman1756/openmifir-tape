@@ -14,6 +14,8 @@ from pathlib import Path
 
 import yaml
 
+from universe.sample import load_frozen_sample
+
 from .model import NormalizedRecord
 from .normalize import normalize_record
 
@@ -69,6 +71,8 @@ def _norm_stats(records: list[NormalizedRecord]) -> dict:
 def generate_evidence(raw_root: Path, evidence_dir: Path, *, date: str) -> Path:
     results: dict[str, dict] = {}
     total_records = 0
+    profile_records = 0
+    sample = load_frozen_sample()
     for source in ("bme_apa", "blb_apae"):
         source_dir = raw_root / source
         if not source_dir.is_dir():
@@ -85,13 +89,23 @@ def generate_evidence(raw_root: Path, evidence_dir: Path, *, date: str) -> Path:
                     records.append(normalize_record(source, r))
         results[source] = _norm_stats(records)
         total_records += results[source]["record_count"]
+        profile_records += sum(
+            1 for r in records if sample.contains(r.instrument_identification_code)
+        )
 
     manifest = {
         "gate": "G0-C",
         "issue_id": "G0-C1",
         "date": date,
         "raw_lossless": True,
+        "scope": "integration",
+        "scope_note": (
+            "Whole-provider-file metrics (F-009): engine conformance only, NOT "
+            "the authoritative es-corporate-bonds profile scope."
+        ),
         "total_normalized_records": total_records,
+        "profile_scope_normalized_records": profile_records,
+        "profile_scope_basis": "frozen 15+5 sample, fixtures/universe/universe_manifest.yaml",
         "by_source": results,
         "note": "Metadata only. Raw provider content is NOT included; only counts, "
                 "parse/sanity distributions and field-preservation metrics.",

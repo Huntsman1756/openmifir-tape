@@ -2,17 +2,22 @@ gate: G0-C
 issue_id: G0-C1
 date: '2026-09-15'
 raw_lossless: true
-total_normalized_records: 969
+scope: integration
+scope_note: 'Whole-provider-file metrics (F-009): engine conformance only, NOT the
+  authoritative es-corporate-bonds profile scope.'
+total_normalized_records: 1282
+profile_scope_normalized_records: 1
+profile_scope_basis: frozen 15+5 sample, fixtures/universe/universe_manifest.yaml
 by_source:
   bme_apa:
-    record_count: 966
+    record_count: 1279
     timestamp_parse_distribution:
-      PARSED: 1932
+      PARSED: 2558
     sanity_distribution:
-      INSUFFICIENT: 966
+      INSUFFICIENT: 1279
     min_raw_field_count: 31
     max_raw_field_count: 35
-    records_with_flags: 45
+    records_with_flags: 66
   blb_apae:
     record_count: 3
     timestamp_parse_distribution:
@@ -27,24 +32,3 @@ note: Metadata only. Raw provider content is NOT included; only counts, parse/sa
 hygiene:
   provider_payloads_in_repo: false
   raw_directory_tracked: false
-
-findings:
-  - id: F-006
-    title: C1/D1 composition proof (raw -> normalized -> ledger reproducible)
-    status: CLOSED
-    deadline: before D1 is VERIFIED
-    cause: >-
-      The G0-C completion criterion (docs/gates/G0.md sec.4) requires
-      "raw -> normalized -> ledger reproducible", but G0-C1's allowed scope ends
-      at normalized (no ledger, by design). The ledger/event representation and
-      the composition proof belong to G0-D1.
-    resolved_by: G0-D1
-    proof: >-
-      G0-D1 provides the composition proof: same raw inputs -> deterministic
-      normalized records -> deterministic ledger semantic digest
-      (cef234e5e533de83a6aabcb7975181750646bf634ba1da29ad574e82848a0c6d,
-      re-verified after the F-007 identity-semantics repair),
-      repeat execution identical. Ledger append-only, NO_HEURISTIC_DELETION.
-    note: >-
-      G0-C is now satisfied end-to-end: G0-C1 normalization implementation
-      verified + G0-D1 composition proof.
