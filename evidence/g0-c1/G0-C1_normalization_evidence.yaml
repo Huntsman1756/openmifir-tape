@@ -42,7 +42,8 @@ findings:
     proof: >-
       G0-D1 provides the composition proof: same raw inputs -> deterministic
       normalized records -> deterministic ledger semantic digest
-      (f0b65d4a7b0c4b9e06e0b986faecc4978dce54131d0b0c73f32e91b15032e489),
+      (cef234e5e533de83a6aabcb7975181750646bf634ba1da29ad574e82848a0c6d,
+      re-verified after the F-007 identity-semantics repair),
       repeat execution identical. Ledger append-only, NO_HEURISTIC_DELETION.
     note: >-
       G0-C is now satisfied end-to-end: G0-C1 normalization implementation

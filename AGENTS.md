@@ -38,7 +38,7 @@ agent inference
 
 ## Lifecycle model
 
-A trade is a sequence of states (EXECUTED → PARTIALLY_PUBLISHED / DEFERRED → FULLY_PUBLISHED → AMENDED → CANCELLED), reconstructed from successive publications. The event log records observations; records are never overwritten, only superseded via `supersedes_source_report_id`.
+A trade is a sequence of states (EXECUTED → PARTIALLY_PUBLISHED / DEFERRED → FULLY_PUBLISHED → AMENDED → CANCELLED), reconstructed from successive publications. The event log records observations; records are never overwritten, only superseded via `supersedes_entry_id`.
 
 ## Task contract format
 

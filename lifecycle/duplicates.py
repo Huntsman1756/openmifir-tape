@@ -32,11 +32,14 @@ def source_exact_duplicates(normalized: list[Any]) -> list[Any]:
     return [rec for rec in normalized if seen[source_exact_key(rec)] > 1]
 
 
-def economic_duplicate_candidates(normalized: list[Any]) -> list[tuple[Any, list[Any]]]:
+def economic_duplicate_candidates(normalized: list[Any]) -> list[dict[str, Any]]:
     """Flag economic-duplicate candidate groups (never merged/deleted).
 
     Candidate key = instrument + quantity + price + trading time. Records are NOT
     removed; they are only grouped and flagged for cross-source analysis (G0-E).
+    Each group is classified ``cross_source`` (distinct sources share the key)
+    or ``intra_source`` — only cross_source groups are usable for cross-source
+    conclusions in G0-E1.
     """
     groups: dict[tuple, list[Any]] = {}
     for rec in normalized:
@@ -47,4 +50,18 @@ def economic_duplicate_candidates(normalized: list[Any]) -> list[tuple[Any, list
             rec.trading_datetime.canonical_utc,
         )
         groups.setdefault(key, []).append(rec)
-    return [(k, v) for k, v in groups.items() if len(v) > 1]
+    candidates: list[dict[str, Any]] = []
+    for key, recs in groups.items():
+        if len(recs) <= 1:
+            continue
+        sources = sorted({r.source for r in recs})
+        candidates.append(
+            {
+                "key": key,
+                "records": recs,
+                "record_count": len(recs),
+                "sources": sources,
+                "scope": "cross_source" if len(sources) > 1 else "intra_source",
+            }
+        )
+    return candidates

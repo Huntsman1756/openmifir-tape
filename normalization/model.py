@@ -47,7 +47,14 @@ class NormalizedRecord:
     trading_datetime: TimestampValue
     publication_datetime: TimestampValue
     flags: list[str] = field(default_factory=list)
-    deferral: bool | None = None
+    # Lifecycle signals (G0-D): tri-state. True/False = determined from source
+    # semantics; None = the source schema cannot determine it (fail closed).
+    deferral: bool | None = None            # non-immediate publication indicated
+    partial_publication: bool | None = None # source published incomplete content
+    cancellation: bool | None = None        # source marks this publication a cancel
+    amendment: bool | None = None           # source marks this publication an amend
+    source_report_id: str | None = None     # source-PUBLISHED publication/report id;
+                                            # None when the source publishes none
     raw_fields: dict[str, Any] = field(default_factory=dict)     # LOSSLESS
     rts2_mapping: dict[str, str] = field(default_factory=dict)   # canonical -> source field
     sanity: list[SanityResult] = field(default_factory=list)
@@ -81,6 +88,10 @@ class NormalizedRecord:
             },
             "flags": self.flags,
             "deferral": self.deferral,
+            "partial_publication": self.partial_publication,
+            "cancellation": self.cancellation,
+            "amendment": self.amendment,
+            "source_report_id": self.source_report_id,
             "raw_field_count": len(self.raw_fields),             # count, not content
             "rts2_mapping": self.rts2_mapping,
             "sanity": [s.__dict__ for s in self.sanity],

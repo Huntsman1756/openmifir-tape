@@ -19,15 +19,19 @@ class TradeState(str, Enum):
     FULLY_PUBLISHED = "FULLY_PUBLISHED"
     AMENDED = "AMENDED"
     CANCELLED = "CANCELLED"
+    # Fail-closed meta-state (not a lifecycle state): the source signals were
+    # absent or contradictory, so no lifecycle state could be determined.
+    UNRESOLVED = "UNRESOLVED"
 
 
 @dataclass
 class LedgerEntry:
     """One immutable observation (publication event) in the append-only ledger."""
 
-    entry_id: str                # deterministic
+    entry_id: str                # deterministic ledger-local identity (sha256)
     source: str
-    source_report_id: str        # source-side identity of this publication
+    source_report_id: str | None  # source-PUBLISHED publication/report id;
+                                # None when the source publishes none
     transaction_identification_code: str | None
     instrument_identification_code: str
     quantity: str | None
@@ -37,9 +41,10 @@ class LedgerEntry:
     publication_utc: str | None
     trading_utc: str | None
     state: str                   # TradeState value
-    event_type: str              # PUBLISH | AMEND | CANCEL | DEFER | ...
-    supersedes_source_report_id: str | None
-    flags: list[str] = field(default_factory=list)
+    event_type: str              # PUBLISH | PARTIAL_PUBLISH | DEFER | AMEND | CANCEL | UNRESOLVED
+    supersedes_entry_id: str | None  # entry_id of the observation this supersedes
+    flags: list[str] = field(default_factory=list)    # source-published flags (verbatim)
+    markers: list[str] = field(default_factory=list)  # ledger-internal diagnostics
     normalized: dict[str, Any] = field(default_factory=dict)   # metadata ref, no payload
 
     def canonical(self) -> dict[str, Any]:
@@ -58,6 +63,7 @@ class LedgerEntry:
             "trading_utc": self.trading_utc,
             "state": self.state,
             "event_type": self.event_type,
-            "supersedes_source_report_id": self.supersedes_source_report_id,
+            "supersedes_entry_id": self.supersedes_entry_id,
             "flags": sorted(self.flags),
+            "markers": sorted(self.markers),
         }

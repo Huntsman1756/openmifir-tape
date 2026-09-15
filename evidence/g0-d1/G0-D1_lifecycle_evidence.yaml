@@ -1,19 +1,46 @@
 gate: G0-D
 issue_id: G0-D1
 date: '2026-09-15'
-ledger_semantic_digest: f0b65d4a7b0c4b9e06e0b986faecc4978dce54131d0b0c73f32e91b15032e489
-entry_count: 969
-chain_count: 963
+ledger_semantic_digest: cef234e5e533de83a6aabcb7975181750646bf634ba1da29ad574e82848a0c6d
+entry_count: 1282
+chain_count: 1255
 states_observed:
+- DEFERRED
 - FULLY_PUBLISHED
+- CANCELLED
+- PARTIALLY_PUBLISHED
+- AMENDED
+state_distribution:
+  AMENDED: 6
+  CANCELLED: 21
+  DEFERRED: 9
+  FULLY_PUBLISHED: 1244
+  PARTIALLY_PUBLISHED: 2
+missing_transaction_id_count: 0
+unchainable_record_count: 0
+ledger_entry_id_collision_count: 0
+supersession_link_count: 27
+unresolved_state_count: 0
 source_exact_duplicate_count: 0
-economic_duplicate_candidate_groups: 9
+economic_duplicate_candidate_groups: 22
+economic_duplicate_cross_source_groups: 0
+economic_duplicate_intra_source_groups: 22
 no_heuristic_deletion: true
 append_only: true
 f006_composition_proof:
   raw_to_normalized: true
-  raw_to_ledger_digest: f0b65d4a7b0c4b9e06e0b986faecc4978dce54131d0b0c73f32e91b15032e489
+  raw_to_ledger_digest: cef234e5e533de83a6aabcb7975181750646bf634ba1da29ad574e82848a0c6d
   deterministic: true
+findings:
+- id: F-007
+  title: PARTIAL_PUBLICATION_UNIMPLEMENTED + identity semantics repair
+  status: CLOSED
+  detail: PARTIALLY_PUBLISHED/DEFERRED now derive deterministically from source semantics
+    (MMT 4.1 deferral reason vs omitted content); canc/amnd source fields honored;
+    missing transaction ids are UNCHAINABLE singletons (never grouped by empty id);
+    source_report_id holds only source-published ids (None today); supersession links
+    use supersedes_entry_id; entry-id collisions are disambiguated deterministically
+    and counted.
 hygiene:
   provider_payloads_in_repo: false
   raw_directory_tracked: false

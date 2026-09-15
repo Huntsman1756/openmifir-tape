@@ -12,6 +12,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from ..mmt import MMT_AMEND_FLAG, MMT_CANCEL_FLAG, MMT_DEFERRAL_REASON, MMT_PARTIAL_TYPE
 from ..model import NormalizedRecord
 from ..quantity import notional_vs_quantity_price
 from ..timestamp import timestamp
@@ -72,10 +73,55 @@ def _bool(val: Any) -> bool | None:
     return None
 
 
+def _deferral_signal(raw: dict[str, Any], flags: list[str]) -> bool | None:
+    """Deferral signal from source semantics.
+
+    ``post_trade_deferral`` carries the MMT 4.1 reason code letter (observed in
+    the captured corpus: 'A'->MLF1, 'C'->LLF3, 'G'->DEFF); any non-empty code
+    means a non-immediate publication deferral was applied. An MMT 4.1 reason
+    mnemonic in ``flags`` also indicates deferral. Field absent AND no flag ->
+    None (undetermined, fail closed).
+    """
+    if set(flags) & MMT_DEFERRAL_REASON:
+        return True
+    if "post_trade_deferral" not in raw:
+        return None
+    value = raw.get("post_trade_deferral")
+    parsed = _bool(value)
+    if parsed is not None:
+        return parsed
+    return bool(str(value).strip())
+
+
+def _partial_signal(raw: dict[str, Any], flags: list[str], deferral: bool | None) -> bool | None:
+    """Partial-publication signal from source semantics.
+
+    A publication is partial when the source publishes the trade but withholds
+    content: an explicit ``missing_price``/``missing_quantity`` indicator, an
+    MMT 4.2 non-full-detail type flag, or — under deferral — the volume block
+    omitted from the publication entirely (observed: DEFF publications carry no
+    quantity/notional keys at all, while non-deferred records of the same
+    instrument type do carry them). Undetermined when deferral itself is
+    undetermined.
+    """
+    if set(flags) & MMT_PARTIAL_TYPE:
+        return True
+    if _bool(raw.get("missing_price")) or _bool(raw.get("missing_quantity")):
+        return True
+    if deferral is None:
+        return None
+    if deferral and raw.get("quantity") is None:
+        return True
+    return False
+
+
 def normalize(rec: dict[str, Any]) -> NormalizedRecord:
     raw = dict(rec)
     td = timestamp(raw.get("trading_date_and_time"))
     pd = timestamp(raw.get("publication_date_and_time"))
+    flags = _flags(raw)
+    flagset = set(flags)
+    deferral = _deferral_signal(raw, flags)
     sanity = [
         notional_vs_quantity_price(
             raw.get("quantity"), raw.get("notional_amount"),
@@ -99,8 +145,12 @@ def normalize(rec: dict[str, Any]) -> NormalizedRecord:
         transaction_identification_code=raw.get("transaction_identification_code"),
         trading_datetime=td,
         publication_datetime=pd,
-        flags=_flags(raw),
-        deferral=_bool(raw.get("post_trade_deferral")),
+        flags=flags,
+        deferral=deferral,
+        partial_publication=_partial_signal(raw, flags, deferral),
+        cancellation=True if MMT_CANCEL_FLAG in flagset else _bool(raw.get("canc")),
+        amendment=True if MMT_AMEND_FLAG in flagset else _bool(raw.get("amnd")),
+        source_report_id=None,   # BME publishes no per-publication report id
         raw_fields=raw,
         rts2_mapping=dict(_FIELD_MAP),
         sanity=sanity,
