@@ -57,15 +57,17 @@ findings:
       config/sources/bme_apa.yaml entrypoint.listing_url with provenance. No URL
       was guessed. BME acquired successfully.
   - id: F-002
-    title: Windows raw-capture byte corruption (O_BINARY) - FIXED
+    title: Windows raw-capture byte corruption (newline translation) - FIXED
     severity: FIXED
     detail: >-
-      On Windows, os.open defaults to text mode without O_BINARY, causing
-      os.write to translate LF->CRLF and inflate/alter the exact captured bytes
-      (observed 1992B -> 2008B, sha mismatch). This initially masqueraded as a
-      "source regenerates content" conflict. Fixed by adding os.O_BINARY
-      (no-op on POSIX); covered by a byte-exactness regression test. Raw objects
-      are now verified byte-for-byte (file sha == recorded raw_sha256).
+      On Windows, opening a file without binary mode causes newline translation
+      (LF->CRLF), inflating/altering the exact captured bytes (observed 1992B ->
+      2008B, sha mismatch). This initially masqueraded as a "source regenerates
+      content" conflict. Fixed with the portable exclusive-create binary mode
+      open(path, "xb"), which also removes the Windows-only os.O_BINARY symbol
+      that would AttributeError on POSIX. Covered by a byte-exactness regression
+      test. Raw objects are verified byte-for-byte (file sha == recorded
+      raw_sha256).
   - id: F-003
     title: Storage identity model separates source_object_id from capture_version
     severity: DESIGN
@@ -76,6 +78,18 @@ findings:
       bytes -> new immutable version, original preserved; same version+different
       bytes -> WriteOnceConflict). Keeps SOURCE REOBSERVATION (G0-A1) distinct
       from INGEST IDEMPOTENCE (G0-A2).
+  - id: F-004
+    title: BME publicationDate semantics
+    status: NEEDS_CONFIRMATION_BEFORE_G0-A3
+    detail: >-
+      observed: publicationDate (source-provided epoch millis) resolves to a
+      local-midnight boundary in CEST, e.g. 2026-09-14 file ->
+      2026-09-13T22:00:00Z. known: it is a source-provided epoch-millis value.
+      NOT PROVEN: whether it represents the exact public-availability timestamp
+      or only the daily publication/catalogue date. G0-A1 only preserves the
+      observed semantics and provenance. G0-A3's 24h/7-day rescan keys on
+      publication_timestamp, so this MUST be confirmed before G0-A3; do not
+      "fix" it blindly now.
 
 hygiene:
   provider_payloads_tracked: false

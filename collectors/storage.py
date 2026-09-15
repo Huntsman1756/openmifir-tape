@@ -34,7 +34,6 @@ never writes provider payloads anywhere under the repository tree.
 from __future__ import annotations
 
 import hashlib
-import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -136,17 +135,15 @@ class RawStore:
 
         created = False
         try:
-            # O_BINARY (no-op on POSIX) prevents Windows text-mode newline
-            # translation, which would otherwise corrupt the exact captured bytes.
-            fd = os.open(str(version_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_BINARY, 0o644)
-        except FileExistsError:
-            pass
-        else:
-            try:
-                os.write(fd, data)
-            finally:
-                os.close(fd)
+            # "xb" = exclusive create (fail if exists) + binary write. Binary
+            # mode prevents newline translation on Windows (exact bytes) and is
+            # portable across Windows and POSIX. Unlike os.O_BINARY, this symbol
+            # is not Windows-only.
+            with open(version_file, "xb") as fh:
+                fh.write(data)
             created = True
+        except FileExistsError:
+            created = False
 
         if created:
             status = "CREATED"
