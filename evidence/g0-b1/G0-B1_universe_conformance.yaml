@@ -182,3 +182,19 @@ cases:
 samples:
   snapshot_payload_sha256_of: universe_snapshot_sha256 over the frozen disposition
     table
+
+findings:
+  - id: F-005
+    title: FIRDS/GLEIF live contract probe
+    status: OPEN
+    deadline: before any result that claims a real es_legal_issuer_v1 universe
+    blocking: false           # does NOT block G0-C1 normalization
+    must_prove:
+      - real FIRDS field-5 (issuer LEI) extraction
+      - real GLEIF LegalJurisdiction path resolution
+      - schema compatibility against a live payload
+      - fail-closed on actual payload variants
+    note: >-
+      The universe_snapshot_sha256 (0a29b1f1...) is the deterministic hash of the
+      frozen disposition/fixture corpus, NOT a materialized FIRDS->GLEIF market
+      universe. Do not cite it as a real universe snapshot until F-005 is closed.

@@ -1,0 +1,29 @@
+gate: G0-C
+issue_id: G0-C1
+date: '2026-09-15'
+raw_lossless: true
+total_normalized_records: 969
+by_source:
+  bme_apa:
+    record_count: 966
+    timestamp_parse_distribution:
+      PARSED: 1932
+    sanity_distribution:
+      INSUFFICIENT: 966
+    min_raw_field_count: 31
+    max_raw_field_count: 35
+    records_with_flags: 45
+  blb_apae:
+    record_count: 3
+    timestamp_parse_distribution:
+      PARSED: 6
+    sanity_distribution:
+      INSUFFICIENT: 3
+    min_raw_field_count: 23
+    max_raw_field_count: 23
+    records_with_flags: 0
+note: Metadata only. Raw provider content is NOT included; only counts, parse/sanity
+  distributions and field-preservation metrics.
+hygiene:
+  provider_payloads_in_repo: false
+  raw_directory_tracked: false
