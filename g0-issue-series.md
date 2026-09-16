@@ -183,17 +183,36 @@ Depends on: G0-D1, G0-A3
 
 Objective:
 Produce cross-source metrics (unique ISINs, trades, intersections,
-source-exclusive sets, notional/trades by source) without coverage
-claims.
+source-exclusive sets, notional/trades by source) over the VALIDATED
+INCLUDE subset of the frozen sample, without coverage claims.
 
 Authority:
-docs/gates/G0.md#G0-E
+docs/gates/G0.md#G0-E (baseline: g0-freeze-v1)
+evidence/g0-b1/F-009_frozen_sample_validation.yaml (validated scope:
+16 INCLUDE of the frozen 15+5; the 4 EXCLUDE stay frozen for audit)
 
 Allowed scope:
 - metrics/ module + report generation
 
+Preregistered interpretation (fixed 2026-09-16, before A3 closes):
+- A3 PASS + low/1-of-16 observation rate is a VALID G0-E result.
+  A low sample hit rate is NOT a gate failure and MUST NOT trigger
+  window extension, sample changes, or re-scoping.
+- A3 FAIL / unexplained capture gaps => the metrics are NOT market
+  evidence and E1 cannot pass.
+- Unobserved sample ISINs are "not observed in an intact capture",
+  never "did not trade".
+
 Done when:
-- COVERAGE_MEASURED report exists
+- COVERAGE_MEASURED report exists with:
+    unique trades by source, intersection, source-exclusive sets,
+    notional by source,
+    validated profile ISINs (16) / observed / unobserved /
+    sample observation rate over the capture window
+- report carries an explicit interpretation_limits section:
+    NO completeness inference, NO market-share inference,
+    NO absence-of-trading inference, no generalization from
+    low-n source-exclusive observations
 - NO_COVERAGE_CLAIM holds (no completeness language anywhere)
 
 Evidence:
