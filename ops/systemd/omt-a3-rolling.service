@@ -1,0 +1,9 @@
+[Unit]
+Description=OpenMiFIR Tape G0-A3 daily rolling 7-day rescan
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/openmifir-tape
+ExecStart=/opt/openmifir-tape/.venv/bin/python -m collectors.a3 --mode rolling

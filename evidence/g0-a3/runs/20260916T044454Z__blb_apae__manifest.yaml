@@ -1,0 +1,43 @@
+run_id: 20260916T044454Z
+gate: G0-A3
+purpose: scheduled capture run (poll/rolling rescan)
+results:
+  source_id: blb_apae
+  attempted: true
+  status: SUCCEEDED
+  observed_at: '2026-09-16T04:44:54.541963+00:00'
+  object_count: 1
+  created_count: 1
+  already_present_count: 0
+  objects:
+  - source_id: blb_apae
+    source_object_id: BAPA-POST2-20260916-04:31:55.950-02.csv
+    capture_version: 950ddff3df44bc2e4478a440f78f001b7e1d88b653276c693b3690675d8da17b
+    filename: 950ddff3df44bc2e4478a440f78f001b7e1d88b653276c693b3690675d8da17b
+    raw_sha256: 950ddff3df44bc2e4478a440f78f001b7e1d88b653276c693b3690675d8da17b
+    observation_utc: '2026-09-16T04:44:54.541963+00:00'
+    publication_timestamp: 20260916-04:31:55.950-02
+    provenance_url: https://www.bloombergapa.com/download?key=BAPA-POST2-20260916-04:31:55.950-02.csv
+    size_bytes: 1679
+    status: CREATED
+  errors: []
+  log:
+  - 'blb_apae: mode=poll window_hours=24.0 cutoff=2026-09-15T04:44:54.541963+00:00'
+  - 'blb_apae: discovered=1 selected_in_window=1 skipped_outside_window=0 unverified_ts_selected=1'
+  - 'blb_apae: CREATED BAPA-POST2-20260916-04:31:55.950-02.csv sha256=950ddff3df44bc2e4478a440f78f001b7e1d88b653276c693b3690675d8da17b'
+  context:
+    mode: poll
+    window_hours: 24.0
+    window_cutoff_utc: '2026-09-15T04:44:54.541963+00:00'
+    unverified_ts_margin_hours: 6.0
+    retry_policy:
+      max_attempts: 3
+      backoff_seconds:
+      - 10.0
+      - 60.0
+      - 300.0
+    historical_page_scanned: false
+    discovered_count: 1
+    selected_count: 1
+    skipped_outside_window: 0
+    unverified_ts_selected: 1

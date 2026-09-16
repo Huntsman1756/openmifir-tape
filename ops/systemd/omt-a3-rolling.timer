@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily G0-A3 rolling 7-day rescan (rolling_days=7 per config/sources/*.yaml)
+
+[Timer]
+# Daily at 06:15 UTC. Persistent=true provides catch-up after downtime.
+OnCalendar=06:15:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

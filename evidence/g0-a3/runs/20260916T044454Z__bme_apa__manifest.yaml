@@ -1,0 +1,33 @@
+run_id: 20260916T044454Z
+gate: G0-A3
+purpose: scheduled capture run (poll/rolling rescan)
+results:
+  source_id: bme_apa
+  attempted: true
+  status: SUCCEEDED
+  observed_at: '2026-09-16T04:44:54.541963+00:00'
+  object_count: 0
+  created_count: 0
+  already_present_count: 0
+  objects: []
+  errors: []
+  log:
+  - 'bme_apa: mode=poll window_hours=24.0 cutoff=2026-09-15T04:44:54.541963+00:00'
+  - 'bme_apa: discovered=126 selected_in_window=0 skipped_outside_window=126 unverified_ts_selected=0'
+  - 'bme_apa: 0 objects within window (e.g. non-trading period)'
+  context:
+    mode: poll
+    window_hours: 24.0
+    window_cutoff_utc: '2026-09-15T04:44:54.541963+00:00'
+    unverified_ts_margin_hours: 6.0
+    retry_policy:
+      max_attempts: 3
+      backoff_seconds:
+      - 10.0
+      - 60.0
+      - 300.0
+    historical_page_scanned: false
+    discovered_count: 126
+    selected_count: 0
+    skipped_outside_window: 126
+    unverified_ts_selected: 0

@@ -1,0 +1,13 @@
+[Unit]
+Description=Hourly G0-A3 capture poll (poll_max_seconds=3600 per config/sources/*.yaml)
+
+[Timer]
+# Every 30 minutes (:07 and :37). poll_max_seconds=3600 is a hard bound;
+# running at 2x that rate leaves margin for scheduler delay so observed
+# inter-poll intervals stay well under 1h. Persistent=true catches up missed
+# runs after downtime; the 24h rescan then re-covers the gap automatically.
+OnCalendar=*:07/30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
