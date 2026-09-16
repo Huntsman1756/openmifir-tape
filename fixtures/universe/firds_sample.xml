@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SYNTHETIC FIRDS subset for G0-B1 offline adapter tests. NOT provider data. -->
 <!-- RTS 23 field 5 = issuer LEI, carried in <Issr>. Field values are fake.   -->
+<!-- No MiFIR ID element exists in auth.036; bond classification (F-008) is    -->
+<!-- sourced from FITRS auth.045, see fixtures/universe/fitrs_sample.xml.      -->
 <!-- Shape mirrors live auth.036: FinInstrm wraps a record-kind element        -->
 <!-- (NewRcrd/ModfdRcrd/TermntdRcrd) carrying FinInstrmGnlAttrbts + Issr.      -->
 <Envelope>
@@ -8,7 +10,6 @@
     <NewRcrd>
       <FinInstrmGnlAttrbts>
         <Id>XS0000000101</Id>
-        <FinInstrmTp>CRPB</FinInstrmTp>
         <ClssfctnTp>DBFUGB</ClssfctnTp>
         <NtnlCcy>EUR</NtnlCcy>
       </FinInstrmGnlAttrbts>
@@ -20,7 +21,6 @@
     <ModfdRcrd>
       <FinInstrmGnlAttrbts>
         <Id>XS0000000102</Id>
-        <FinInstrmTp>CRPB</FinInstrmTp>
         <ClssfctnTp>DBFUGB</ClssfctnTp>
         <NtnlCcy>EUR</NtnlCcy>
       </FinInstrmGnlAttrbts>
@@ -32,7 +32,6 @@
     <TermntdRcrd>
       <FinInstrmGnlAttrbts>
         <Id>XS0000000103</Id>
-        <FinInstrmTp>SHRS</FinInstrmTp>
         <ClssfctnTp>ESXXXX</ClssfctnTp>
         <NtnlCcy>EUR</NtnlCcy>
       </FinInstrmGnlAttrbts>

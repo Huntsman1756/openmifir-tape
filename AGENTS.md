@@ -34,7 +34,7 @@ agent inference
 
 ## Universe rule (summary)
 
-`es_legal_issuer_v1`: instrument MiFIR ID = CRPB, issuer LEI from FIRDS field 5, GLEIF LegalJurisdiction.country = ES. No ISIN-prefix heuristics. Full disposition table, fixtures, and the 15+5 frozen sample live in `docs/gates/G0.md` and `fixtures/`.
+`es_legal_issuer_v1`: instrument MiFIR ID = BOND (RTS 2 field 3) AND Bond Type = CRPB (RTS 2 field 9, from ESMA FITRS non-equity transparency data — never guessed from FIRDS CFI), issuer LEI from FIRDS field 5, GLEIF LegalJurisdiction.country = ES. No ISIN-prefix heuristics. Full disposition table, fixtures, and the 15+5 frozen sample live in `docs/gates/G0.md` and `fixtures/`.
 
 ## Lifecycle model
 

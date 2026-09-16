@@ -6,15 +6,18 @@ matching, no automatic overrides, no heuristic deletion or merge.
 
 Precedence (first match wins):
 
-1. instrument MiFIR ID != CRPB        -> EXCLUDE / NOT_CRPB
-2. missing issuer LEI                  -> QUARANTINE / MISSING_ISSUER_LEI
-3. LEI not an exact ISO 17442 shape   -> QUARANTINE / INVALID_ISSUER_LEI
-4. explicit identity conflict OR two+
+1. MiFIR ID undetermined (absent)      -> QUARANTINE / MISSING_MIFIR_ID
+2. instrument MiFIR ID != BOND         -> EXCLUDE / NOT_BOND
+3. Bond Type undetermined (absent)     -> QUARANTINE / MISSING_BOND_TYPE
+4. Bond Type != CRPB                   -> EXCLUDE / NOT_CRPB
+5. missing issuer LEI                  -> QUARANTINE / MISSING_ISSUER_LEI
+6. LEI not an exact ISO 17442 shape    -> QUARANTINE / INVALID_ISSUER_LEI
+7. explicit identity conflict OR two+
    distinct observed jurisdictions     -> CONFLICT / IDENTITY_CONFLICT
-5. GLEIF unresolved OR jurisdiction
+8. GLEIF unresolved OR jurisdiction
    country missing                     -> QUARANTINE / UNRESOLVABLE_LEGAL_JURISDICTION
-6. resolved jurisdiction != ES         -> CONFLICT / NON_ES_LEGAL_JURISDICTION
-7. otherwise                           -> INCLUDE / IN_ES_CRPB_UNIVERSE
+9. resolved jurisdiction != ES         -> CONFLICT / NON_ES_LEGAL_JURISDICTION
+10. otherwise                          -> INCLUDE / IN_ES_CRPB_UNIVERSE
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ import json
 from collections import Counter
 
 from .model import (
+    BOND_TYPE,
     INSTRUMENT_MIFIR_ID,
     LEGAL_JURISDICTION_FILTER,
     LEI_PATTERN,
@@ -63,33 +67,48 @@ def _norm_country(value) -> str | None:
 def resolve_disposition(record: SecurityRecord) -> Disposition:
     """Resolve one record to a single frozen branch (deterministic)."""
     mifir_id = _norm_mifir_id(record.instrument_mifir_id)
+    bond_type = _norm_mifir_id(record.instrument_bond_type)
     lei = _norm_lei(record.issuer_lei)
 
+    def disp(branch: Branch, reason: Reason, country: str | None = None) -> Disposition:
+        return Disposition(mifir_id, bond_type or None, lei or None, country, branch, reason)
+
+    # An absent MiFIR ID is undetermined, not "not a bond": QUARANTINE.
+    # Only a present, non-BOND value is a true EXCLUDE.
+    if not mifir_id:
+        return disp(Branch.QUARANTINE, Reason.MISSING_MIFIR_ID)
+
     if mifir_id != INSTRUMENT_MIFIR_ID:
-        return Disposition(mifir_id, lei or None, None, Branch.EXCLUDE, Reason.NOT_CRPB)
+        return disp(Branch.EXCLUDE, Reason.NOT_BOND)
+
+    # Scope before identity: a bond whose RTS 2 field 9 type is undetermined is
+    # QUARANTINE (fail closed), a known non-CRPB type is EXCLUDE.
+    if not bond_type:
+        return disp(Branch.QUARANTINE, Reason.MISSING_BOND_TYPE)
+
+    if bond_type != BOND_TYPE:
+        return disp(Branch.EXCLUDE, Reason.NOT_CRPB)
 
     if not lei:
-        return Disposition(mifir_id, None, None, Branch.QUARANTINE, Reason.MISSING_ISSUER_LEI)
+        return disp(Branch.QUARANTINE, Reason.MISSING_ISSUER_LEI)
 
     if not LEI_PATTERN.match(lei):
-        return Disposition(mifir_id, lei, None, Branch.QUARANTINE, Reason.INVALID_ISSUER_LEI)
+        return disp(Branch.QUARANTINE, Reason.INVALID_ISSUER_LEI)
 
     distinct_jurisdictions = {
         country for country in (record.conflicting_jurisdictions or ()) if _norm_country(country)
     }
     if record.identity_conflict or len(distinct_jurisdictions) > 1:
-        return Disposition(mifir_id, lei, None, Branch.CONFLICT, Reason.IDENTITY_CONFLICT)
+        return disp(Branch.CONFLICT, Reason.IDENTITY_CONFLICT)
 
     country = _norm_country(record.gleif_legal_jurisdiction_country)
     if not record.gleif_resolved or not country:
-        return Disposition(
-            mifir_id, lei, None, Branch.QUARANTINE, Reason.UNRESOLVABLE_LEGAL_JURISDICTION
-        )
+        return disp(Branch.QUARANTINE, Reason.UNRESOLVABLE_LEGAL_JURISDICTION)
 
     if country != LEGAL_JURISDICTION_FILTER:
-        return Disposition(mifir_id, lei, country, Branch.CONFLICT, Reason.NON_ES_LEGAL_JURISDICTION)
+        return disp(Branch.CONFLICT, Reason.NON_ES_LEGAL_JURISDICTION, country)
 
-    return Disposition(mifir_id, lei, country, Branch.INCLUDE, Reason.IN_ES_CRPB_UNIVERSE)
+    return disp(Branch.INCLUDE, Reason.IN_ES_CRPB_UNIVERSE, country)
 
 
 def build_disposition_table(records: list[SecurityRecord]) -> list[Disposition]:
@@ -108,6 +127,7 @@ def _sorted_rows(dispositions: list[Disposition]) -> list[dict[str, str | None]]
     rows = [d.to_canonical() for d in dispositions]
     key = lambda row: (  # noqa: E731
         row["instrument_mifir_id"] or "",
+        row["instrument_bond_type"] or "",
         row["issuer_lei"] or "",
         row["legal_jurisdiction_country"] or "",
         row["branch"] or "",
@@ -130,6 +150,8 @@ def snapshot_payload(
         "universe_id": UNIVERSE_ID,
         "profile": PROFILE,
         "instrument_mifir_id": INSTRUMENT_MIFIR_ID,
+        "instrument_bond_type": BOND_TYPE,
+        "bond_type_source": "ESMA_FITRS_auth045_ISINAndSubClss",
         "issuer_lei_source": "FIRDS_RTS23_FIELD5",
         "legal_jurisdiction_source": "GLEIF_LegalJurisdiction.country",
         "legal_jurisdiction_filter": LEGAL_JURISDICTION_FILTER,

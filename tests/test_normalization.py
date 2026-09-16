@@ -10,7 +10,7 @@ def _bme_record(**overrides):
     rec = {
         "instrument_identification_code": "ES0000000001",
         "venue_of_execution": "XOFF",
-        "mifir_identifier": "CRPB",
+        "mifir_identifier": "BOND",
         "price_currency": "EUR",
         "price_notation": "PERC",
         "notation_of_the_quantity_in_measurement_unit": "UNIT",

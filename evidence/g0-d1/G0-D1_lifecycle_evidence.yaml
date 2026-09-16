@@ -1,30 +1,63 @@
 gate: G0-D
 issue_id: G0-D1
-date: '2026-09-15'
-ledger_semantic_digest: cef234e5e533de83a6aabcb7975181750646bf634ba1da29ad574e82848a0c6d
-entry_count: 1282
-chain_count: 1255
-states_observed:
-- DEFERRED
-- FULLY_PUBLISHED
-- CANCELLED
-- PARTIALLY_PUBLISHED
-- AMENDED
-state_distribution:
-  AMENDED: 6
-  CANCELLED: 21
-  DEFERRED: 9
-  FULLY_PUBLISHED: 1244
-  PARTIALLY_PUBLISHED: 2
-missing_transaction_id_count: 0
-unchainable_record_count: 0
-ledger_entry_id_collision_count: 0
-supersession_link_count: 27
-unresolved_state_count: 0
-source_exact_duplicate_count: 0
-economic_duplicate_candidate_groups: 22
-economic_duplicate_cross_source_groups: 0
-economic_duplicate_intra_source_groups: 22
+date: '2026-09-16'
+scopes:
+  integration:
+    description: All captured provider records (whole APA files). Engine conformance
+      / robustness metrics only; NOT authoritative for G0-E or G0 PASS.
+    normalized_record_count: 1282
+    ledger_semantic_digest: cef234e5e533de83a6aabcb7975181750646bf634ba1da29ad574e82848a0c6d
+    entry_count: 1282
+    chain_count: 1255
+    states_observed:
+    - DEFERRED
+    - FULLY_PUBLISHED
+    - CANCELLED
+    - PARTIALLY_PUBLISHED
+    - AMENDED
+    state_distribution:
+      AMENDED: 6
+      CANCELLED: 21
+      DEFERRED: 9
+      FULLY_PUBLISHED: 1244
+      PARTIALLY_PUBLISHED: 2
+    missing_transaction_id_count: 0
+    unchainable_record_count: 0
+    ledger_entry_id_collision_count: 0
+    supersession_link_count: 27
+    unresolved_state_count: 0
+    source_exact_duplicate_count: 0
+    economic_duplicate_candidate_groups: 22
+    economic_duplicate_cross_source_groups: 0
+    economic_duplicate_intra_source_groups: 22
+  profile:
+    description: Records whose ISIN is in the validated INCLUDE subset of the frozen
+      15+5 observation sample (evidence/g0-b1/F-009_frozen_sample_validation.yaml).
+      Authoritative es-corporate-bonds scope for G0-E/PASS. EXCLUDE/QUARANTINE/CONFLICT
+      sample ISINs stay frozen for audit but are NOT profile scope.
+    frozen_sample_isin_count: 20
+    validated_profile_isin_count: 16
+    sample_isins_observed: 1
+    frozen_sample_status: FROZEN_SAMPLE_2026_09_14
+    frozen_sample_manifest_sha256: ad666760bc525e9f48b203ab6f5166645458756069d000866879c3e810040d04
+    validated_scope_basis: evidence/g0-b1/F-009_frozen_sample_validation.yaml
+    normalized_record_count: 1
+    ledger_semantic_digest: fb2db45dc18da43d6bbfcf3308f2aba924bca59fd315afa7b9423d512f625e48
+    entry_count: 1
+    chain_count: 1
+    states_observed:
+    - FULLY_PUBLISHED
+    state_distribution:
+      FULLY_PUBLISHED: 1
+    missing_transaction_id_count: 0
+    unchainable_record_count: 0
+    ledger_entry_id_collision_count: 0
+    supersession_link_count: 0
+    unresolved_state_count: 0
+    source_exact_duplicate_count: 0
+    economic_duplicate_candidate_groups: 0
+    economic_duplicate_cross_source_groups: 0
+    economic_duplicate_intra_source_groups: 0
 no_heuristic_deletion: true
 append_only: true
 f006_composition_proof:
@@ -41,6 +74,14 @@ findings:
     source_report_id holds only source-published ids (None today); supersession links
     use supersedes_entry_id; entry-id collisions are disambiguated deterministically
     and counted.
+- id: F-009
+  title: PROFILE_SCOPE_NOT_APPLIED
+  status: CLOSED
+  detail: 'Prior D1 metrics ran over whole provider files, not the frozen es-corporate-bonds
+    sample. Evidence is now emitted at two scopes: integration (all records; engine
+    conformance) and profile (VALIDATED INCLUDE subset of the frozen 15+5 sample,
+    per evidence/g0-b1/F-009_frozen_sample_validation.yaml; authoritative for G0-E/PASS).
+    Whole-provider metrics MUST NOT feed G0-E conclusions.'
 hygiene:
   provider_payloads_in_repo: false
   raw_directory_tracked: false

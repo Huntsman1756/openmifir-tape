@@ -1,28 +1,31 @@
 gate: G0-B
 issue_id: G0-B1
-objective: 'es_legal_issuer_v1 universe construction: FIRDS field 5 LEI + GLEIF LegalJurisdiction
-  resolution + frozen disposition table, fixture-verified.'
+objective: 'es_legal_issuer_v1 universe construction: MiFIR ID=BOND + Bond Type=CRPB
+  (RTS 2 fields 3/9) + FIRDS field 5 LEI + GLEIF LegalJurisdiction resolution + frozen
+  disposition table, fixture-verified.'
 authority:
 - docs/gates/G0.md#G0-B
 - fixtures/universe/ (disposition fixtures)
 profile: es-corporate-bonds
 universe_id: es_legal_issuer_v1
-instrument_mifir_id: CRPB
+instrument_mifir_id: BOND
+instrument_bond_type: CRPB
+bond_type_source: ESMA_FITRS_auth045_ISINAndSubClss
 legal_jurisdiction_filter: ES
-generated_at: '2026-09-15T02:55:35.339750+00:00'
+generated_at: '2026-09-16T04:17:45.677598+00:00'
 synthetic_fixtures_only: true
 provider_data_present: false
 provider_data_note: No FIRDS payloads, no GLEIF dumps. Metadata only.
 idempotence_note: Snapshot digest is deterministic and content-sensitive; re-runs
   reproduce the same universe_snapshot_sha256.
-case_count: 14
+case_count: 17
 all_passed: true
 branch_counts:
   INCLUDE: 3
-  EXCLUDE: 3
-  QUARANTINE: 5
+  EXCLUDE: 4
+  QUARANTINE: 7
   CONFLICT: 3
-universe_snapshot_sha256: 0a29b1f1456594bde1ac971d0c51a0a00b57b18bf928dfbcb126fe4a16722d79
+universe_snapshot_sha256: a3e6c6533bd4585f512c86556ad4232258178ed1235ae6427ca95c069dcb0151
 fail_closed_demonstrated: true
 cases:
 - case_id: include_es_crpb_xs_isin
@@ -32,7 +35,8 @@ cases:
   resolved_reason: IN_ES_CRPB_UNIVERSE
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: '00000000000000000001'
     legal_jurisdiction_country: ES
   note: Canonical INCLUDE; ISIN prefix must not influence the decision.
@@ -43,7 +47,8 @@ cases:
   resolved_reason: IN_ES_CRPB_UNIVERSE
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: '00000000000000000002'
     legal_jurisdiction_country: ES
   note: ES ISIN prefix proves membership is NOT driven by ISIN prefix.
@@ -54,43 +59,83 @@ cases:
   resolved_reason: IN_ES_CRPB_UNIVERSE
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: '00000000000000000003'
     legal_jurisdiction_country: ES
   note: Lowercase country code is canonicalized (deterministic, not a guess).
 - case_id: exclude_equity
   expected_branch: EXCLUDE
-  expected_reason: NOT_CRPB
+  expected_reason: NOT_BOND
   resolved_branch: EXCLUDE
-  resolved_reason: NOT_CRPB
+  resolved_reason: NOT_BOND
   passed: true
   input:
     instrument_mifir_id: SHRS
+    instrument_bond_type: null
     issuer_lei: '00000000000000000004'
     legal_jurisdiction_country: null
-  note: Equity (SHRS) instrument is outside the corporate-bond profile.
+  note: Equity (SHRS) instrument is outside the bond profile entirely.
 - case_id: exclude_derivative
   expected_branch: EXCLUDE
-  expected_reason: NOT_CRPB
+  expected_reason: NOT_BOND
   resolved_branch: EXCLUDE
-  resolved_reason: NOT_CRPB
+  resolved_reason: NOT_BOND
   passed: true
   input:
     instrument_mifir_id: OPTN
+    instrument_bond_type: null
     issuer_lei: '00000000000000000005'
     legal_jurisdiction_country: null
   note: Derivative instrument is outside the profile.
-- case_id: exclude_non_crpb_missing_lei
+- case_id: exclude_non_bond_missing_lei
+  expected_branch: EXCLUDE
+  expected_reason: NOT_BOND
+  resolved_branch: EXCLUDE
+  resolved_reason: NOT_BOND
+  passed: true
+  input:
+    instrument_mifir_id: FUND
+    instrument_bond_type: null
+    issuer_lei: null
+    legal_jurisdiction_country: null
+  note: 'Precedence: non-BOND outranks missing identity; fail-safe EXCLUDE.'
+- case_id: exclude_sovereign_bond
   expected_branch: EXCLUDE
   expected_reason: NOT_CRPB
   resolved_branch: EXCLUDE
   resolved_reason: NOT_CRPB
   passed: true
   input:
-    instrument_mifir_id: FUND
-    issuer_lei: null
+    instrument_mifir_id: BOND
+    instrument_bond_type: EUSB
+    issuer_lei: '00000000000000000011'
     legal_jurisdiction_country: null
-  note: 'Precedence: non-CRPB outranks missing identity; fail-safe EXCLUDE.'
+  note: BOND + sovereign bond type (EUSB) is a bond but not a corporate bond.
+- case_id: quarantine_missing_mifir_id
+  expected_branch: QUARANTINE
+  expected_reason: MISSING_MIFIR_ID
+  resolved_branch: QUARANTINE
+  resolved_reason: MISSING_MIFIR_ID
+  passed: true
+  input:
+    instrument_mifir_id: ''
+    instrument_bond_type: null
+    issuer_lei: '00000000000000000013'
+    legal_jurisdiction_country: null
+  note: 'MISSING_IDENTITY_FAIL_CLOSED: absent MiFIR ID is undetermined, never EXCLUDE.'
+- case_id: quarantine_missing_bond_type
+  expected_branch: QUARANTINE
+  expected_reason: MISSING_BOND_TYPE
+  resolved_branch: QUARANTINE
+  resolved_reason: MISSING_BOND_TYPE
+  passed: true
+  input:
+    instrument_mifir_id: BOND
+    instrument_bond_type: null
+    issuer_lei: '00000000000000000012'
+    legal_jurisdiction_country: null
+  note: 'MISSING_IDENTITY_FAIL_CLOSED: undetermined bond type never includes.'
 - case_id: quarantine_missing_lei
   expected_branch: QUARANTINE
   expected_reason: MISSING_ISSUER_LEI
@@ -98,7 +143,8 @@ cases:
   resolved_reason: MISSING_ISSUER_LEI
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: null
     legal_jurisdiction_country: null
   note: 'MISSING_IDENTITY_FAIL_CLOSED: absent LEI is never assumed.'
@@ -109,7 +155,8 @@ cases:
   resolved_reason: MISSING_ISSUER_LEI
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: null
     legal_jurisdiction_country: null
   note: Whitespace/blank LEI treated as missing (no fuzzy filling).
@@ -120,7 +167,8 @@ cases:
   resolved_reason: INVALID_ISSUER_LEI
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: '12345'
     legal_jurisdiction_country: null
   note: Exact-shape validation; no fuzzy matching or checksum repair.
@@ -131,7 +179,8 @@ cases:
   resolved_reason: UNRESOLVABLE_LEGAL_JURISDICTION
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: '00000000000000000006'
     legal_jurisdiction_country: null
   note: 'MISSING_IDENTITY_FAIL_CLOSED: unresolved GLEIF identity never includes.'
@@ -142,7 +191,8 @@ cases:
   resolved_reason: UNRESOLVABLE_LEGAL_JURISDICTION
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: '00000000000000000007'
     legal_jurisdiction_country: null
   note: 'MISSING_IDENTITY_FAIL_CLOSED: absent country code never includes.'
@@ -153,7 +203,8 @@ cases:
   resolved_reason: NON_ES_LEGAL_JURISDICTION
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: 00000000000000000008
     legal_jurisdiction_country: FR
   note: ES-prefixed ISIN + FR jurisdiction -> identity conflict, not EXCLUDE/INCLUDE.
@@ -164,7 +215,8 @@ cases:
   resolved_reason: IDENTITY_CONFLICT
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: 00000000000000000009
     legal_jurisdiction_country: null
   note: Contradictory records (ES vs FR) for one issuer identity -> conflict.
@@ -175,38 +227,41 @@ cases:
   resolved_reason: IDENTITY_CONFLICT
   passed: true
   input:
-    instrument_mifir_id: CRPB
+    instrument_mifir_id: BOND
+    instrument_bond_type: CRPB
     issuer_lei: '00000000000000000010'
     legal_jurisdiction_country: null
   note: Explicit contradictory-identity flag on the record -> conflict.
 samples:
   snapshot_payload_sha256_of: universe_snapshot_sha256 over the frozen disposition
     table
-
 findings:
-  - id: F-005
-    title: FIRDS/GLEIF live contract probe
-    status: RESOLVED
-    resolved: '2026-09-15'
-    evidence: evidence/g0-b1/F-005_live_contract_probe.yaml
-    must_prove:
-      - real FIRDS field-5 (issuer LEI) extraction   # PROVEN: 620/620 Issr extracted
-      - real GLEIF LegalJurisdiction path resolution # PROVEN; live field is entity.jurisdiction
-      - schema compatibility against a live payload  # PROVEN: auth.036 DLTINS parsed
-      - fail-closed on actual payload variants       # PROVEN: record kinds + 404
-    note: >-
-      Probe exposed two live-contract divergences, both fixed: GLEIF uses
-      entity.jurisdiction (with subdivision codes like US-CA); FIRDS auth.036 has
-      NO FinInstrmTp element (type is ClssfctnTp/CFI). The
-      universe_snapshot_sha256 (0a29b1f1...) remains the hash of the frozen
-      fixture corpus, NOT a real universe. See F-008.
-  - id: F-008
-    title: CRPB membership derivation on real FIRDS
-    status: OPEN
-    deadline: before any result that claims a real es_legal_issuer_v1 universe
-    blocking: false
-    detail: >-
-      The auth.036 FIRDS schema carries no literal MiFIR instrument identifier
-      (no FinInstrmTp). CRPB membership must be derived from ClssfctnTp (CFI,
-      ISO 10962) under a documented mapping, or a type field must be confirmed
-      in the FULINS schema. Until then, no real universe may be claimed.
+- id: F-005
+  title: FIRDS/GLEIF live contract probe
+  status: RESOLVED
+  resolved: '2026-09-15'
+  evidence: evidence/g0-b1/F-005_live_contract_probe.yaml
+  note: 'Live divergences fixed: GLEIF uses entity.jurisdiction; FIRDS auth.036 has
+    no FinInstrmTp. Superseded in part by F-008 (MiFIR ID/Bond Type now sourced from
+    FITRS auth.045).'
+- id: F-008
+  title: 'Bond classification contract: MiFIR ID=BOND + Bond Type=CRPB'
+  status: RESOLVED
+  resolved: '2026-09-15'
+  evidence: evidence/g0-b1/F-008_fitrs_bond_type_probe.yaml
+  detail: 'Frozen spec corrected (MiFIR ID=BOND per RTS 2 field 3; Bond Type=CRPB
+    per field 9). Bond type is sourced from ESMA FITRS non-equity transparency data
+    (DLTNCR/FULNCR, auth.045): FinInstrmClssfctn=BOND + DerivSubClss/Desc=''Corporate
+    bond'' (SACL BOND5). CFI (ClssfctnTp) is NOT used to derive bond type. universe_snapshot_sha256
+    remains the hash of the frozen fixture corpus, not a real universe.'
+- id: F-009
+  title: PROFILE_SCOPE_NOT_APPLIED -> frozen 15+5 sample validated against live data
+  status: RESOLVED
+  resolved: '2026-09-16'
+  evidence: evidence/g0-b1/F-009_frozen_sample_validation.yaml
+  detail: 'All 20 frozen ISINs resolved through the real regulatory chain: FITRS FULNCR_20260912_D
+    (auth.045; MiFIR ID + Bond Type, SACL code primary with Desc as cross-check),
+    FIRDS FULINS_D_20260912 (auth.017; RTS 23 field 5 issuer LEI), live GLEIF LegalJurisdiction.
+    Result: 16 INCLUDE / 4 EXCLUDE (BOND+CVTB convertibles, kept in place and documented
+    — no re-sampling) / 0 QUARANTINE / 0 CONFLICT. The sample is now a validated es_legal_issuer_v1
+    profile sample, not merely an observation seed.'

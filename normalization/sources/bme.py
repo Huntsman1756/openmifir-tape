@@ -12,7 +12,14 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from ..mmt import MMT_AMEND_FLAG, MMT_CANCEL_FLAG, MMT_DEFERRAL_REASON, MMT_PARTIAL_TYPE
+from ..mmt import (
+    BME_DEFERRAL_BOOL_FIELDS,
+    BME_DEFERRAL_CODE_CLASS,
+    MMT_AMEND_FLAG,
+    MMT_CANCEL_FLAG,
+    MMT_DEFERRAL_REASON,
+    MMT_PARTIAL_TYPE,
+)
 from ..model import NormalizedRecord
 from ..quantity import notional_vs_quantity_price
 from ..timestamp import timestamp
@@ -73,24 +80,40 @@ def _bool(val: Any) -> bool | None:
     return None
 
 
-def _deferral_signal(raw: dict[str, Any], flags: list[str]) -> bool | None:
-    """Deferral signal from source semantics.
+def _deferral_field_class(raw: dict[str, Any]) -> str | None:
+    """Classify the ``post_trade_deferral`` field via the frozen BME code table.
 
-    ``post_trade_deferral`` carries the MMT 4.1 reason code letter (observed in
-    the captured corpus: 'A'->MLF1, 'C'->LLF3, 'G'->DEFF); any non-empty code
-    means a non-immediate publication deferral was applied. An MMT 4.1 reason
-    mnemonic in ``flags`` also indicates deferral. Field absent AND no flag ->
-    None (undetermined, fail closed).
+    Returns 'NONE'/'REASON'/'PARTIAL'/'FULL' for documented codes, ``None``
+    when the field is absent, and 'UNKNOWN' for a non-empty value outside the
+    table (fail closed — never ``bool(non_empty)``).
     """
-    if set(flags) & MMT_DEFERRAL_REASON:
-        return True
     if "post_trade_deferral" not in raw:
         return None
     value = raw.get("post_trade_deferral")
     parsed = _bool(value)
     if parsed is not None:
-        return parsed
-    return bool(str(value).strip())
+        return "REASON" if parsed else "NONE"
+    return BME_DEFERRAL_CODE_CLASS.get(str(value).strip(), "UNKNOWN")
+
+
+def _deferral_signal(raw: dict[str, Any], flags: list[str]) -> bool | None:
+    """Deferral signal from source semantics.
+
+    ``post_trade_deferral`` is classified by the explicit BME Gate codification
+    table (Level 4.1 efficient-mode letters and the historical Level 4.2
+    mnemonics); the dedicated boolean indicators ``lrgs``/``ilqd``/``size`` are
+    the classic RTS 2 deferral reasons; an MMT 4.1 reason mnemonic in ``flags``
+    also indicates deferral. Field absent AND no flag AND no boolean reason ->
+    None (undetermined, fail closed). An unknown code -> None.
+    """
+    if set(flags) & MMT_DEFERRAL_REASON:
+        return True
+    if any(_bool(raw.get(f)) for f in BME_DEFERRAL_BOOL_FIELDS):
+        return True
+    cls = _deferral_field_class(raw)
+    if cls is None or cls == "UNKNOWN":
+        return None
+    return cls != "NONE"
 
 
 def _partial_signal(raw: dict[str, Any], flags: list[str], deferral: bool | None) -> bool | None:
@@ -98,19 +121,21 @@ def _partial_signal(raw: dict[str, Any], flags: list[str], deferral: bool | None
 
     A publication is partial when the source publishes the trade but withholds
     content: an explicit ``missing_price``/``missing_quantity`` indicator, an
-    MMT 4.2 non-full-detail type flag, or — under deferral — the volume block
-    omitted from the publication entirely (observed: DEFF publications carry no
+    MMT 4.2 non-full-detail type flag, a PARTIAL-class code in
+    ``post_trade_deferral``, or — under deferral — the volume block omitted
+    from the publication entirely (observed: DEFF publications carry no
     quantity/notional keys at all, while non-deferred records of the same
-    instrument type do carry them). Undetermined when deferral itself is
-    undetermined.
+    instrument type do carry them). A FULL-class code (FULF/FULA/FULV/FULJ) is
+    a deferred complete publication, not partial. Undetermined when deferral
+    itself is undetermined.
     """
-    if set(flags) & MMT_PARTIAL_TYPE:
+    if set(flags) & MMT_PARTIAL_TYPE or _deferral_field_class(raw) == "PARTIAL":
         return True
     if _bool(raw.get("missing_price")) or _bool(raw.get("missing_quantity")):
         return True
     if deferral is None:
         return None
-    if deferral and raw.get("quantity") is None:
+    if deferral and raw.get("quantity") is None and _deferral_field_class(raw) != "FULL":
         return True
     return False
 

@@ -1,4 +1,4 @@
-﻿# fixtures/universe/disposition_cases.yaml
+# fixtures/universe/disposition_cases.yaml
 # SYNTHETIC disposition fixtures for G0-B1 (universe construction).
 #
 # These are NOT provider data and NOT real market records. They are constructed
@@ -6,8 +6,11 @@
 #   INCLUDE / EXCLUDE / QUARANTINE / CONFLICT
 # plus negative controls for MISSING_IDENTITY_FAIL_CLOSED.
 #
-# Frozen semantics (docs/gates/G0.md Â§3 G0-B):
-#   instrument MiFIR ID = CRPB
+# Frozen semantics (docs/gates/G0.md §3 G0-B), corrected by F-008:
+#   instrument MiFIR ID = BOND   (RTS 2 Annex IV Table 2 field 3)
+#   Bond Type          = CRPB   (RTS 2 field 9, from ESMA FITRS auth.045
+#                                ISINAndSubClss/DerivSubClss/Desc; never
+#                                guessed from the FIRDS CFI code)
 #   issuer LEI from FIRDS RTS 23 field 5
 #   GLEIF LegalJurisdiction.country = ES
 #   NO ISIN-prefix heuristics
@@ -21,7 +24,9 @@
 
 universe_id: es_legal_issuer_v1
 profile: es-corporate-bonds
-instrument_mifir_id: CRPB
+instrument_mifir_id: BOND
+instrument_bond_type: CRPB
+bond_type_source: ESMA_FITRS_auth045_ISINAndSubClss
 issuer_lei_source: FIRDS_RTS23_FIELD5
 legal_jurisdiction_source: GLEIF_LegalJurisdiction.country
 legal_jurisdiction_filter: ES
@@ -29,14 +34,15 @@ isin_prefix_heuristics: PROHIBITED
 
 cases:
   # ---- INCLUDE -----------------------------------------------------------
-  # Valid CRPB, present LEI, GLEIF LegalJurisdiction.country = ES.
+  # Valid BOND+CRPB, present LEI, GLEIF LegalJurisdiction.country = ES.
   # XS-prefixed ISIN does NOT block membership (no ISIN heuristics).
   - id: include_es_crpb_xs_isin
     expected_branch: INCLUDE
     expected_reason: IN_ES_CRPB_UNIVERSE
     note: Canonical INCLUDE; ISIN prefix must not influence the decision.
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: XS0000000001
       issuer_lei: "00000000000000000001"
       gleif_resolved: true
@@ -48,7 +54,8 @@ cases:
     expected_reason: IN_ES_CRPB_UNIVERSE
     note: ES ISIN prefix proves membership is NOT driven by ISIN prefix.
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: ES0378165015
       issuer_lei: "00000000000000000002"
       gleif_resolved: true
@@ -60,18 +67,19 @@ cases:
     expected_reason: IN_ES_CRPB_UNIVERSE
     note: Lowercase country code is canonicalized (deterministic, not a guess).
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       issuer_lei: "00000000000000000003"
       gleif_resolved: true
       gleif_legal_jurisdiction_country: es
 
   # ---- EXCLUDE -----------------------------------------------------------
-  # Not the profile instrument type (MiFIR ID != CRPB) -> EXCLUDE, no matter
-  # what identity fields say. The instrument is simply outside es-corporate-bonds.
+  # MiFIR ID != BOND -> EXCLUDE, no matter what identity fields say.
+  # The instrument is simply outside es-corporate-bonds.
   - id: exclude_equity
     expected_branch: EXCLUDE
-    expected_reason: NOT_CRPB
-    note: Equity (SHRS) instrument is outside the corporate-bond profile.
+    expected_reason: NOT_BOND
+    note: Equity (SHRS) instrument is outside the bond profile entirely.
     record:
       instrument_mifir_id: SHRS
       instrument_isin: XS0000000002
@@ -81,7 +89,7 @@ cases:
 
   - id: exclude_derivative
     expected_branch: EXCLUDE
-    expected_reason: NOT_CRPB
+    expected_reason: NOT_BOND
     note: Derivative instrument is outside the profile.
     record:
       instrument_mifir_id: OPTN
@@ -90,12 +98,12 @@ cases:
       gleif_resolved: true
       gleif_legal_jurisdiction_country: FR
 
-  # Precedence control: a non-CRPB instrument with a missing LEI is EXCLUDE,
-  # NOT QUARANTINE. Instrument-type scope is decided before identity.
-  - id: exclude_non_crpb_missing_lei
+  # Precedence control: a non-BOND instrument with a missing LEI is EXCLUDE,
+  # NOT QUARANTINE. Instrument-class scope is decided before identity.
+  - id: exclude_non_bond_missing_lei
     expected_branch: EXCLUDE
-    expected_reason: NOT_CRPB
-    note: "Precedence: non-CRPB outranks missing identity; fail-safe EXCLUDE."
+    expected_reason: NOT_BOND
+    note: "Precedence: non-BOND outranks missing identity; fail-safe EXCLUDE."
     record:
       instrument_mifir_id: FUND
       instrument_isin: XS0000000004
@@ -103,14 +111,57 @@ cases:
       gleif_resolved: true
       gleif_legal_jurisdiction_country: ES
 
+  # A bond of a known non-corporate type -> EXCLUDE / NOT_CRPB.
+  - id: exclude_sovereign_bond
+    expected_branch: EXCLUDE
+    expected_reason: NOT_CRPB
+    note: BOND + sovereign bond type (EUSB) is a bond but not a corporate bond.
+    record:
+      instrument_mifir_id: BOND
+      instrument_bond_type: EUSB
+      instrument_isin: XS0000000012
+      issuer_lei: "00000000000000000011"
+      gleif_resolved: true
+      gleif_legal_jurisdiction_country: ES
+
   # ---- QUARANTINE (MISSING_IDENTITY_FAIL_CLOSED) ------------------------
-  # CRPB but no issuer LEI -> QUARANTINE. We never guess an LEI.
+  # MiFIR ID absent entirely -> QUARANTINE. An undetermined instrument class
+  # is NOT "not a bond"; only a present non-BOND value may EXCLUDE.
+  - id: quarantine_missing_mifir_id
+    expected_branch: QUARANTINE
+    expected_reason: MISSING_MIFIR_ID
+    note: "MISSING_IDENTITY_FAIL_CLOSED: absent MiFIR ID is undetermined, never EXCLUDE."
+    record:
+      instrument_mifir_id: null
+      instrument_bond_type: null
+      instrument_isin: XS0000000014
+      issuer_lei: "00000000000000000013"
+      gleif_resolved: true
+      gleif_legal_jurisdiction_country: ES
+
+  # BOND but bond type undetermined (absent from the source) -> QUARANTINE.
+  # Fail closed: a bond we cannot prove to be corporate is never included and
+  # never silently excluded.
+  - id: quarantine_missing_bond_type
+    expected_branch: QUARANTINE
+    expected_reason: MISSING_BOND_TYPE
+    note: "MISSING_IDENTITY_FAIL_CLOSED: undetermined bond type never includes."
+    record:
+      instrument_mifir_id: BOND
+      instrument_bond_type: null
+      instrument_isin: XS0000000013
+      issuer_lei: "00000000000000000012"
+      gleif_resolved: true
+      gleif_legal_jurisdiction_country: ES
+
+  # BOND+CRPB but no issuer LEI -> QUARANTINE. We never guess an LEI.
   - id: quarantine_missing_lei
     expected_branch: QUARANTINE
     expected_reason: MISSING_ISSUER_LEI
     note: "MISSING_IDENTITY_FAIL_CLOSED: absent LEI is never assumed."
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: XS0000000005
       issuer_lei: null
       gleif_resolved: true
@@ -121,50 +172,54 @@ cases:
     expected_reason: MISSING_ISSUER_LEI
     note: Whitespace/blank LEI treated as missing (no fuzzy filling).
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: XS0000000006
       issuer_lei: "   "
       gleif_resolved: true
       gleif_legal_jurisdiction_country: ES
 
-  # CRPB but LEI is not an exact ISO 17442 shape -> QUARANTINE (fail closed).
+  # BOND+CRPB but LEI is not an exact ISO 17442 shape -> QUARANTINE (fail closed).
   - id: quarantine_malformed_lei
     expected_branch: QUARANTINE
     expected_reason: INVALID_ISSUER_LEI
     note: Exact-shape validation; no fuzzy matching or checksum repair.
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: XS0000000007
       issuer_lei: "12345"
       gleif_resolved: true
       gleif_legal_jurisdiction_country: ES
 
-  # CRPB, LEI present, but GLEIF has no record -> QUARANTINE (unresolvable).
+  # BOND+CRPB, LEI present, but GLEIF has no record -> QUARANTINE (unresolvable).
   - id: quarantine_gleif_unresolved
     expected_branch: QUARANTINE
     expected_reason: UNRESOLVABLE_LEGAL_JURISDICTION
     note: "MISSING_IDENTITY_FAIL_CLOSED: unresolved GLEIF identity never includes."
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: XS0000000008
       issuer_lei: "00000000000000000006"
       gleif_resolved: false
       gleif_legal_jurisdiction_country: null
 
-  # CRPB, LEI present, GLEIF resolved but no jurisdiction country -> QUARANTINE.
+  # BOND+CRPB, LEI present, GLEIF resolved but no jurisdiction country -> QUARANTINE.
   - id: quarantine_blank_jurisdiction
     expected_branch: QUARANTINE
     expected_reason: UNRESOLVABLE_LEGAL_JURISDICTION
     note: "MISSING_IDENTITY_FAIL_CLOSED: absent country code never includes."
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: XS0000000009
       issuer_lei: "00000000000000000007"
       gleif_resolved: true
       gleif_legal_jurisdiction_country: null
 
   # ---- CONFLICT ----------------------------------------------------------
-  # CRPB, LEI present, GLEIF resolves to a NON-ES jurisdiction -> CONFLICT.
+  # BOND+CRPB, LEI present, GLEIF resolves to a NON-ES jurisdiction -> CONFLICT.
   # Even with an ES-prefixed ISIN, a non-ES resolved jurisdiction CONFLICTS
   # (proving the ISIN prefix is NOT used to force membership).
   - id: conflict_non_es_jurisdiction
@@ -172,32 +227,35 @@ cases:
     expected_reason: NON_ES_LEGAL_JURISDICTION
     note: ES-prefixed ISIN + FR jurisdiction -> identity conflict, not EXCLUDE/INCLUDE.
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: ES0000000001
       issuer_lei: "00000000000000000008"
       gleif_resolved: true
       gleif_legal_jurisdiction_country: FR
 
-  # CRPB, two distinct observed jurisdictions (contradictory records) -> CONFLICT.
+  # BOND+CRPB, two distinct observed jurisdictions (contradictory records) -> CONFLICT.
   - id: conflict_contradictory_jurisdictions
     expected_branch: CONFLICT
     expected_reason: IDENTITY_CONFLICT
     note: Contradictory records (ES vs FR) for one issuer identity -> conflict.
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: XS0000000010
       issuer_lei: "00000000000000000009"
       gleif_resolved: true
       gleif_legal_jurisdiction_country: ES
       conflicting_jurisdictions: [ES, FR]
 
-  # CRPB, explicit upstream contradiction flag -> CONFLICT.
+  # BOND+CRPB, explicit upstream contradiction flag -> CONFLICT.
   - id: conflict_explicit_identity_flag
     expected_branch: CONFLICT
     expected_reason: IDENTITY_CONFLICT
     note: Explicit contradictory-identity flag on the record -> conflict.
     record:
-      instrument_mifir_id: CRPB
+      instrument_mifir_id: BOND
+      instrument_bond_type: CRPB
       instrument_isin: XS0000000011
       issuer_lei: "00000000000000000010"
       gleif_resolved: true
