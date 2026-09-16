@@ -50,6 +50,7 @@ class Reason(str, Enum):
     """Deterministic, auditable reason code attached to every disposition."""
 
     IN_ES_CRPB_UNIVERSE = "IN_ES_CRPB_UNIVERSE"
+    MISSING_MIFIR_ID = "MISSING_MIFIR_ID"
     NOT_BOND = "NOT_BOND"
     MISSING_BOND_TYPE = "MISSING_BOND_TYPE"
     NOT_CRPB = "NOT_CRPB"

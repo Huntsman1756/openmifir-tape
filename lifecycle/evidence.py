@@ -4,10 +4,11 @@ Two evidence scopes (F-009):
 
 - ``integration``: every captured provider record — engine-conformance metrics
   for parser/lifecycle robustness. NOT authoritative for G0-E / G0 PASS.
-- ``profile``: records whose ISIN belongs to the frozen 15+5 sample
-  (``fixtures/universe/universe_manifest.yaml``) — the authoritative
-  ``es-corporate-bonds`` scope until the real ``es_legal_issuer_v1``
-  disposition table is materialized.
+- ``profile``: records whose ISIN belongs to the VALIDATED INCLUDE subset of
+  the frozen 15+5 sample (``evidence/g0-b1/F-009_frozen_sample_validation.yaml``)
+  — the authoritative ``es-corporate-bonds`` scope for G0-E / G0 PASS. The
+  frozen 20 stay intact for preregistration audit; EXCLUDE/QUARANTINE/CONFLICT
+  ISINs are documented there but are NOT profile scope.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from normalization.evidence import _load_bme_json, _load_bloomberg_csv
 from normalization.model import NormalizedRecord
 from normalization.normalize import normalize_record
 from universe.sample import load_frozen_sample
+from universe.sample_validation import load_validated_scope
 from .duplicates import economic_duplicate_candidates, source_exact_duplicates
 from .ledger import build_ledger, ledger_digest, ledger_stats
 from .lifecycle import reconstruct_chains, states_in_corpus
@@ -80,8 +82,10 @@ def generate_evidence(raw_root: Path, evidence_dir: Path, *, date: str) -> Path:
             normalized.append(normalize_record(source, raw))
 
     sample = load_frozen_sample()
+    validated_scope = load_validated_scope(sample)
     profile_records = [
-        r for r in normalized if sample.contains(r.instrument_identification_code)
+        r for r in normalized
+        if (r.instrument_identification_code or "") in validated_scope
     ]
 
     integration = _scope_metrics(normalized)
@@ -102,17 +106,21 @@ def generate_evidence(raw_root: Path, evidence_dir: Path, *, date: str) -> Path:
             },
             "profile": {
                 "description": (
-                    "Records whose ISIN is in the frozen 15+5 observation "
-                    "sample (fixtures/universe/universe_manifest.yaml). "
-                    "Authoritative es-corporate-bonds scope pending the real "
-                    "es_legal_issuer_v1 disposition table."
+                    "Records whose ISIN is in the validated INCLUDE subset of "
+                    "the frozen 15+5 observation sample "
+                    "(evidence/g0-b1/F-009_frozen_sample_validation.yaml). "
+                    "Authoritative es-corporate-bonds scope for G0-E/PASS. "
+                    "EXCLUDE/QUARANTINE/CONFLICT sample ISINs stay frozen for "
+                    "audit but are NOT profile scope."
                 ),
                 "frozen_sample_isin_count": len(sample.isins),
+                "validated_profile_isin_count": len(validated_scope),
                 "sample_isins_observed": len(
                     {r.instrument_identification_code for r in profile_records}
                 ),
                 "frozen_sample_status": sample.status,
                 "frozen_sample_manifest_sha256": sample.snapshot_sha256,
+                "validated_scope_basis": "evidence/g0-b1/F-009_frozen_sample_validation.yaml",
                 **profile,
             },
         },
@@ -146,8 +154,10 @@ def generate_evidence(raw_root: Path, evidence_dir: Path, *, date: str) -> Path:
                     "Prior D1 metrics ran over whole provider files, not the frozen "
                     "es-corporate-bonds sample. Evidence is now emitted at two "
                     "scopes: integration (all records; engine conformance) and "
-                    "profile (frozen 15+5 ISIN sample; authoritative for G0-E/PASS). "
-                    "Whole-provider metrics MUST NOT feed G0-E conclusions."
+                    "profile (VALIDATED INCLUDE subset of the frozen 15+5 sample, "
+                    "per evidence/g0-b1/F-009_frozen_sample_validation.yaml; "
+                    "authoritative for G0-E/PASS). Whole-provider metrics MUST NOT "
+                    "feed G0-E conclusions."
                 ),
             },
         ],

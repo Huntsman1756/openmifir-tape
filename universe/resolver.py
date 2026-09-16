@@ -6,17 +6,18 @@ matching, no automatic overrides, no heuristic deletion or merge.
 
 Precedence (first match wins):
 
-1. instrument MiFIR ID != BOND        -> EXCLUDE / NOT_BOND
-2. Bond Type undetermined (absent)    -> QUARANTINE / MISSING_BOND_TYPE
-3. Bond Type != CRPB                  -> EXCLUDE / NOT_CRPB
-4. missing issuer LEI                  -> QUARANTINE / MISSING_ISSUER_LEI
-5. LEI not an exact ISO 17442 shape   -> QUARANTINE / INVALID_ISSUER_LEI
-6. explicit identity conflict OR two+
+1. MiFIR ID undetermined (absent)      -> QUARANTINE / MISSING_MIFIR_ID
+2. instrument MiFIR ID != BOND         -> EXCLUDE / NOT_BOND
+3. Bond Type undetermined (absent)     -> QUARANTINE / MISSING_BOND_TYPE
+4. Bond Type != CRPB                   -> EXCLUDE / NOT_CRPB
+5. missing issuer LEI                  -> QUARANTINE / MISSING_ISSUER_LEI
+6. LEI not an exact ISO 17442 shape    -> QUARANTINE / INVALID_ISSUER_LEI
+7. explicit identity conflict OR two+
    distinct observed jurisdictions     -> CONFLICT / IDENTITY_CONFLICT
-7. GLEIF unresolved OR jurisdiction
+8. GLEIF unresolved OR jurisdiction
    country missing                     -> QUARANTINE / UNRESOLVABLE_LEGAL_JURISDICTION
-8. resolved jurisdiction != ES         -> CONFLICT / NON_ES_LEGAL_JURISDICTION
-9. otherwise                           -> INCLUDE / IN_ES_CRPB_UNIVERSE
+9. resolved jurisdiction != ES         -> CONFLICT / NON_ES_LEGAL_JURISDICTION
+10. otherwise                          -> INCLUDE / IN_ES_CRPB_UNIVERSE
 """
 
 from __future__ import annotations
@@ -71,6 +72,11 @@ def resolve_disposition(record: SecurityRecord) -> Disposition:
 
     def disp(branch: Branch, reason: Reason, country: str | None = None) -> Disposition:
         return Disposition(mifir_id, bond_type or None, lei or None, country, branch, reason)
+
+    # An absent MiFIR ID is undetermined, not "not a bond": QUARANTINE.
+    # Only a present, non-BOND value is a true EXCLUDE.
+    if not mifir_id:
+        return disp(Branch.QUARANTINE, Reason.MISSING_MIFIR_ID)
 
     if mifir_id != INSTRUMENT_MIFIR_ID:
         return disp(Branch.EXCLUDE, Reason.NOT_BOND)

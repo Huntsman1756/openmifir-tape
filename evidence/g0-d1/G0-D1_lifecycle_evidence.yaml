@@ -1,6 +1,6 @@
 gate: G0-D
 issue_id: G0-D1
-date: '2026-09-15'
+date: '2026-09-16'
 scopes:
   integration:
     description: All captured provider records (whole APA files). Engine conformance
@@ -31,13 +31,16 @@ scopes:
     economic_duplicate_cross_source_groups: 0
     economic_duplicate_intra_source_groups: 22
   profile:
-    description: Records whose ISIN is in the frozen 15+5 observation sample (fixtures/universe/universe_manifest.yaml).
-      Authoritative es-corporate-bonds scope pending the real es_legal_issuer_v1 disposition
-      table.
+    description: Records whose ISIN is in the validated INCLUDE subset of the frozen
+      15+5 observation sample (evidence/g0-b1/F-009_frozen_sample_validation.yaml).
+      Authoritative es-corporate-bonds scope for G0-E/PASS. EXCLUDE/QUARANTINE/CONFLICT
+      sample ISINs stay frozen for audit but are NOT profile scope.
     frozen_sample_isin_count: 20
+    validated_profile_isin_count: 16
     sample_isins_observed: 1
     frozen_sample_status: FROZEN_SAMPLE_2026_09_14
     frozen_sample_manifest_sha256: ad666760bc525e9f48b203ab6f5166645458756069d000866879c3e810040d04
+    validated_scope_basis: evidence/g0-b1/F-009_frozen_sample_validation.yaml
     normalized_record_count: 1
     ledger_semantic_digest: fb2db45dc18da43d6bbfcf3308f2aba924bca59fd315afa7b9423d512f625e48
     entry_count: 1
@@ -76,7 +79,8 @@ findings:
   status: CLOSED
   detail: 'Prior D1 metrics ran over whole provider files, not the frozen es-corporate-bonds
     sample. Evidence is now emitted at two scopes: integration (all records; engine
-    conformance) and profile (frozen 15+5 ISIN sample; authoritative for G0-E/PASS).
+    conformance) and profile (VALIDATED INCLUDE subset of the frozen 15+5 sample,
+    per evidence/g0-b1/F-009_frozen_sample_validation.yaml; authoritative for G0-E/PASS).
     Whole-provider metrics MUST NOT feed G0-E conclusions.'
 hygiene:
   provider_payloads_in_repo: false

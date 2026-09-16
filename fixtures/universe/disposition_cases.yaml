@@ -125,6 +125,20 @@ cases:
       gleif_legal_jurisdiction_country: ES
 
   # ---- QUARANTINE (MISSING_IDENTITY_FAIL_CLOSED) ------------------------
+  # MiFIR ID absent entirely -> QUARANTINE. An undetermined instrument class
+  # is NOT "not a bond"; only a present non-BOND value may EXCLUDE.
+  - id: quarantine_missing_mifir_id
+    expected_branch: QUARANTINE
+    expected_reason: MISSING_MIFIR_ID
+    note: "MISSING_IDENTITY_FAIL_CLOSED: absent MiFIR ID is undetermined, never EXCLUDE."
+    record:
+      instrument_mifir_id: null
+      instrument_bond_type: null
+      instrument_isin: XS0000000014
+      issuer_lei: "00000000000000000013"
+      gleif_resolved: true
+      gleif_legal_jurisdiction_country: ES
+
   # BOND but bond type undetermined (absent from the source) -> QUARANTINE.
   # Fail closed: a bond we cannot prove to be corporate is never included and
   # never silently excluded.

@@ -37,7 +37,54 @@ from .fitrs import FitrsRecord, parse_fitrs
 from .gleif import GleifEntity, parse_gleif, resolve_legal_jurisdiction
 from .model import Branch, SecurityRecord
 from .resolver import resolve_disposition
-from .sample import FrozenSample, load_frozen_sample
+from .sample import DEFAULT_SAMPLE_MANIFEST, FrozenSample, load_frozen_sample
+
+DEFAULT_VALIDATION_ARTIFACT = (
+    Path(__file__).resolve().parents[1]
+    / "evidence" / "g0-b1" / "F-009_frozen_sample_validation.yaml"
+)
+
+
+class SampleValidationError(Exception):
+    """Raised when the validation artifact is missing, malformed, or stale."""
+
+
+def load_validated_scope(
+    sample: FrozenSample | None = None,
+    path: Path = DEFAULT_VALIDATION_ARTIFACT,
+) -> frozenset[str]:
+    """ISINs whose documented disposition is INCLUDE — the authoritative
+    ``es-corporate-bonds`` profile scope for G0-E / G0 PASS.
+
+    The frozen 20-ISIN observation sample stays intact for preregistration
+    audit; this scope is its validated INCLUDE subset (e.g. BOND+CVTB
+    convertibles documented EXCLUDE are NOT profile scope).
+
+    Fail closed: a missing/malformed artifact raises, and the artifact's
+    recorded ``sample_snapshot_sha256`` MUST equal the current manifest's —
+    a stale artifact after a re-freeze is never silently accepted.
+    """
+    if sample is None:
+        sample = load_frozen_sample(DEFAULT_SAMPLE_MANIFEST)
+    if not path.exists():
+        raise SampleValidationError(f"validation artifact not found: {path}")
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    frozen = doc.get("frozen_sample") or {}
+    if frozen.get("sample_snapshot_sha256") != sample.snapshot_sha256:
+        raise SampleValidationError(
+            "validation artifact sample_snapshot_sha256 does not match the "
+            "frozen manifest — stale artifact, re-run validation"
+        )
+    results = doc.get("results")
+    if not isinstance(results, list) or not results:
+        raise SampleValidationError("validation artifact has no 'results' list")
+    scope: set[str] = set()
+    for row in results:
+        if not isinstance(row, dict) or not isinstance(row.get("isin"), str):
+            raise SampleValidationError("validation artifact row missing 'isin'")
+        if row.get("disposition") == "INCLUDE" and row["isin"].strip():
+            scope.add(row["isin"].strip())
+    return frozenset(scope)
 
 
 @dataclass(frozen=True)
@@ -281,9 +328,10 @@ def main(argv: list[str]) -> int:
         "semantics": (
             "es_legal_issuer_v1 (docs/gates/G0.md §3, F-008 corrected): "
             "MiFIR ID=BOND (FITRS FinInstrmClssfctn) AND Bond Type=CRPB "
-            "(SACL BOND5 primary, Desc cross-check) AND issuer LEI (FIRDS "
-            "field 5) AND GLEIF LegalJurisdiction.country=ES. Frozen resolver "
-            "decides every branch; no ISIN is ever re-drawn."
+            "(SACL criterion only; Desc is a cross-check and never sufficient "
+            "alone) AND issuer LEI (FIRDS field 5) AND GLEIF "
+            "LegalJurisdiction.country=ES. Frozen resolver decides every "
+            "branch; no ISIN is ever re-drawn."
         ),
         "inputs": {
             "fitrs_files": fitrs_meta,

@@ -9,9 +9,9 @@ frozen_sample:
   isin_count: 20
   sample_snapshot_sha256: ad666760bc525e9f48b203ab6f5166645458756069d000866879c3e810040d04
 semantics: 'es_legal_issuer_v1 (docs/gates/G0.md §3, F-008 corrected): MiFIR ID=BOND
-  (FITRS FinInstrmClssfctn) AND Bond Type=CRPB (SACL BOND5 primary, Desc cross-check)
-  AND issuer LEI (FIRDS field 5) AND GLEIF LegalJurisdiction.country=ES. Frozen resolver
-  decides every branch; no ISIN is ever re-drawn.'
+  (FITRS FinInstrmClssfctn) AND Bond Type=CRPB (SACL criterion only; Desc is a cross-check
+  and never sufficient alone) AND issuer LEI (FIRDS field 5) AND GLEIF LegalJurisdiction.country=ES.
+  Frozen resolver decides every branch; no ISIN is ever re-drawn.'
 inputs:
   fitrs_files:
   - file: FULNCR_20260912_D_1of5.zip

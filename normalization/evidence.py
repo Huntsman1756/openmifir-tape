@@ -15,6 +15,7 @@ from pathlib import Path
 import yaml
 
 from universe.sample import load_frozen_sample
+from universe.sample_validation import load_validated_scope
 
 from .model import NormalizedRecord
 from .normalize import normalize_record
@@ -73,6 +74,7 @@ def generate_evidence(raw_root: Path, evidence_dir: Path, *, date: str) -> Path:
     total_records = 0
     profile_records = 0
     sample = load_frozen_sample()
+    validated_scope = load_validated_scope(sample)
     for source in ("bme_apa", "blb_apae"):
         source_dir = raw_root / source
         if not source_dir.is_dir():
@@ -90,7 +92,8 @@ def generate_evidence(raw_root: Path, evidence_dir: Path, *, date: str) -> Path:
         results[source] = _norm_stats(records)
         total_records += results[source]["record_count"]
         profile_records += sum(
-            1 for r in records if sample.contains(r.instrument_identification_code)
+            1 for r in records
+            if (r.instrument_identification_code or "") in validated_scope
         )
 
     manifest = {
@@ -105,7 +108,12 @@ def generate_evidence(raw_root: Path, evidence_dir: Path, *, date: str) -> Path:
         ),
         "total_normalized_records": total_records,
         "profile_scope_normalized_records": profile_records,
-        "profile_scope_basis": "frozen 15+5 sample, fixtures/universe/universe_manifest.yaml",
+        "profile_scope_isin_count": len(validated_scope),
+        "frozen_sample_isin_count": len(sample.isins),
+        "profile_scope_basis": (
+            "validated INCLUDE subset of the frozen 15+5 sample, "
+            "evidence/g0-b1/F-009_frozen_sample_validation.yaml"
+        ),
         "by_source": results,
         "note": "Metadata only. Raw provider content is NOT included; only counts, "
                 "parse/sanity distributions and field-preservation metrics.",

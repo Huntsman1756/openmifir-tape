@@ -204,6 +204,7 @@ def run_fixture_cases(path: Path = DEFAULT_UNIVERSE_FIXTURE) -> FixtureRunResult
     # MISSING_IDENTITY_FAIL_CLOSED: any case where a missing/unusable identity
     # (LEI, jurisdiction) did NOT resolve to INCLUDE.
     identity_branches = {r.branch for r in results if r.reason in {
+        "MISSING_MIFIR_ID",
         "MISSING_ISSUER_LEI",
         "INVALID_ISSUER_LEI",
         "UNRESOLVABLE_LEGAL_JURISDICTION",

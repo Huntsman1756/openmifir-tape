@@ -1,13 +1,15 @@
 gate: G0-C
 issue_id: G0-C1
-date: '2026-09-15'
+date: '2026-09-16'
 raw_lossless: true
 scope: integration
 scope_note: 'Whole-provider-file metrics (F-009): engine conformance only, NOT the
   authoritative es-corporate-bonds profile scope.'
 total_normalized_records: 1282
 profile_scope_normalized_records: 1
-profile_scope_basis: frozen 15+5 sample, fixtures/universe/universe_manifest.yaml
+profile_scope_isin_count: 16
+frozen_sample_isin_count: 20
+profile_scope_basis: validated INCLUDE subset of the frozen 15+5 sample, evidence/g0-b1/F-009_frozen_sample_validation.yaml
 by_source:
   bme_apa:
     record_count: 1279

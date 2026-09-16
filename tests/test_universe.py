@@ -360,7 +360,7 @@ def test_fitrs_parse_extracts_bond_classification():
 
     desc_only = by_isin["XS0000000208"]
     assert desc_only.instrument_mifir_id == "BOND"
-    assert desc_only.bond_type == "OTHR"  # label fallback when SACL absent
+    assert desc_only.bond_type is None  # label alone never determines type
 
 
 def test_gleif_parse_resolves_legal_jurisdiction_country():
@@ -511,11 +511,11 @@ def test_validate_frozen_sample_resolves_real_chain():
     assert rows["XS0000000001"].reason == "IN_ES_CRPB_UNIVERSE"
     assert rows["XS0000000002"].branch == "EXCLUDE"
     assert rows["XS0000000002"].reason == "NOT_CRPB"
-    # Absent from FITRS -> cannot demonstrate BOND -> EXCLUDE/NOT_BOND,
-    # ISIN kept in place and documented (never re-drawn).
-    assert rows["XS0000000003"].branch == "EXCLUDE"
-    assert rows["XS0000000003"].reason == "NOT_BOND"
+    # Absent from FITRS -> MiFIR ID undetermined -> QUARANTINE/MISSING_MIFIR_ID,
+    # ISIN kept in place and documented (never re-drawn, never falsely EXCLUDEd).
+    assert rows["XS0000000003"].branch == "QUARANTINE"
+    assert rows["XS0000000003"].reason == "MISSING_MIFIR_ID"
     assert rows["XS0000000003"].fitrs_observed is False
     assert result.branch_counts == {
-        "INCLUDE": 1, "EXCLUDE": 2, "QUARANTINE": 0, "CONFLICT": 0,
+        "INCLUDE": 1, "EXCLUDE": 1, "QUARANTINE": 1, "CONFLICT": 0,
     }

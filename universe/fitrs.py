@@ -18,12 +18,13 @@ stable across publications); the ``Desc`` label is a cross-check only, since
 label text is presentation data (capitalization has already varied, e.g.
 ``Covered Bond``). Resolution:
 
+- SACL absent -> ``bond_type=None`` (fail closed; the code is the regulatory
+  signal and a label alone NEVER determines the type);
 - SACL present but not in the frozen code table -> ``bond_type=None`` (fail
   closed; a new/unknown code is never guessed);
-- SACL and Desc both mapped but disagreeing -> ``bond_type=None`` (fail
+- SACL mapped and Desc mapped but disagreeing -> ``bond_type=None`` (fail
   closed on contradiction);
-- SACL absent -> Desc mapping alone may determine the type;
-- otherwise the mapped code wins.
+- otherwise the SACL-mapped code wins.
 
 ``bond_type=None`` always lands in the resolver as ``MISSING_BOND_TYPE`` ->
 QUARANTINE. Nothing is derived from the FIRDS CFI code.
@@ -53,7 +54,8 @@ FITRS_SACL_BOND_TYPE: dict[str, str] = {
 }
 
 # RTS 2 Annex IV Table 2 field 9 codes for the six FITRS-published bond labels.
-# Cross-check for SACL and fallback when a record carries no SACL criterion.
+# Cross-check ONLY: a Desc label without a SACL criterion yields
+# ``bond_type=None`` (fail closed) — the label is presentation data.
 FITRS_BOND_TYPE: dict[str, str] = {
     "Corporate bond": "CRPB",
     "Convertible bond": "CVTB",
@@ -118,12 +120,14 @@ def _record_from(element: ET.Element) -> FitrsRecord | None:
                 break
     sacl_type = FITRS_SACL_BOND_TYPE.get(sacl) if sacl else None
     desc_type = FITRS_BOND_TYPE.get(label.strip()) if label else None
-    if sacl is not None and sacl_type is None:
+    if sacl is None:
+        bond_type = None  # no SACL criterion published -> fail closed
+    elif sacl_type is None:
         bond_type = None  # published but unknown SACL code -> fail closed
-    elif sacl_type is not None and desc_type is not None and sacl_type != desc_type:
+    elif desc_type is not None and desc_type != sacl_type:
         bond_type = None  # SACL code / Desc label contradiction -> fail closed
     else:
-        bond_type = sacl_type or desc_type
+        bond_type = sacl_type
     return FitrsRecord(
         instrument_isin=isin,
         instrument_mifir_id=mifir_id,

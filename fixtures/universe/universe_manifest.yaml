@@ -18,7 +18,7 @@ legal_jurisdiction_filter: ES
 isin_prefix_heuristics: PROHIBITED
 selection_seed: "es-main-corp-bonds-2026-09-14"
 snapshot_date: "2026-09-14"
-universe_snapshot_sha256: "ededb97695f1ee837b9dcd747cd8333d17269a028e32f1cb9e986593c32bbeeb"  # fixture disposition table (F-008 corrected semantics)
+universe_snapshot_sha256: "a3e6c6533bd4585f512c86556ad4232258178ed1235ae6427ca95c069dcb0151"  # fixture disposition table (F-008 corrected semantics + MISSING_MIFIR_ID)
 sample_snapshot_sha256: "ad666760bc525e9f48b203ab6f5166645458756069d000866879c3e810040d04"  # SHA-256 over the 20 selected_isins (active then quiet), LF-joined
 
 corpus:
