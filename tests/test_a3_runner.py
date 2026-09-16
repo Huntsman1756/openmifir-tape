@@ -200,6 +200,18 @@ def test_weekend_poll_with_nothing_in_window_succeeds(tmp_path: Path):
     assert r.context["selected_count"] == 0
 
 
+def test_lock_contention_journals_skipped_locked(tmp_path: Path):
+    import json
+
+    from collectors.a3 import record_skipped_locked
+    journal = tmp_path / "journal.jsonl"
+    record_skipped_locked(journal, "20260918T120000Z", "rolling", 900.0)
+    rec = json.loads(journal.read_text().strip())
+    assert rec["status"] == "SKIPPED_LOCKED"
+    assert rec["reason"] == "concurrent_a3_run"
+    assert rec["mode"] == "rolling" and rec["lock_wait_seconds"] == 900.0
+
+
 def test_evidence_and_journal_are_metadata_only(tmp_path: Path):
     _FakeA3Adapter.reset()
     _FakeA3Adapter.objects = [_obj("o.json", _iso(NOW - timedelta(hours=1)))]

@@ -247,11 +247,14 @@ def run_scheduled(
         return result
 
     selected, skipped, unverified = select_window(discovered, cutoff)
+    sel_pubs = sorted(o.publication_timestamp for o in selected if o.publication_timestamp)
     result.context.update({
         "discovered_count": len(discovered),
         "selected_count": len(selected),
         "skipped_outside_window": skipped,
         "unverified_ts_selected": unverified,
+        "oldest_selected_publication_timestamp": sel_pubs[0] if sel_pubs else None,
+        "newest_selected_publication_timestamp": sel_pubs[-1] if sel_pubs else None,
     })
     result.log.append(
         f"{source_id}: discovered={len(discovered)} selected_in_window={len(selected)} "
@@ -348,31 +351,65 @@ def _run_id(now: datetime) -> str:
     return now.strftime("%Y%m%dT%H%M%SZ")
 
 
+LOCK_WAIT_TIMEOUT_S = 900.0  # serialization bound; beyond this -> SKIPPED_LOCKED
+
+
+def record_skipped_locked(journal_path: Path, run_id: str, mode: str,
+                          waited_s: float) -> None:
+    """Journal a run that could not start because another run holds the lock.
+
+    Lock contention is itself an operational event: it MUST be visible to the
+    A3 verification rather than leaving an unexplained gap in the journal.
+    """
+    journal_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "run_id": run_id,
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "mode": mode,
+        "status": "SKIPPED_LOCKED",
+        "reason": "concurrent_a3_run",
+        "lock_wait_seconds": round(waited_s, 3),
+    }
+    with open(journal_path, "a", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(record, sort_keys=True) + "\n")
+
+
 @contextlib.contextmanager
-def _run_lock(lock_path: Path):
-    """Non-blocking advisory lock: a second concurrent run exits cleanly
-    instead of double-fetching (the next scheduled poll provides coverage)."""
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fd = None
+def _run_lock(lock_path: Path, timeout_s: float = LOCK_WAIT_TIMEOUT_S,
+              sleep: Callable[[float], None] = time.sleep):
+    """Serializing advisory lock: a concurrent run WAITS (bounded) instead of
+    being silently dropped — a recovery rolling rescan must never be lost.
+    Yields (acquired, waited_seconds). On platforms without fcntl (e.g. Windows
+    dev runs) degrades to an always-acquired no-op lock."""
     try:
-        import fcntl  # POSIX only; absence (e.g. Windows dev runs) degrades to no lock
-        fd = open(lock_path, "w")
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            fd.close()
-            yield False
-            return
-        yield True
+        import fcntl  # POSIX only
     except ImportError:
-        yield True
+        yield True, 0.0
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = open(lock_path, "w")
+    acquired = False
+    waited = 0.0
+    deadline = time.monotonic() + timeout_s
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    break
+                sleep(1.0)
+                waited = time.monotonic() - (deadline - timeout_s)
+        yield acquired, waited
     finally:
-        if fd is not None:
+        if acquired:
             try:
                 fcntl.flock(fd, fcntl.LOCK_UN)
             except OSError:
                 pass
-            fd.close()
+        fd.close()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -390,13 +427,17 @@ def main(argv: list[str] | None = None) -> int:
     configs = load_all_sources(args.config_dir)
     wanted = list(configs) if args.source == "all" else [args.source]
 
-    with _run_lock(args.lock_file) as acquired:
-        if not acquired:
-            print("another omt-g0a3 run holds the lock; skipping (fail-safe)")
-            return 0
+    now = datetime.now(timezone.utc)
+    run_id = _run_id(now)
 
-        now = datetime.now(timezone.utc)
-        run_id = _run_id(now)
+    with _run_lock(args.lock_file) as (acquired, waited):
+        if not acquired:
+            record_skipped_locked(args.journal, run_id, args.mode, waited)
+            print(f"another omt-g0a3 run held the lock for {waited:.0f}s; "
+                  f"journaled SKIPPED_LOCKED", file=sys.stderr)
+            return 1
+        if waited:
+            print(f"lock contention: waited {waited:.0f}s for a prior run")
 
         from .cli import default_http_get
         http_get: HttpGetter = default_http_get
@@ -408,6 +449,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             result = run_scheduled(source_id, configs[source_id], store, http_get,
                                    mode=args.mode, now=now)
+            if waited:
+                result.context["lock_wait_seconds"] = round(waited, 3)
             manifest_path = write_run_evidence(args.evidence_dir, result, run_id)
             append_journal(args.journal, result, run_id)
             print(f"{source_id}: mode={args.mode} status={result.status} "

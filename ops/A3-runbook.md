@@ -39,20 +39,24 @@ systemctl enable --now omt-a3-poll.timer omt-a3-rolling.timer
 systemctl list-timers omt-a3-*
 ```
 
-Poll runs hourly at :07; rolling daily at 06:15 UTC. Both timers are
-`Persistent=true` so a missed run fires on boot.
+Poll runs every 30 min (:07/:37) — twice the `poll_max_seconds=3600` bound so
+scheduler delay never produces observed intervals over 1h. Rolling runs daily
+at 06:15 UTC. Both timers are `Persistent=true` so a missed run fires on boot.
+Concurrent runs serialize on `data/a3/.runner.lock` (15 min bound); a run that
+still cannot acquire the lock journals `SKIPPED_LOCKED` and exits non-zero —
+it never disappears silently.
 
 ## Alternative: cron
 
 ```cron
-7 * * * *  cd /opt/openmifir-tape && .venv/bin/python -m collectors.a3 --mode poll
-15 6 * * * cd /opt/openmifir-tape && .venv/bin/python -m collectors.a3 --mode rolling
+7,37 * * * * cd /opt/openmifir-tape && .venv/bin/python -m collectors.a3 --mode poll
+15 6 * * *   cd /opt/openmifir-tape && .venv/bin/python -m collectors.a3 --mode rolling
 ```
 
 ## Windows (Task Scheduler)
 
 ```powershell
-schtasks /create /tn "omt-a3-poll" /sc hourly /mo 1 `
+schtasks /create /tn "omt-a3-poll" /sc minute /mo 30 `
   /tr "\"<repo>\\.venv\\Scripts\\python.exe\" -m collectors.a3 --mode poll" /ru <user>
 schtasks /create /tn "omt-a3-rolling" /sc daily /st 06:15 `
   /tr "\"<repo>\\.venv\\Scripts\\python.exe\" -m collectors.a3 --mode rolling" /ru <user>
