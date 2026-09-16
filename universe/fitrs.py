@@ -13,10 +13,20 @@ live ``DLTNCR`` (``auth.045.001.03``) payload during F-008:
 - ``SgmttnCrit`` ``SACL`` carries the sub-asset class code (``BOND1``..``BOND6``
   in the same order as the labels above — ICMA RTS 2 response).
 
-Bond type labels are mapped to RTS 2 field 9 codes via an explicit frozen
-table; an unmapped label yields ``bond_type=None`` (fail closed — the resolver
-QUARANTINEs it as ``MISSING_BOND_TYPE``). Nothing is derived from the FIRDS
-CFI code.
+The SACL code is the PRIMARY bond-type signal (a fixed regulatory code list,
+stable across publications); the ``Desc`` label is a cross-check only, since
+label text is presentation data (capitalization has already varied, e.g.
+``Covered Bond``). Resolution:
+
+- SACL present but not in the frozen code table -> ``bond_type=None`` (fail
+  closed; a new/unknown code is never guessed);
+- SACL and Desc both mapped but disagreeing -> ``bond_type=None`` (fail
+  closed on contradiction);
+- SACL absent -> Desc mapping alone may determine the type;
+- otherwise the mapped code wins.
+
+``bond_type=None`` always lands in the resolver as ``MISSING_BOND_TYPE`` ->
+QUARANTINE. Nothing is derived from the FIRDS CFI code.
 
 Offline by construction: the parser consumes in-memory bytes or a file object;
 no network access. Uses ``iterparse`` so multi-GB full files stream.
@@ -28,7 +38,22 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import IO, Iterable
 
+# RTS 2 Annex IV Table 2 field 9 codes keyed by the FITRS SACL sub-asset class
+# criterion (``SgmttnCrit[CritNm=SACL]/CritVal``). This is the PRIMARY mapping:
+# BOND1..BOND6 is a fixed regulatory code list, observed live in DLTNCR
+# 2026-09-14 and matching the ICMA RTS 2 ordering (sovereign, public,
+# convertible, covered, corporate, other).
+FITRS_SACL_BOND_TYPE: dict[str, str] = {
+    "BOND1": "EUSB",
+    "BOND2": "OEPB",
+    "BOND3": "CVTB",
+    "BOND4": "CVDB",
+    "BOND5": "CRPB",
+    "BOND6": "OTHR",
+}
+
 # RTS 2 Annex IV Table 2 field 9 codes for the six FITRS-published bond labels.
+# Cross-check for SACL and fallback when a record carries no SACL criterion.
 FITRS_BOND_TYPE: dict[str, str] = {
     "Corporate bond": "CRPB",
     "Convertible bond": "CVTB",
@@ -91,7 +116,14 @@ def _record_from(element: ET.Element) -> FitrsRecord | None:
             if _direct_child_text(crit, "CritNm") == "SACL":
                 sacl = _direct_child_text(crit, "CritVal")
                 break
-    bond_type = FITRS_BOND_TYPE.get(label.strip()) if label else None
+    sacl_type = FITRS_SACL_BOND_TYPE.get(sacl) if sacl else None
+    desc_type = FITRS_BOND_TYPE.get(label.strip()) if label else None
+    if sacl is not None and sacl_type is None:
+        bond_type = None  # published but unknown SACL code -> fail closed
+    elif sacl_type is not None and desc_type is not None and sacl_type != desc_type:
+        bond_type = None  # SACL code / Desc label contradiction -> fail closed
+    else:
+        bond_type = sacl_type or desc_type
     return FitrsRecord(
         instrument_isin=isin,
         instrument_mifir_id=mifir_id,

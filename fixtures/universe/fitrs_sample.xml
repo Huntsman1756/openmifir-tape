@@ -47,14 +47,14 @@
     </Id>
     <Lqdty>true</Lqdty>
   </NonEqtyTrnsprncyData>
-  <!-- Bond with a label not in the frozen mapping -> bond_type None (fail closed). -->
+  <!-- SACL code / Desc label contradiction -> bond_type None (fail closed). -->
   <NonEqtyTrnsprncyData>
     <TechRcrdId>1004</TechRcrdId>
     <Id>
       <ISINAndSubClss>
         <ISIN>XS0000000204</ISIN>
         <DerivSubClss>
-          <Desc>Unrecognized bond label</Desc>
+          <Desc>Corporate bond</Desc>
           <SgmttnCrit><CritNm>SACL</CritNm><CritVal>BOND6</CritVal></SgmttnCrit>
         </DerivSubClss>
         <FinInstrmClssfctn>BOND</FinInstrmClssfctn>
@@ -68,6 +68,49 @@
     <Id>
       <ISINAndSubClss>
         <ISIN>XS0000000205</ISIN>
+        <FinInstrmClssfctn>BOND</FinInstrmClssfctn>
+      </ISINAndSubClss>
+    </Id>
+    <Lqdty>false</Lqdty>
+  </NonEqtyTrnsprncyData>
+  <!-- Published but unknown SACL code -> bond_type None even when Desc maps. -->
+  <NonEqtyTrnsprncyData>
+    <TechRcrdId>1006</TechRcrdId>
+    <Id>
+      <ISINAndSubClss>
+        <ISIN>XS0000000206</ISIN>
+        <DerivSubClss>
+          <Desc>Corporate bond</Desc>
+          <SgmttnCrit><CritNm>SACL</CritNm><CritVal>BOND9</CritVal></SgmttnCrit>
+        </DerivSubClss>
+        <FinInstrmClssfctn>BOND</FinInstrmClssfctn>
+      </ISINAndSubClss>
+    </Id>
+    <Lqdty>false</Lqdty>
+  </NonEqtyTrnsprncyData>
+  <!-- SACL-only bond (no Desc label) -> code alone determines CRPB. -->
+  <NonEqtyTrnsprncyData>
+    <TechRcrdId>1007</TechRcrdId>
+    <Id>
+      <ISINAndSubClss>
+        <ISIN>XS0000000207</ISIN>
+        <DerivSubClss>
+          <SgmttnCrit><CritNm>SACL</CritNm><CritVal>BOND5</CritVal></SgmttnCrit>
+        </DerivSubClss>
+        <FinInstrmClssfctn>BOND</FinInstrmClssfctn>
+      </ISINAndSubClss>
+    </Id>
+    <Lqdty>false</Lqdty>
+  </NonEqtyTrnsprncyData>
+  <!-- Desc-only bond (no SACL criterion) -> label fallback still maps. -->
+  <NonEqtyTrnsprncyData>
+    <TechRcrdId>1008</TechRcrdId>
+    <Id>
+      <ISINAndSubClss>
+        <ISIN>XS0000000208</ISIN>
+        <DerivSubClss>
+          <Desc>Other bonds</Desc>
+        </DerivSubClss>
         <FinInstrmClssfctn>BOND</FinInstrmClssfctn>
       </ISINAndSubClss>
     </Id>

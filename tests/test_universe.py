@@ -325,7 +325,7 @@ def test_firds_parse_extracts_field5_issuer_lei():
 
 def test_fitrs_parse_extracts_bond_classification():
     records = parse_fitrs(FITRS_SAMPLE.read_bytes())
-    assert len(records) == 5
+    assert len(records) == 8
     by_isin = {r.instrument_isin: r for r in records}
 
     corporate = by_isin["XS0000000201"]
@@ -342,13 +342,25 @@ def test_fitrs_parse_extracts_bond_classification():
     assert derivative.instrument_mifir_id == "DERV"
     assert derivative.bond_type is None  # "Swaptions" is not a bond label
 
-    unknown = by_isin["XS0000000204"]
-    assert unknown.instrument_mifir_id == "BOND"
-    assert unknown.bond_type is None  # unmapped label -> fail closed
+    contradiction = by_isin["XS0000000204"]
+    assert contradiction.instrument_mifir_id == "BOND"
+    assert contradiction.bond_type is None  # SACL BOND6 vs Desc CRPB -> fail closed
 
     no_subclass = by_isin["XS0000000205"]
     assert no_subclass.instrument_mifir_id == "BOND"
     assert no_subclass.bond_type is None
+
+    unknown_sacl = by_isin["XS0000000206"]
+    assert unknown_sacl.instrument_mifir_id == "BOND"
+    assert unknown_sacl.bond_type is None  # unknown published code -> fail closed
+
+    sacl_only = by_isin["XS0000000207"]
+    assert sacl_only.instrument_mifir_id == "BOND"
+    assert sacl_only.bond_type == "CRPB"  # code primary works without Desc
+
+    desc_only = by_isin["XS0000000208"]
+    assert desc_only.instrument_mifir_id == "BOND"
+    assert desc_only.bond_type == "OTHR"  # label fallback when SACL absent
 
 
 def test_gleif_parse_resolves_legal_jurisdiction_country():
@@ -413,3 +425,97 @@ def test_frozen_sample_loader_and_membership():
     # Digest is deterministic and matches the manifest's frozen snapshot
     # (active-then-quiet order, LF-joined — the documented convention).
     assert sample.isin_digest() == sample.snapshot_sha256
+
+
+def test_frozen_sample_loader_fails_closed_on_tamper(tmp_path):
+    """A manifest mutated in ANY frozen dimension must raise, never load."""
+    import copy
+
+    import yaml
+
+    from universe.sample import (
+        DEFAULT_SAMPLE_MANIFEST,
+        SampleManifestError,
+        load_frozen_sample,
+    )
+
+    doc = yaml.safe_load(DEFAULT_SAMPLE_MANIFEST.read_text(encoding="utf-8"))
+
+    def _write(mutate) -> Path:
+        d = copy.deepcopy(doc)
+        mutate(d)
+        p = tmp_path / "manifest.yaml"
+        p.write_text(yaml.safe_dump(d), encoding="utf-8")
+        return p
+
+    def _expect_error(mutate):
+        with pytest.raises(SampleManifestError):
+            load_frozen_sample(_write(mutate))
+
+    _expect_error(lambda d: d.update({"sample_snapshot_sha256": "0" * 64}))
+    _expect_error(
+        lambda d: d["corpus"]["selected_isins"].update({"status": "UNFROZEN"})
+    )
+    _expect_error(lambda d: d["corpus"]["selected_isins"]["quiet"].pop())
+    _expect_error(
+        lambda d: d["corpus"]["selected_isins"]["active"][0].update(
+            {"isin": d["corpus"]["selected_isins"]["quiet"][0]["isin"]}
+        )
+    )
+    _expect_error(
+        lambda d: d["corpus"]["selected_isins"]["active"].append(
+            {"isin": "ES9999999999", "issuer": "injected"}
+        )
+    )
+
+
+def test_validate_frozen_sample_resolves_real_chain():
+    """Pure-function check: the 20/20 validation reuses the frozen resolver."""
+    from universe.firds import FirdsInstrument
+    from universe.fitrs import FitrsRecord
+    from universe.gleif import GleifEntity
+    from universe.sample import FrozenSample
+    from universe.sample_validation import validate_frozen_sample
+
+    sample = FrozenSample(
+        universe_id="es_legal_issuer_v1",
+        profile="es-corporate-bonds",
+        status="FROZEN_SAMPLE_2026_09_14",
+        isins=frozenset({"XS0000000001", "XS0000000002", "XS0000000003"}),
+        isin_order=("XS0000000001", "XS0000000002", "XS0000000003"),
+        snapshot_sha256="0" * 64,
+        buckets={
+            "XS0000000001": "active",
+            "XS0000000002": "active",
+            "XS0000000003": "quiet",
+        },
+    )
+    fitrs = [
+        FitrsRecord("XS0000000001", "BOND", "CRPB", "Corporate bond", "BOND5"),
+        FitrsRecord("XS0000000002", "BOND", "EUSB", "Sovereign bond", "BOND1"),
+        # XS0000000003 absent from FITRS entirely.
+    ]
+    firds = [
+        FirdsInstrument("XS0000000001", "00000000000000000001"),
+        FirdsInstrument("XS0000000002", "00000000000000000002"),
+    ]
+    gleif = {
+        "00000000000000000001": GleifEntity("00000000000000000001", "ES", True),
+        "00000000000000000002": GleifEntity("0000000000000000002", "ES", True),
+    }
+
+    result = validate_frozen_sample(sample, fitrs, firds, gleif)
+    rows = {r.isin: r for r in result.rows}
+
+    assert rows["XS0000000001"].branch == "INCLUDE"
+    assert rows["XS0000000001"].reason == "IN_ES_CRPB_UNIVERSE"
+    assert rows["XS0000000002"].branch == "EXCLUDE"
+    assert rows["XS0000000002"].reason == "NOT_CRPB"
+    # Absent from FITRS -> cannot demonstrate BOND -> EXCLUDE/NOT_BOND,
+    # ISIN kept in place and documented (never re-drawn).
+    assert rows["XS0000000003"].branch == "EXCLUDE"
+    assert rows["XS0000000003"].reason == "NOT_BOND"
+    assert rows["XS0000000003"].fitrs_observed is False
+    assert result.branch_counts == {
+        "INCLUDE": 1, "EXCLUDE": 2, "QUARANTINE": 0, "CONFLICT": 0,
+    }

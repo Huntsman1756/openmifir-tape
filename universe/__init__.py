@@ -18,7 +18,7 @@ from .fixture_runner import (
     load_disposition_cases,
     run_fixture_cases,
 )
-from .firds import FirdsInstrument, fetch as firds_fetch, parse_firds
+from .firds import FirdsInstrument, fetch as firds_fetch, iter_firds, parse_firds
 from .fitrs import FitrsRecord, parse_fitrs
 from .gleif import GleifEntity, fetch as gleif_fetch, parse_gleif, resolve_legal_jurisdiction
 from .model import Branch, Disposition, Reason, SecurityRecord
@@ -29,6 +29,8 @@ from .resolver import (
     snapshot_payload,
     universe_snapshot_sha256,
 )
+from .sample import FrozenSample, SampleManifestError, load_frozen_sample
+from .sample_validation import SampleValidation, validate_frozen_sample
 
 __all__ = [
     "Branch",
@@ -37,14 +39,19 @@ __all__ = [
     "FitrsRecord",
     "FixtureCase",
     "FixtureRunResult",
+    "FrozenSample",
     "GleifEntity",
     "Reason",
+    "SampleManifestError",
+    "SampleValidation",
     "SecurityRecord",
     "branch_counts",
     "build_disposition_table",
     "firds_fetch",
     "gleif_fetch",
+    "iter_firds",
     "load_disposition_cases",
+    "load_frozen_sample",
     "parse_firds",
     "parse_fitrs",
     "parse_gleif",
@@ -53,4 +60,5 @@ __all__ = [
     "run_fixture_cases",
     "snapshot_payload",
     "universe_snapshot_sha256",
+    "validate_frozen_sample",
 ]

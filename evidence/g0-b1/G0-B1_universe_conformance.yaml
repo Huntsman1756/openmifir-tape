@@ -242,3 +242,15 @@ findings:
     (DLTNCR/FULNCR, auth.045): FinInstrmClssfctn=BOND + DerivSubClss/Desc=''Corporate
     bond'' (SACL BOND5). CFI (ClssfctnTp) is NOT used to derive bond type. universe_snapshot_sha256
     remains the hash of the frozen fixture corpus, not a real universe.'
+- id: F-009
+  title: 'PROFILE_SCOPE_NOT_APPLIED -> frozen 15+5 sample validated against live data'
+  status: RESOLVED
+  resolved: '2026-09-16'
+  evidence: evidence/g0-b1/F-009_frozen_sample_validation.yaml
+  detail: 'All 20 frozen ISINs resolved through the real regulatory chain:
+    FITRS FULNCR_20260912_D (auth.045; MiFIR ID + Bond Type, SACL code primary
+    with Desc as cross-check), FIRDS FULINS_D_20260912 (auth.017; RTS 23
+    field 5 issuer LEI), live GLEIF LegalJurisdiction. Result: 16 INCLUDE /
+    4 EXCLUDE (BOND+CVTB convertibles, kept in place and documented — no
+    re-sampling) / 0 QUARANTINE / 0 CONFLICT. The sample is now a validated
+    es_legal_issuer_v1 profile sample, not merely an observation seed.'

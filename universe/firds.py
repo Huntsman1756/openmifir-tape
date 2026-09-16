@@ -16,9 +16,13 @@ in ``<ClssfctnTp>``.
 Verified against a live ``auth.036.001.03`` DLTINS payload during F-005:
 ``FinInstrm`` wraps a record-kind element (``NewRcrd``/``ModfdRcrd``/
 ``TermntdRcrd``) that carries ``FinInstrmGnlAttrbts`` and ``Issr`` as direct
-children; there is NO ``FinInstrmTp`` element in that schema. Per F-008, the
-MiFIR ID / Bond Type classification comes from ESMA FITRS non-equity
-transparency data (``universe/fitrs.py``, auth.045), NEVER guessed from CFI.
+children; there is NO ``FinInstrmTp`` element in that schema. The FULINS
+full file (``auth.017.001.02``, verified live 2026-09-12 during F-009)
+carries the same two fields directly under ``RefData`` record elements —
+both record-level tags are matched, and the two schemas never nest inside
+each other. Per F-008, the MiFIR ID / Bond Type classification comes from
+ESMA FITRS non-equity transparency data (``universe/fitrs.py``, auth.045),
+NEVER guessed from CFI.
 """
 
 from __future__ import annotations
@@ -27,9 +31,14 @@ import hashlib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import IO, Callable, Iterator
 
 FIELD_ISSUER_LEI = 5  # RTS 23 field number for issuer LEI
+
+# Record-level elements across the two FIRDS schemas: ``FinInstrm`` wraps the
+# record kind in auth.036 deltas (DLTINS); ``RefData`` is the record element in
+# auth.017 full files (FULINS). The two never nest within each other.
+_RECORD_TAGS = frozenset({"FinInstrm", "RefData"})
 
 HttpGet = Callable[[str], bytes]
 
@@ -79,6 +88,32 @@ def _direct_child_text(element: ET.Element, name: str) -> str | None:
     return None
 
 
+def _instrument_from(element: ET.Element) -> FirdsInstrument:
+    # The record wrapper (NewRcrd/ModfdRcrd/TermntdRcrd in auth.036, or a
+    # direct FinInstrmGnlAttrbts in the synthetic fixture) carries
+    # FinInstrmGnlAttrbts; Issr (RTS 23 field 5) is a direct child of the
+    # record element — never descend into nested instrument structures.
+    wrapper = next((c for c in element if isinstance(c.tag, str)), None)
+    if wrapper is None:
+        gnl = _direct_child(element, "FinInstrmGnlAttrbts")
+        issuer_lei = _direct_child_text(element, "Issr")
+    elif _local_name(wrapper.tag) == "FinInstrmGnlAttrbts":
+        gnl = wrapper
+        issuer_lei = _direct_child_text(element, "Issr")
+    else:
+        gnl = _direct_child(wrapper, "FinInstrmGnlAttrbts")
+        issuer_lei = _direct_child_text(wrapper, "Issr")
+    isin = _direct_child_text(gnl, "Id") if gnl is not None else ""
+    cfi = _direct_child_text(gnl, "ClssfctnTp") if gnl is not None else None
+    report_id = _child_text(element, "FinInstrmRptgRprtSts") or _child_text(element, "RptgRef")
+    return FirdsInstrument(
+        instrument_isin=isin or "",
+        issuer_lei=issuer_lei or "",
+        cfi_code=cfi,
+        source_report_id=report_id,
+    )
+
+
 def parse_firds(xml_bytes: bytes) -> list[FirdsInstrument]:
     """Parse a FIRDS XML subset into instruments with field 5 issuer LEI.
 
@@ -90,38 +125,30 @@ def parse_firds(xml_bytes: bytes) -> list[FirdsInstrument]:
     except ET.ParseError as exc:  # XMLSyntaxError is a subclass
         raise FirdsParseError(f"FIRDS XML parse failed: {exc}") from exc
 
-    instruments: list[FirdsInstrument] = []
-    for element in root.iter():
-        if _local_name(element.tag) != "FinInstrm":
-            continue
-        # The record wrapper (NewRcrd/ModfdRcrd/TermntdRcrd in auth.036, or a
-        # direct FinInstrmGnlAttrbts in the synthetic fixture) carries
-        # FinInstrmGnlAttrbts; Issr (RTS 23 field 5) is a direct child of the
-        # record element — never descend into nested instrument structures.
-        wrapper = next((c for c in element if isinstance(c.tag, str)), None)
-        if wrapper is None:
-            gnl = _direct_child(element, "FinInstrmGnlAttrbts")
-            issuer_lei = _direct_child_text(element, "Issr")
-        elif _local_name(wrapper.tag) == "FinInstrmGnlAttrbts":
-            gnl = wrapper
-            issuer_lei = _direct_child_text(element, "Issr")
-        else:
-            gnl = _direct_child(wrapper, "FinInstrmGnlAttrbts")
-            issuer_lei = _direct_child_text(wrapper, "Issr")
-        isin = _direct_child_text(gnl, "Id") if gnl is not None else ""
-        cfi = _direct_child_text(gnl, "ClssfctnTp") if gnl is not None else None
-        report_id = _child_text(element, "FinInstrmRptgRprtSts") or _child_text(element, "RptgRef")
-        instruments.append(
-            FirdsInstrument(
-                instrument_isin=isin or "",
-                issuer_lei=issuer_lei or "",
-                cfi_code=cfi,
-                source_report_id=report_id,
-            )
-        )
+    instruments = [
+        _instrument_from(element)
+        for element in root.iter()
+        if _local_name(element.tag) in _RECORD_TAGS
+    ]
     if not instruments:
-        raise FirdsParseError("no <FinInstrm> records found in FIRDS payload")
+        raise FirdsParseError("no <FinInstrm>/<RefData> records found in FIRDS payload")
     return instruments
+
+
+def iter_firds(source: "IO[bytes]") -> "Iterator[FirdsInstrument]":
+    """Streaming variant for multi-hundred-MB FULINS payloads (iterparse).
+
+    Same fail-closed semantics as :func:`parse_firds`; consumes a file object
+    so full reference-data files never materialize as one DOM tree.
+    """
+    try:
+        for _event, element in ET.iterparse(source):
+            if _local_name(element.tag) not in _RECORD_TAGS:
+                continue
+            yield _instrument_from(element)
+            element.clear()
+    except ET.ParseError as exc:
+        raise FirdsParseError(f"FIRDS XML parse failed: {exc}") from exc
 
 
 def fetch(url: str, http_get: HttpGet) -> bytes:
