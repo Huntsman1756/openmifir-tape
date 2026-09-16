@@ -1,0 +1,11 @@
+[Unit]
+Description=OpenMiFIR Tape G0-A3 hourly capture poll (24h publication_timestamp rescan)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/openmifir-tape
+ExecStart=/opt/openmifir-tape/.venv/bin/python -m collectors.a3 --mode poll
+# Non-zero exit means a source run was not SUCCEEDED; journal + run manifest
+# under evidence/g0-a3/runs/ carry the failure record.

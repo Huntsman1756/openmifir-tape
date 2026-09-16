@@ -30,6 +30,7 @@ class SourceRunResult:
     objects: list[CaptureRecord] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
 
     @property
     def succeeded(self) -> bool:
@@ -52,6 +53,7 @@ class SourceRunResult:
             "objects": [o.to_manifest() for o in self.objects],
             "errors": self.errors,
             "log": self.log,
+            **({"context": self.context} if self.context else {}),
         }
 
 

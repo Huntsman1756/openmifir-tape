@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly G0-A3 capture poll (poll_max_seconds=3600 per config/sources/*.yaml)
+
+[Timer]
+# Every hour at :07. Persistent=true catches up missed runs after downtime;
+# the runner's 24h rescan then re-covers the gap automatically.
+OnCalendar=*:07:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
