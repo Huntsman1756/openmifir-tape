@@ -6,4 +6,4 @@ provide a query layer. Provider payloads are written ONLY to the gitignored
 local data directory; the repository holds code, schemas, tests, and metadata.
 """
 
-__all__ = ["config", "storage", "harness", "sources"]
+__all__ = ["config", "harness", "sources", "storage"]

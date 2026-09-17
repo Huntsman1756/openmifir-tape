@@ -27,6 +27,11 @@ Invariants (enforced):
 This keeps SOURCE REOBSERVATION (G0-A1 capture model) distinct from INGEST
 IDEMPOTENCE (G0-A2). It never overwrites and never deletes.
 
+Note: the payload and its ``.meta.yaml`` are two separate writes, not an
+atomic pair. A crash between them can leave a raw object whose meta is
+written on the next observation of the same bytes (self-healing), but no
+guarantee is made that a payload can never exist without metadata.
+
 The raw directory is the gitignored local data directory (`data/`). This module
 never writes provider payloads anywhere under the repository tree.
 """
@@ -35,7 +40,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +52,7 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def sanitize_filename(name: str) -> str:
@@ -174,9 +179,28 @@ class RawStore:
         if extra:
             meta.update(extra)
 
-        if not meta_path.exists():
-            with open(meta_path, "w", encoding="utf-8", newline="\n") as fh:
+        # Write-once meta: exclusive create so a concurrent or repeated capture
+        # can never overwrite the provenance recorded at first capture. A
+        # racing loser REUSES the winner's meta after verifying it describes
+        # this exact capture identity; a mismatch is corruption, not a race.
+        try:
+            with open(meta_path, "x", encoding="utf-8", newline="\n") as fh:
                 yaml.safe_dump(meta, fh, sort_keys=False)
+        except FileExistsError:
+            try:
+                existing_meta = yaml.safe_load(
+                    meta_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, yaml.YAMLError):
+                existing_meta = None
+            if not isinstance(existing_meta, dict):
+                existing_meta = {}
+            if existing_meta.get("raw_sha256") != digest:
+                # FileExistsError is control flow here, not the causal error.
+                raise WriteOnceConflict(
+                    f"{meta_path} exists but records raw_sha256="
+                    f"{existing_meta.get('raw_sha256')!r}, expected {digest!r}; "
+                    f"refusing to proceed (source_object_id={object_key!r})"
+                ) from None
 
         return CaptureRecord(
             source_id=source_id,

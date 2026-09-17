@@ -42,7 +42,7 @@ def _load_bloomberg_csv(path: Path) -> list[dict]:
     for row in reader:
         if not row or all(c == "" for c in row):
             continue
-        rows.append(dict(zip(header, row)))
+        rows.append(dict(zip(header, row, strict=False)))  # ragged rows tolerated
     return rows
 
 

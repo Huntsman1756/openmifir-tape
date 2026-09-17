@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from . import bloomberg_apae, bme_apa
 from .base import (
     DiscoveredObject,
     HttpGetter,
     SourceDiscoveryError,
     SourceFetchError,
 )
-from . import bme_apa, bloomberg_apae
 
 ADAPTERS = {
     bme_apa.SOURCE_ID: bme_apa,
@@ -25,11 +25,11 @@ def get_adapter(source_id: str):
 
 __all__ = [
     "ADAPTERS",
-    "bme_apa",
-    "bloomberg_apae",
-    "get_adapter",
     "DiscoveredObject",
     "HttpGetter",
     "SourceDiscoveryError",
     "SourceFetchError",
+    "bloomberg_apae",
+    "bme_apa",
+    "get_adapter",
 ]

@@ -44,7 +44,7 @@ margin — the runner errs toward over-capture, never under-capture.
 
 ```bash
 git clone <repo> /opt/openmifir-tape && cd /opt/openmifir-tape
-python3 -m venv .venv && .venv/bin/pip install pyyaml
+python3 -m venv .venv && .venv/bin/pip install .
 cp ops/systemd/omt-a3-*.service ops/systemd/omt-a3-*.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now omt-a3-poll.timer omt-a3-rolling.timer

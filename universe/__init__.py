@@ -12,19 +12,21 @@ repository tree.
 
 from __future__ import annotations
 
+from .firds import FirdsInstrument, iter_firds, parse_firds
+from .firds import fetch as firds_fetch
+from .fitrs import FitrsRecord, parse_fitrs
 from .fixture_runner import (
     FixtureCase,
     FixtureRunResult,
     load_disposition_cases,
     run_fixture_cases,
 )
-from .firds import FirdsInstrument, fetch as firds_fetch, iter_firds, parse_firds
-from .fitrs import FitrsRecord, parse_fitrs
-from .gleif import GleifEntity, fetch as gleif_fetch, parse_gleif, resolve_legal_jurisdiction
+from .gleif import GleifEntity, parse_gleif, resolve_legal_jurisdiction
+from .gleif import fetch as gleif_fetch
 from .model import Branch, Disposition, Reason, SecurityRecord
 from .resolver import (
-    build_disposition_table,
     branch_counts,
+    build_disposition_table,
     resolve_disposition,
     snapshot_payload,
     universe_snapshot_sha256,

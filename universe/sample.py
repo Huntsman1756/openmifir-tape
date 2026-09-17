@@ -30,9 +30,9 @@ from pathlib import Path
 
 import yaml
 
-DEFAULT_SAMPLE_MANIFEST = (
-    Path(__file__).resolve().parents[1] / "fixtures" / "universe" / "universe_manifest.yaml"
-)
+from ._paths import repo_file
+
+DEFAULT_SAMPLE_MANIFEST = repo_file("fixtures", "universe", "universe_manifest.yaml")
 
 
 class SampleManifestError(Exception):

@@ -16,6 +16,7 @@ from typing import Any
 
 import yaml
 
+from ._paths import repo_file
 from .model import SecurityRecord
 from .resolver import (
     branch_counts,
@@ -24,9 +25,7 @@ from .resolver import (
     universe_snapshot_sha256,
 )
 
-DEFAULT_UNIVERSE_FIXTURE = (
-    Path(__file__).resolve().parents[1] / "fixtures" / "universe" / "disposition_cases.yaml"
-)
+DEFAULT_UNIVERSE_FIXTURE = repo_file("fixtures", "universe", "disposition_cases.yaml")
 
 
 class FixtureParseError(Exception):
@@ -143,7 +142,7 @@ def _load_record_fields(raw: dict[str, Any]) -> SecurityRecord:
 def load_disposition_cases(path: Path = DEFAULT_UNIVERSE_FIXTURE) -> list[FixtureCase]:
     if not path.exists():
         raise FixtureParseError(f"disposition fixtures not found: {path}")
-    with open(path, "r", encoding="utf-8", newline="\n") as fh:
+    with open(path, encoding="utf-8", newline="\n") as fh:
         doc = yaml.safe_load(fh) or {}
     cases_raw = doc.get("cases")
     if not isinstance(cases_raw, list) or not cases_raw:
@@ -180,7 +179,7 @@ def run_fixture_cases(path: Path = DEFAULT_UNIVERSE_FIXTURE) -> FixtureRunResult
     dispositions = build_disposition_table(records)
 
     results: list[CaseResult] = []
-    for case, disp in zip(cases, dispositions):
+    for case, disp in zip(cases, dispositions, strict=True):
         results.append(
             CaseResult(
                 case_id=case.case_id,

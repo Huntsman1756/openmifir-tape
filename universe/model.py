@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 UNIVERSE_ID = "es_legal_issuer_v1"
 PROFILE = "es-corporate-bonds"
@@ -37,7 +37,7 @@ LEGAL_JURISDICTION_SOURCE = "GLEIF_LegalJurisdiction.country"
 LEI_PATTERN = re.compile(r"^[A-Z0-9]{20}$")
 
 
-class Branch(str, Enum):
+class Branch(StrEnum):
     """Disposition branch (frozen)."""
 
     INCLUDE = "INCLUDE"
@@ -46,7 +46,7 @@ class Branch(str, Enum):
     CONFLICT = "CONFLICT"
 
 
-class Reason(str, Enum):
+class Reason(StrEnum):
     """Deterministic, auditable reason code attached to every disposition."""
 
     IN_ES_CRPB_UNIVERSE = "IN_ES_CRPB_UNIVERSE"

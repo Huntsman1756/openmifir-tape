@@ -15,7 +15,8 @@ import re
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
-from ..sources.base import DiscoveredObject, HttpGetter, SourceDiscoveryError, SourceFetchError
+from ..net import is_http_url
+from .base import DiscoveredObject, HttpGetter, SourceDiscoveryError, SourceFetchError
 
 SOURCE_ID = "blb_apae"
 
@@ -57,8 +58,10 @@ def discover(conf: dict[str, Any], http_get: HttpGetter) -> list[DiscoveredObjec
 
     seen: dict[str, DiscoveredObject] = {}
     # 1) Links whose URL or text carries a BAPA-POST2 file.
-    for raw in _URL_RE.findall(html) + ['' for _ in range(0)]:
+    for raw in _URL_RE.findall(html):
         url = _absolute(raw, page)
+        if not is_http_url(url):
+            continue
         m = _REPORT_TOKEN_RE.search(url)
         if m:
             token = m.group(1)
@@ -75,6 +78,8 @@ def discover(conf: dict[str, Any], http_get: HttpGetter) -> list[DiscoveredObjec
         if not re.search(r"BAPA-POST2", key, re.IGNORECASE):
             continue
         url = urljoin(page, "download?key=" + key)
+        if not is_http_url(url):
+            continue
         seen[key] = DiscoveredObject(
             source_id=SOURCE_ID,
             object_key=key,
@@ -96,5 +101,5 @@ def fetch(conf: dict[str, Any], http_get: HttpGetter, obj: DiscoveredObject) -> 
     """Fetch the exact bytes of one Bloomberg APAE delayed report."""
     try:
         return http_get(obj.url)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise SourceFetchError(f"blb_apae: fetch failed for {obj.object_key}: {exc}") from exc

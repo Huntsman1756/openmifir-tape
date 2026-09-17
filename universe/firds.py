@@ -28,10 +28,12 @@ NEVER guessed from CFI.
 from __future__ import annotations
 
 import hashlib
-import xml.etree.ElementTree as ET
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO, Callable, Iterator
+from typing import IO
+
+from defusedxml import ElementTree as ET
 
 FIELD_ISSUER_LEI = 5  # RTS 23 field number for issuer LEI
 
@@ -135,7 +137,7 @@ def parse_firds(xml_bytes: bytes) -> list[FirdsInstrument]:
     return instruments
 
 
-def iter_firds(source: "IO[bytes]") -> "Iterator[FirdsInstrument]":
+def iter_firds(source: IO[bytes]) -> Iterator[FirdsInstrument]:
     """Streaming variant for multi-hundred-MB FULINS payloads (iterparse).
 
     Same fail-closed semantics as :func:`parse_firds`; consumes a file object

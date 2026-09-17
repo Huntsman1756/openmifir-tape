@@ -1,0 +1,20 @@
+OpenMiFIR Tape
+Copyright (c) 2026 OpenMiFIR Tape contributors
+
+License scope
+-------------
+
+The MIT License in LICENSE applies ONLY to the contents of this repository:
+source code, schemas, fixtures, tests, documentation, and configuration
+authored by the project.
+
+It does NOT apply to, and grants no rights over:
+
+  * third-party market data or provider payloads (BME, Bloomberg, ESMA,
+    GLEIF, or any other source) — these remain subject to their respective
+    terms of use; see docs/legal/ for the per-source classification;
+  * the names, trademarks, or services of any data provider;
+  * data captured by operators into their local data/ directory.
+
+Nothing in this repository's license grants any right to redistribute
+provider data.

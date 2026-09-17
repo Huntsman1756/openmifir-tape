@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
-from . import bme, bloomberg
+from . import bloomberg, bme
 
 MAPPERS: dict[str, Callable] = {
     bme.SOURCE: bme.normalize,
