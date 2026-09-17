@@ -108,7 +108,7 @@ def build_ledger(normalized: list[Any]) -> list[LedgerEntry]:
     for rec in normalized:
         state, event_type, markers = _state_and_event(rec)
         if rec.publication_datetime.parse_status != "PARSED":
-            markers = markers + [MARKER_UNPARSED_PUB_TS]
+            markers = [*markers, MARKER_UNPARSED_PUB_TS]
         material = _identity_material(rec, event_type)
         items.append((rec, state, event_type, markers, material))
 
@@ -130,8 +130,8 @@ def build_ledger(normalized: list[Any]) -> list[LedgerEntry]:
             entry_ids.append(m)
             collided.append(False)
     # entry_ids/collided are indexed by position in `order`; map back to items.
-    id_by_pos = dict(zip(order, entry_ids))
-    col_by_pos = dict(zip(order, collided))
+    id_by_pos = dict(zip(order, entry_ids, strict=True))
+    col_by_pos = dict(zip(order, collided, strict=True))
 
     # Group by (source, transaction id); missing/blank id -> singleton group.
     groups: dict[tuple, list[int]] = {}

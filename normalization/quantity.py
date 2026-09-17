@@ -43,13 +43,10 @@ def notional_vs_quantity_price(
             status="INSUFFICIENT",
             detail="need quantity, notional and price; raw values preserved",
         )
-    divisor = Decimal("100") if (price_notation or "").upper() == "PERC" else Decimal("1")
+    divisor = Decimal(100) if (price_notation or "").upper() == "PERC" else Decimal(1)
     expected = q * p / divisor
     # Relative tolerance 1e-6 avoids float/rounding noise.
-    if abs(expected) == 0:
-        ok = abs(n) == 0
-    else:
-        ok = abs(n - expected) / abs(expected) < Decimal("1e-6")
+    ok = abs(n) == 0 if abs(expected) == 0 else abs(n - expected) / abs(expected) < Decimal("1e-6")
     return SanityResult(
         check="notional_vs_quantity_price",
         status="PASS" if ok else "FLAG",

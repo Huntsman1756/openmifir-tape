@@ -9,24 +9,20 @@ from __future__ import annotations
 
 import argparse
 import sys
-import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import load_all_sources
 from .harness import run_source, write_evidence
+from .net import default_http_get
 from .sources.base import HttpGetter
 from .storage import RawStore
 
-
-def default_http_get(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "OpenMiFIRTape/0.0.1"})
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return resp.read()
+__all__ = ["default_http_get", "main"]
 
 
 def _run_id() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def main(argv: list[str] | None = None) -> int:

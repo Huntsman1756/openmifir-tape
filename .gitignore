@@ -19,13 +19,25 @@ credentials/
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
+.venv*/
 venv/
-.python-version/
+.python-version
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+.tox/
+
+# Build / coverage artifacts
+build/
+dist/
+.coverage
+coverage/
+htmlcov/
+
+# Logs are ignored everywhere EXCEPT sanitized evidence logs under
+# evidence/ (metadata only — see AGENTS.md hard rule 2).
 *.log
+!evidence/**/*.log
 
 # Editors / OS
 .vscode/

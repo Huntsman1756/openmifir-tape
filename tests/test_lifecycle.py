@@ -1,16 +1,16 @@
 """Offline tests for G0-D1 lifecycle reconstruction + F-006 composition proof."""
 
-from normalization import normalize_record
 from lifecycle import (
     build_ledger,
     chain_state_sequence,
+    composition_proof,
     economic_duplicate_candidates,
     ledger_digest,
     ledger_stats,
     reconstruct_chains,
     source_exact_duplicates,
-    composition_proof,
 )
+from normalization import normalize_record
 
 
 def _bme(**overrides):
@@ -187,8 +187,11 @@ def test_entry_id_collision_disambiguated_deterministically():
 
 
 def test_ledger_digest_deterministic_and_order_independent():
-    recs = [_norm(_bme(transaction_identification_code=f"TX-{i}", publication_date_and_time=f"2026-09-14T10:00:0{i}.000Z"))
-            for i in range(3)]
+    recs = [
+        _norm(_bme(transaction_identification_code=f"TX-{i}",
+                   publication_date_and_time=f"2026-09-14T10:00:0{i}.000Z"))
+        for i in range(3)
+    ]
     d1 = ledger_digest(build_ledger(list(recs)))
     d2 = ledger_digest(build_ledger(list(reversed(recs))))  # different input order
     d3 = ledger_digest(build_ledger(list(recs)))

@@ -22,13 +22,14 @@ evidence artifact only as SHA-256 + byte counts.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import sys
 import zipfile
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
 
 import yaml
 
@@ -245,32 +246,36 @@ def _file_meta(path: Path) -> dict:
     return {"file": path.name, "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str] | None = None) -> int:
     """Operator-local runner: local files only, no network.
 
-    Usage: sample_validation.py <out.yaml> --fitrs <zip...> --firds <zip...>
-           --gleif-cache <dir> [--manifest <universe_manifest.yaml>]
+    Usage: omt-sample-validation <out.yaml> --fitrs <zip...> --firds <zip...>
+           --gleif-cache <dir...> --manifest <universe_manifest.yaml>
     """
-    args = list(argv)
-    out = Path(args.pop(0))
+    parser = argparse.ArgumentParser(
+        prog="omt-sample-validation",
+        description=(
+            "F-009: validate the frozen 15+5 observation sample against local "
+            "FITRS/FIRDS zips and the local GLEIF payload cache. No network."
+        ),
+    )
+    parser.add_argument("out", type=Path, help="output evidence YAML path")
+    parser.add_argument("--fitrs", type=Path, nargs="+", action="append",
+                        required=True, help="FITRS zip file(s)")
+    parser.add_argument("--firds", type=Path, nargs="+", action="append",
+                        required=True, help="FIRDS zip file(s)")
+    parser.add_argument("--gleif-cache", dest="gleif_cache", type=Path,
+                        nargs="+", action="append", required=True,
+                        help="GLEIF cache directories")
+    parser.add_argument("--manifest", type=Path, required=True,
+                        help="frozen universe manifest path")
+    args = parser.parse_args(argv)
 
-    def _take(flag: str) -> list[str]:
-        taken: list[str] = []
-        while flag in args:
-            i = args.index(flag)
-            args.pop(i)
-            taken.append(args.pop(i))
-        return taken
-
-    fitrs_paths = [Path(p) for p in _take("--fitrs")]
-    firds_paths = [Path(p) for p in _take("--firds")]
-    gleif_dirs = [Path(p) for p in _take("--gleif-cache")]
-    manifest_args = _take("--manifest")
-    if args:
-        raise SystemExit(f"unexpected arguments: {args}")
-    if not fitrs_paths or not firds_paths or not gleif_dirs or not manifest_args:
-        raise SystemExit("missing required --fitrs/--firds/--gleif-cache/--manifest")
-    manifest = Path(manifest_args[0])
+    out = args.out
+    fitrs_paths = [p for group in args.fitrs for p in group]
+    firds_paths = [p for group in args.firds for p in group]
+    gleif_dirs = [p for group in args.gleif_cache for p in group]
+    manifest = args.manifest
 
     sample = load_frozen_sample(manifest)
 

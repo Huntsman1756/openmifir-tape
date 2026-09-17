@@ -35,9 +35,11 @@ no network access. Uses ``iterparse`` so multi-GB full files stream.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import IO, Iterable
+from typing import IO
+
+from defusedxml import ElementTree as ET
 
 # RTS 2 Annex IV Table 2 field 9 codes keyed by the FITRS SACL sub-asset class
 # criterion (``SgmttnCrit[CritNm=SACL]/CritVal``). This is the PRIMARY mapping:

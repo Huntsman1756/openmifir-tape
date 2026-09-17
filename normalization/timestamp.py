@@ -9,7 +9,7 @@ record's own trading/publication timestamp field is considered.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .model import TimestampValue
 
@@ -19,11 +19,11 @@ def _parse(value: str | None) -> tuple[str | None, str]:
         return None, "ABSENT"
     try:
         # Accept ISO-8601 with 'Z' or offset; normalize to UTC.
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(value)
         if dt.tzinfo is None:
             # Source omitted timezone: record as unparseable-to-UTC (no inference).
             return None, "UNPARSED_NO_TZ"
-        return dt.astimezone(timezone.utc).isoformat(), "PARSED"
+        return dt.astimezone(UTC).isoformat(), "PARSED"
     except (ValueError, TypeError):
         return None, "UNPARSED"
 

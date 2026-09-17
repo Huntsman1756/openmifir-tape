@@ -18,11 +18,12 @@ from pathlib import Path
 
 import yaml
 
-from normalization.evidence import _load_bme_json, _load_bloomberg_csv
+from normalization.evidence import _load_bloomberg_csv, _load_bme_json
 from normalization.model import NormalizedRecord
 from normalization.normalize import normalize_record
 from universe.sample import load_frozen_sample
 from universe.sample_validation import load_validated_scope
+
 from .duplicates import economic_duplicate_candidates, source_exact_duplicates
 from .ledger import build_ledger, ledger_digest, ledger_stats
 from .lifecycle import reconstruct_chains, states_in_corpus

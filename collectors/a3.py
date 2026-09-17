@@ -30,9 +30,10 @@ import json
 import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from collections.abc import Callable, Iterable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 import yaml
 
@@ -75,13 +76,14 @@ def parse_publication_timestamp(ts: str | None) -> tuple[datetime | None, bool]:
         year, mon, day, hh, mm, ss, frac = m.groups()
         micros = int((frac or "0").ljust(6, "0")[:6])
         dt = datetime(int(year), int(mon), int(day), int(hh), int(mm), int(ss),
-                      micros, tzinfo=timezone.utc)
+                      micros, tzinfo=UTC)
         return dt, False
     try:
-        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        # Python 3.11+ parses the 'Z' suffix natively.
+        dt = datetime.fromisoformat(text)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc), True
+            dt = dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC), True
     except ValueError:
         return None, False
 
@@ -213,7 +215,7 @@ def run_scheduled(
     sleep: Callable[[float], None] = time.sleep,
 ) -> SourceRunResult:
     """Run one scheduled capture for one source under the given mode window."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     observed_at = now.isoformat()
     adapter = get_adapter(source_id)
     result = SourceRunResult(source_id=source_id, attempted=True,
@@ -353,6 +355,15 @@ def _run_id(now: datetime) -> str:
 
 LOCK_WAIT_TIMEOUT_S = 900.0  # serialization bound; beyond this -> SKIPPED_LOCKED
 
+try:
+    import fcntl  # POSIX advisory locking
+except ImportError:
+    fcntl = None
+try:
+    import msvcrt  # Windows byte-range locking
+except ImportError:
+    msvcrt = None
+
 
 def record_skipped_locked(journal_path: Path, run_id: str, mode: str,
                           waited_s: float) -> None:
@@ -364,7 +375,7 @@ def record_skipped_locked(journal_path: Path, run_id: str, mode: str,
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     record = {
         "run_id": run_id,
-        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "observed_at": datetime.now(UTC).isoformat(),
         "mode": mode,
         "status": "SKIPPED_LOCKED",
         "reason": "concurrent_a3_run",
@@ -374,42 +385,60 @@ def record_skipped_locked(journal_path: Path, run_id: str, mode: str,
         fh.write(json.dumps(record, sort_keys=True) + "\n")
 
 
+def _try_lock(fd) -> bool:
+    """One non-blocking lock attempt on the platform's advisory mechanism."""
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    if msvcrt is not None:
+        fd.seek(0)
+        if fd.read(1) == b"":
+            fd.write(b"\0")
+            fd.flush()
+        fd.seek(0)
+        msvcrt.locking(fd.fileno(), msvcrt.LK_NBLCK, 1)
+        return True
+    return True  # no locking primitive available: degrade to no-op
+
+
+def _unlock(fd) -> None:
+    try:
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        elif msvcrt is not None:
+            fd.seek(0)
+            msvcrt.locking(fd.fileno(), msvcrt.LK_UNLCK, 1)
+    except OSError:
+        pass
+
+
 @contextlib.contextmanager
 def _run_lock(lock_path: Path, timeout_s: float = LOCK_WAIT_TIMEOUT_S,
               sleep: Callable[[float], None] = time.sleep):
     """Serializing advisory lock: a concurrent run WAITS (bounded) instead of
     being silently dropped — a recovery rolling rescan must never be lost.
-    Yields (acquired, waited_seconds). On platforms without fcntl (e.g. Windows
-    dev runs) degrades to an always-acquired no-op lock."""
-    try:
-        import fcntl  # POSIX only
-    except ImportError:
-        yield True, 0.0
-        return
+    Yields (acquired, waited_seconds). Uses fcntl on POSIX and msvcrt byte-range
+    locking on Windows; on platforms with neither it degrades to a no-op."""
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fd = open(lock_path, "w")
     acquired = False
     waited = 0.0
-    deadline = time.monotonic() + timeout_s
-    try:
-        while True:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                acquired = True
-                break
-            except OSError:
-                if time.monotonic() >= deadline:
+    start = time.monotonic()
+    deadline = start + timeout_s
+    with open(lock_path, "a+b") as fd:
+        try:
+            while True:
+                try:
+                    acquired = _try_lock(fd)
                     break
-                sleep(1.0)
-                waited = time.monotonic() - (deadline - timeout_s)
-        yield acquired, waited
-    finally:
-        if acquired:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_UN)
-            except OSError:
-                pass
-        fd.close()
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        break
+                    sleep(1.0)
+                    waited = time.monotonic() - start
+            yield acquired, waited
+        finally:
+            if acquired:
+                _unlock(fd)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -427,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
     configs = load_all_sources(args.config_dir)
     wanted = list(configs) if args.source == "all" else [args.source]
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     run_id = _run_id(now)
 
     with _run_lock(args.lock_file) as (acquired, waited):
@@ -439,7 +468,8 @@ def main(argv: list[str] | None = None) -> int:
         if waited:
             print(f"lock contention: waited {waited:.0f}s for a prior run")
 
-        from .cli import default_http_get
+        from .net import default_http_get
+
         http_get: HttpGetter = default_http_get
         store = RawStore(args.raw_dir)
         worst = 0

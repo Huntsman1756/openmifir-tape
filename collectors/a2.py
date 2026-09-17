@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import sys
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -101,7 +102,7 @@ def _split(state: dict[str, dict[str, str]]) -> tuple[dict[str, dict[str, str]],
     return raw, meta
 
 
-def run_idempotence(raw_root: Path, *, now_utc: str | None = None) -> IdempotenceReport:
+def run_idempotence(raw_root: Path) -> IdempotenceReport:
     """Replay the exact captured objects through the ingest pipeline.
 
     Returns a report; raises nothing on a PASS. Any unintended change is
@@ -184,9 +185,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: raw dir not found: {args.raw_dir}", file=sys.stderr)
         return 2
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     report = run_idempotence(args.raw_dir)
     path = write_evidence(args.evidence_dir, report, run_id)
     print(f"before_digest={report.before_digest}")

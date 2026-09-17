@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from collectors.sources import bme_apa, bloomberg_apae
+from collectors.sources import bloomberg_apae, bme_apa
 from collectors.sources.base import SourceDiscoveryError
 from collectors.sources.bloomberg_apae import _parse_timestamp
 

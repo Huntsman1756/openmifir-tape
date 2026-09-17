@@ -25,7 +25,7 @@ def load_source_config(path: Path) -> dict:
     """Load and minimally validate a single source descriptor YAML file."""
     if not path.is_file():
         raise ConfigError(f"source descriptor not found: {path}")
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         conf = yaml.safe_load(fh) or {}
     if not isinstance(conf, dict) or "source_id" not in conf:
         raise ConfigError(f"{path}: missing 'source_id'")

@@ -5,8 +5,9 @@ offline-CI rule. Window/verification semantics tested against synthetic
 publication timestamps.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import yaml
 
@@ -22,7 +23,7 @@ from collectors.sources.base import DiscoveredObject, SourceFetchError
 from collectors.storage import RawStore
 
 FAKE3 = "fake_a3"
-NOW = datetime(2026, 9, 18, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 18, 12, 0, 0, tzinfo=UTC)
 
 
 def _iso(dt: datetime) -> str:
@@ -31,11 +32,11 @@ def _iso(dt: datetime) -> str:
 
 class _FakeA3Adapter:
     SOURCE_ID = FAKE3
-    objects: list[DiscoveredObject] = []
-    hist_objects: list[DiscoveredObject] = []
-    payloads: dict[str, bytes] = {}
-    fail_fetch: dict[str, int] = {}   # object_key -> remaining failures
-    fetch_calls: list[str] = []
+    objects: ClassVar[list[DiscoveredObject]] = []
+    hist_objects: ClassVar[list[DiscoveredObject]] = []
+    payloads: ClassVar[dict[str, bytes]] = {}
+    fail_fetch: ClassVar[dict[str, int]] = {}   # object_key -> remaining failures
+    fetch_calls: ClassVar[list[str]] = []
 
     @classmethod
     def reset(cls):
@@ -83,13 +84,13 @@ def _obj(key: str, pub: str) -> DiscoveredObject:
 
 def test_parse_publication_timestamp():
     dt, verified = parse_publication_timestamp("2026-09-14T10:00:00+00:00")
-    assert verified and dt == datetime(2026, 9, 14, 10, tzinfo=timezone.utc)
+    assert verified and dt == datetime(2026, 9, 14, 10, tzinfo=UTC)
     dt, verified = parse_publication_timestamp("2026-09-14T10:00:00Z")
     assert verified and dt.utcoffset() == timedelta(0)
     # Bloomberg BAPA-POST2 token: wall-clock portion parsed, unverified.
     dt, verified = parse_publication_timestamp("20260914-20:22:55.841-02")
     assert not verified
-    assert dt == datetime(2026, 9, 14, 20, 22, 55, 841000, tzinfo=timezone.utc)
+    assert dt == datetime(2026, 9, 14, 20, 22, 55, 841000, tzinfo=UTC)
     assert parse_publication_timestamp("garbage") == (None, False)
     assert parse_publication_timestamp("") == (None, False)
 
@@ -102,9 +103,8 @@ def test_select_window_boundaries():
         _obj("old", _iso(cutoff - timedelta(seconds=1))),            # outside
         _obj("nopub", ""),                                           # unparseable: included
         _obj("tok_in", "20260917-20:00:00.000-02"),                  # token inside
-        _obj("tok_margin", _iso(cutoff - timedelta(hours=5))
-             .replace("-", "").replace(":", "")[:0] or
-             (cutoff - timedelta(hours=5)).strftime("%Y%m%d-%H:%M:%S.000-02")),  # within margin
+        # token timestamp within the unverified margin -> selected
+        _obj("tok_margin", (cutoff - timedelta(hours=5)).strftime("%Y%m%d-%H:%M:%S.000-02")),
         _obj("tok_out", (cutoff - timedelta(hours=7)).strftime("%Y%m%d-%H:%M:%S.000-02")),
     ]
     selected, skipped, unverified = select_window(objs, cutoff)

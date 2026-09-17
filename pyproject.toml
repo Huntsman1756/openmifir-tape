@@ -1,9 +1,73 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "openmifir-tape"
 version = "0.0.1"
 description = "OpenMiFIR Tape - reproducible, auditable post-trade transparency lab for MiFIR bond data"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "OpenMiFIR Tape contributors" }]
+keywords = ["mifir", "mifid2", "post-trade", "transparency", "bonds", "esma", "audit"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "PyYAML>=6.0.2",
+    "defusedxml>=0.7.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff==0.14.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/Huntsman1756/openmifir-tape"
+Repository = "https://github.com/Huntsman1756/openmifir-tape"
+
+[project.scripts]
+omt-g0a1 = "collectors.cli:main"
+omt-g0a2 = "collectors.a2:main"
+omt-g0a3 = "collectors.a3:main"
+omt-sample-validation = "universe.sample_validation:main"
+
+[tool.setuptools.packages.find]
+include = ["collectors*", "lifecycle*", "normalization*", "universe*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# Deterministic rule set: do NOT rely on a ruff version's default selection.
+# BLE is enabled on purpose: blind excepts are allowed ONLY where the code
+# explicitly records-and-continues per the fail-closed contract, marked with
+# a targeted `noqa: BLE001` that must justify itself in a comment.
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "S", "BLE", "RUF", "FURB"]
+ignore = [
+    # The acquisition CLIs intentionally fetch provider URLs.
+    "S310",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Asserts are the assertion mechanism in tests, not a security issue.
+"tests/**" = ["S101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Make the repo root importable under a bare `pytest` invocation too.
+pythonpath = ["."]

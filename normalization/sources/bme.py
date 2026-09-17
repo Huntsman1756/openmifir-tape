@@ -135,9 +135,9 @@ def _partial_signal(raw: dict[str, Any], flags: list[str], deferral: bool | None
         return True
     if deferral is None:
         return None
-    if deferral and raw.get("quantity") is None and _deferral_field_class(raw) != "FULL":
-        return True
-    return False
+    return bool(
+        deferral and raw.get("quantity") is None and _deferral_field_class(raw) != "FULL"
+    )
 
 
 def normalize(rec: dict[str, Any]) -> NormalizedRecord:

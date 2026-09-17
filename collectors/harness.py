@@ -8,9 +8,11 @@ metadata-only SourceRunResult objects for the evidence manifest.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from .sources import get_adapter
 from .sources.base import HttpGetter
@@ -18,7 +20,7 @@ from .storage import CaptureRecord, RawStore
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -64,8 +66,7 @@ def run_source(
     http_get: HttpGetter,
     *,
     now: str | None = None,
-    max_objects: int = 1,
-    keep_errors: bool = True,
+    max_objects: int | None = 1,
 ) -> SourceRunResult:
     """Run a single source through the G0-A capture pipeline one time."""
     observed_at = now or _utc_now_iso()
@@ -75,7 +76,7 @@ def run_source(
     try:
         discovered = adapter.discover(conf, http_get)
     except Exception as exc:  # noqa: BLE001 - record failure, fail closed
-        result.status = "FAILED" if keep_errors else "FAILED"
+        result.status = "FAILED"
         result.errors.append(f"discover: {exc}")
         result.log.append(f"{source_id}: discover failed: {exc}")
         return result
@@ -87,7 +88,14 @@ def run_source(
         return result
 
     # Newest is last (adapters return sorted by publication_timestamp).
-    selected = discovered[-max_objects:] if max_objects is not None else discovered
+    # max_objects=None captures everything; 0 captures nothing (NOT ``-0:``,
+    # which would silently select the whole list).
+    if max_objects is None:
+        selected = list(discovered)
+    elif max_objects <= 0:
+        selected = []
+    else:
+        selected = discovered[-max_objects:]
     result.log.append(f"{source_id}: discovered {len(discovered)}, selecting {len(selected)}")
 
     for obj in selected:
@@ -121,11 +129,11 @@ def run_source(
         result.objects.append(record)
         result.log.append(f"{source_id}: {record.status} {obj.object_key} sha256={record.raw_sha256}")
 
-    if result.errors and (not result.objects):
+    if result.errors and not result.objects:
         result.status = "FAILED"
-    elif result.errors and result.objects:
+    elif result.errors:
         # Partial: at least some objects captured; record status accordingly.
-        result.status = "FAILED" if not result.objects else "PARTIAL"
+        result.status = "PARTIAL"
     return result
 
 
@@ -144,11 +152,9 @@ def write_evidence(evidence_dir: Path, source_id: str, result: SourceRunResult, 
     }
     manifest_path = evidence_dir / f"{run_id}__{source_id}__manifest.yaml"
     log_path = evidence_dir / f"{run_id}__{source_id}__run.log"
-    import yaml
 
     with open(manifest_path, "w", encoding="utf-8", newline="\n") as fh:
         yaml.safe_dump(manifest, fh, sort_keys=False)
     with open(log_path, "w", encoding="utf-8", newline="\n") as fh:
-        for line in result.log:
-            fh.write(f"{line}\n")
+        fh.writelines(f"{line}\n" for line in result.log)
     return manifest_path
