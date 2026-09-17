@@ -27,6 +27,11 @@ Invariants (enforced):
 This keeps SOURCE REOBSERVATION (G0-A1 capture model) distinct from INGEST
 IDEMPOTENCE (G0-A2). It never overwrites and never deletes.
 
+Note: the payload and its ``.meta.yaml`` are two separate writes, not an
+atomic pair. A crash between them can leave a raw object whose meta is
+written on the next observation of the same bytes (self-healing), but no
+guarantee is made that a payload can never exist without metadata.
+
 The raw directory is the gitignored local data directory (`data/`). This module
 never writes provider payloads anywhere under the repository tree.
 """

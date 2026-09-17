@@ -126,7 +126,9 @@ tests/          offline, fixture-based test suite
 ## Security
 
 See [`SECURITY.md`](SECURITY.md). All provider XML is parsed with
-`defusedxml`; all fetched URLs are restricted to `http`/`https`.
+`defusedxml`; the live transport (`collectors/net.py`) restricts fetches to
+per-source `allowed_hosts` over `http`/`https`, refuses non-public resolved
+addresses, and re-validates every redirect hop.
 
 ## License
 

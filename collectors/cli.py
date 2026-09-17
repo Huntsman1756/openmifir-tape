@@ -14,11 +14,11 @@ from pathlib import Path
 
 from .config import load_all_sources
 from .harness import run_source, write_evidence
-from .net import default_http_get
+from .net import make_http_get
 from .sources.base import HttpGetter
 from .storage import RawStore
 
-__all__ = ["default_http_get", "main"]
+__all__ = ["main"]
 
 
 def _run_id() -> str:
@@ -38,7 +38,6 @@ def main(argv: list[str] | None = None) -> int:
     wanted = list(configs) if args.source == "all" else [args.source]
 
     run_id = _run_id()
-    http_get: HttpGetter = default_http_get
     store = RawStore(args.raw_dir)
     summary: list[str] = []
 
@@ -47,6 +46,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: no config for source_id={source_id}", file=sys.stderr)
             return 2
         conf = configs[source_id]
+        # Fail-closed transport: only this source's allowed_hosts, http/https,
+        # public IPs, redirects re-validated per hop (collectors/net.py).
+        http_get: HttpGetter = make_http_get(conf["allowed_hosts"])
         result = run_source(source_id, conf, store, http_get, max_objects=args.max_objects)
         manifest_path = write_evidence(args.evidence_dir, source_id, result, run_id)
         summary.append(f"{source_id}: status={result.status} objects={result.object_count}")

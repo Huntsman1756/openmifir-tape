@@ -10,8 +10,11 @@ directory.
 The security-relevant surfaces are:
 
 - **Acquisition** — outbound HTTP(S) fetches to the configured provider
-  endpoints (`config/sources/`). All fetched URLs are restricted to the
-  `http`/`https` schemes (`collectors/net.py`).
+  endpoints (`config/sources/`). The transport boundary
+  (`collectors/net.py`) is fail-closed: only `http`/`https` schemes, only
+  the per-source `allowed_hosts`, only ports 80/443, only addresses that
+  resolve to public IPs (loopback/RFC1918/link-local/metadata endpoints are
+  refused), and every redirect hop is re-validated before it is followed.
 - **Parsing** — provider XML payloads are parsed with `defusedxml` to
   prevent XML entity-expansion attacks.
 - **Storage integrity** — raw objects are write-once and content-addressed

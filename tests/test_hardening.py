@@ -9,7 +9,7 @@ import pytest
 
 from collectors import sources
 from collectors.harness import run_source
-from collectors.net import default_http_get, is_http_url
+from collectors.net import _CheckedRedirectHandler, is_http_url, make_http_get
 from collectors.sources import bloomberg_apae, bme_apa
 from collectors.sources.base import DiscoveredObject, SourceDiscoveryError
 from collectors.storage import RawStore, WriteOnceConflict
@@ -38,9 +38,99 @@ def test_is_http_url_accepts_only_http_schemes():
     assert not is_http_url("")
 
 
-def test_default_http_get_refuses_non_http_without_network():
+def test_transport_refuses_non_http_without_network():
+    get = make_http_get(["example.test"])
     with pytest.raises(ValueError, match="non-HTTP"):
-        default_http_get("file:///etc/passwd")
+        get("file:///etc/passwd")
+
+
+# --- SSRF hardening: host allowlist + public-IP-only + redirect re-validation --
+
+def _public_addrinfo(*_a, **_k):
+    return [(2, 1, 6, "", ("93.184.216.34", 443))]  # example.com range, public
+
+
+class _FakeResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return b"payload"
+
+
+@pytest.mark.parametrize("url", [
+    "http://127.0.0.1/x",                # loopback
+    "http://169.254.169.254/latest",     # link-local cloud metadata
+    "http://10.0.0.5/x",                 # RFC1918
+    "http://[::1]/x",                    # IPv6 loopback
+    "http://evil.test/x",                # host simply not allowlisted
+])
+def test_transport_refuses_forbidden_targets(url):
+    # allowlist contains the literal hosts so refusal at the IP layer is
+    # exercised for IP literals, and at the host layer for evil.test
+    get = make_http_get(["127.0.0.1", "169.254.169.254", "10.0.0.5", "::1"])
+    with pytest.raises(ValueError, match="refusing"):
+        get(url)
+
+
+def test_transport_refuses_host_resolving_to_private_ip(monkeypatch):
+    import socket
+    monkeypatch.setattr(
+        socket, "getaddrinfo",
+        lambda *a, **k: [(2, 1, 6, "", ("192.168.1.10", 443))])
+    get = make_http_get(["allowed.test"])
+    with pytest.raises(ValueError, match="non-public"):
+        get("https://allowed.test/x")
+
+
+def test_transport_refuses_when_dns_fails(monkeypatch):
+    import socket
+    monkeypatch.setattr(
+        socket, "getaddrinfo",
+        lambda *a, **k: (_ for _ in ()).throw(socket.gaierror("nxdomain")))
+    get = make_http_get(["allowed.test"])
+    with pytest.raises(ValueError, match="cannot resolve"):
+        get("https://allowed.test/x")
+
+
+def test_transport_allows_public_allowed_url(monkeypatch):
+    import socket
+    import urllib.request
+    monkeypatch.setattr(socket, "getaddrinfo", _public_addrinfo)
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open",
+                        lambda self, req, timeout=None: _FakeResponse())
+    get = make_http_get(["www.bloombergapa.com"])
+    assert get("https://www.bloombergapa.com/x.csv") == b"payload"
+
+
+def test_redirect_to_forbidden_destination_refused(monkeypatch):
+    import socket
+    import urllib.request
+    monkeypatch.setattr(socket, "getaddrinfo", _public_addrinfo)
+    handler = _CheckedRedirectHandler(frozenset({"www.bolsasymercados.es"}))
+    req = urllib.request.Request("https://www.bolsasymercados.es/a.json")
+    # allowed host redirecting to link-local metadata -> refused
+    with pytest.raises(ValueError, match="refusing"):
+        handler.redirect_request(
+            req, None, 302, "", {}, "http://169.254.169.254/latest/meta-data")
+    # allowed host redirecting to a foreign host -> refused
+    with pytest.raises(ValueError, match="refusing"):
+        handler.redirect_request(
+            req, None, 302, "", {}, "https://attacker.example/x")
+
+
+def test_redirect_within_allowed_host_followed(monkeypatch):
+    import socket
+    import urllib.request
+    monkeypatch.setattr(socket, "getaddrinfo", _public_addrinfo)
+    handler = _CheckedRedirectHandler(frozenset({"www.bolsasymercados.es"}))
+    req = urllib.request.Request("https://www.bolsasymercados.es/a.json")
+    new = handler.redirect_request(
+        req, None, 302, "", {}, "https://www.bolsasymercados.es/b.json")
+    assert new is not None and "b.json" in new.full_url
 
 
 def test_bme_discover_skips_non_http_links():

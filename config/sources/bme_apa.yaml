@@ -28,6 +28,13 @@ entrypoint:
 
 access_mode: PUBLIC_HTTP_GET
 
+# Transport boundary (collectors/net.py) fails closed: only these hostnames
+# may be fetched, over http/https, on ports 80/443, resolving to public IPs
+# only. If the source ever redirects to a CDN hostname, add it here after
+# review — never broaden blindly.
+allowed_hosts:
+  - www.bolsasymercados.es
+
 publication_timestamp_semantics:
   status: RESOLVED
   note: >-

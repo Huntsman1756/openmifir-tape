@@ -473,16 +473,18 @@ def main(argv: list[str] | None = None) -> int:
         if waited:
             print(f"lock contention: waited {waited:.0f}s for a prior run")
 
-        from .net import default_http_get
+        from .net import make_http_get
 
-        http_get: HttpGetter = default_http_get
         store = RawStore(args.raw_dir)
         worst = 0
         for source_id in wanted:
             if source_id not in configs:
                 print(f"ERROR: no config for source_id={source_id}", file=sys.stderr)
                 return 2
-            result = run_scheduled(source_id, configs[source_id], store, http_get,
+            conf = configs[source_id]
+            # Fail-closed transport scoped to this source's allowed_hosts.
+            http_get: HttpGetter = make_http_get(conf["allowed_hosts"])
+            result = run_scheduled(source_id, conf, store, http_get,
                                    mode=args.mode, now=now)
             if waited:
                 result.context["lock_wait_seconds"] = round(waited, 3)

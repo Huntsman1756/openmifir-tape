@@ -30,6 +30,14 @@ def load_source_config(path: Path) -> dict:
     if not isinstance(conf, dict) or "source_id" not in conf:
         raise ConfigError(f"{path}: missing 'source_id'")
     _require(conf, "source_id", conf["source_id"])
+    _require(conf, "allowed_hosts", conf["source_id"])
+    hosts = conf["allowed_hosts"]
+    if not isinstance(hosts, list) or not hosts or not all(
+            isinstance(h, str) and "://" not in h and "/" not in h
+            for h in hosts):
+        raise ConfigError(
+            f"{path}: 'allowed_hosts' must be a non-empty list of bare "
+            f"hostnames (no scheme, no path)")
     return conf
 
 
