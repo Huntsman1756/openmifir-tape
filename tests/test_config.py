@@ -38,6 +38,13 @@ def test_load_missing_allowed_hosts_raises(tmp_path: Path):
         load_source_config(f)
 
 
+def test_load_all_sources_missing_dir_raises(tmp_path: Path):
+    # Fail closed: a nonexistent descriptor dir must error, not silently yield
+    # zero sources (Path.glob returns empty on missing dirs).
+    with pytest.raises(ConfigError):
+        load_all_sources(tmp_path / "no-such-dir")
+
+
 def test_load_all_sources_filters_yaml(tmp_path: Path):
     (tmp_path / "a.yaml").write_text(
         "source_id: a\nallowed_hosts: [a.test]\n", encoding="utf-8")

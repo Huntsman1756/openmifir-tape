@@ -42,7 +42,14 @@ def load_source_config(path: Path) -> dict:
 
 
 def load_all_sources(sources_dir: Path) -> dict[str, dict]:
-    """Load every *.yaml source descriptor in a directory, keyed by source_id."""
+    """Load every *.yaml source descriptor in a directory, keyed by source_id.
+
+    A missing directory is a ConfigError, not an empty result: Path.glob on a
+    nonexistent path yields nothing, which would otherwise let a mistyped or
+    unresolvable --config-dir degrade to a silent no-op run.
+    """
+    if not sources_dir.is_dir():
+        raise ConfigError(f"source descriptor directory not found: {sources_dir}")
     result: dict[str, dict] = {}
     for path in sorted(sources_dir.glob("*.yaml")):
         conf = load_source_config(path)
