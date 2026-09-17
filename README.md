@@ -87,7 +87,12 @@ omt-sample-validation evidence/g0-b1/F-009_frozen_sample_validation.yaml \
 ```
 
 Every command accepts `--help`. Source endpoints and retrieval intervals are
-configured in [`config/sources/`](config/sources), never hard-coded.
+configured in [`config/sources/`](config/sources), never hard-coded. The
+descriptors are a runtime resource: they ship inside the wheel (as the
+`config.sources` package), so an installed `omt-g0a1`/`omt-g0a3`
+loads them without a checkout and regardless of the working directory.
+`--config-dir` overrides the packaged descriptors explicitly; a missing or
+invalid descriptor set fails closed with `ConfigError`.
 
 ### Scheduling
 

@@ -45,7 +45,15 @@ omt-g0a3 = "collectors.a3:main"
 omt-sample-validation = "universe.sample_validation:main"
 
 [tool.setuptools.packages.find]
-include = ["collectors*", "lifecycle*", "normalization*", "universe*"]
+# `config` is a real package: config/sources/*.yaml are runtime resources
+# (source descriptors) and must travel inside the wheel — a valid install
+# must be able to run the collectors without a checkout. A regular package
+# (not a PEP 420 namespace) keeps importlib.resources.files() robust under
+# editable installs. fixtures/, evidence/ and tools/ stay out of the wheel.
+include = ["collectors*", "lifecycle*", "normalization*", "universe*", "config*"]
+
+[tool.setuptools.package-data]
+"config.sources" = ["*.yaml"]
 
 [tool.ruff]
 target-version = "py311"

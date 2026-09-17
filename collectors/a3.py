@@ -452,7 +452,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", required=True, choices=["poll", "rolling"])
     parser.add_argument("--source", default="all", choices=["all", "bme_apa", "blb_apae"])
     parser.add_argument("--config-dir", type=Path, default=None,
-                        help="source descriptors dir (default: checkout's config/sources)")
+                        help="source descriptors dir (default: packaged config/sources resource)")
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
     parser.add_argument("--evidence-dir", type=Path, default=Path("evidence"))
     parser.add_argument("--journal", type=Path, default=Path("data/a3/journal.jsonl"))

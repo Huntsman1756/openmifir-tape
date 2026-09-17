@@ -4,7 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from collectors.config import ConfigError, load_all_sources, load_source_config
+from collectors.cli import main as g0a1_main
+from collectors.config import (
+    ConfigError,
+    default_config_dir,
+    load_all_sources,
+    load_source_config,
+)
 
 
 def test_load_source_config_minimal(tmp_path: Path):
@@ -61,3 +67,34 @@ def test_real_source_descriptors_load(tmp_path: Path):
     assert set(confs) == {"bme_apa", "blb_apae"}
     assert confs["bme_apa"]["allowed_hosts"] == ["www.bolsasymercados.es"]
     assert confs["blb_apae"]["allowed_hosts"] == ["www.bloombergapa.com"]
+
+
+def test_default_config_dir_loads_packaged_descriptors():
+    # The default resolution is the packaged config.sources resource — it
+    # must satisfy the same loader contract as a checkout directory.
+    confs = load_all_sources(default_config_dir())
+    assert set(confs) == {"bme_apa", "blb_apae"}
+    assert confs["bme_apa"]["allowed_hosts"] == ["www.bolsasymercados.es"]
+
+
+def test_default_config_dir_ignores_cwd(tmp_path: Path, monkeypatch):
+    # No cwd fallback: an unrelated empty working directory must not affect
+    # (or be probed by) the packaged-descriptor default.
+    monkeypatch.chdir(tmp_path)
+    assert not (tmp_path / "config").exists()
+    confs = load_all_sources(default_config_dir())
+    assert set(confs) == {"bme_apa", "blb_apae"}
+
+
+def test_list_sources_uses_packaged_descriptors(capsys):
+    # The console entry point resolves packaged descriptors without
+    # --config-dir and without touching the network.
+    assert g0a1_main(["--list-sources"]) == 0
+    assert capsys.readouterr().out.split() == ["blb_apae", "bme_apa"]
+
+
+def test_list_sources_config_dir_override(tmp_path: Path, capsys):
+    (tmp_path / "x.yaml").write_text(
+        "source_id: x\nallowed_hosts: [x.test]\n", encoding="utf-8")
+    assert g0a1_main(["--config-dir", str(tmp_path), "--list-sources"]) == 0
+    assert capsys.readouterr().out.split() == ["x"]
