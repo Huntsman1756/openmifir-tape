@@ -55,6 +55,7 @@ jobs:
           python -m pip install --upgrade pip setuptools
           pip wheel . --no-deps --no-build-isolation -w dist
       - name: Wheel contents — descriptors in, dev/evidence dirs out
+        shell: bash
         run: |
           python -c "import glob, zipfile; \
             n = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); \
@@ -63,6 +64,7 @@ jobs:
             assert not any(x.startswith(('fixtures/', 'evidence/', 'tools/', 'data/')) for x in n), n; \
             print('wheel contents ok')"
       - name: Install wheel (non-editable)
+        shell: bash
         run: pip install dist/openmifir_tape-*.whl
       - name: Smoke — packaged descriptors load from an empty cwd
         shell: bash
