@@ -190,7 +190,7 @@ class RawStore:
             try:
                 existing_meta = yaml.safe_load(
                     meta_path.read_text(encoding="utf-8"))
-            except (OSError, yaml.YAMLError):
+            except (OSError, UnicodeDecodeError, yaml.YAMLError):
                 existing_meta = None
             if not isinstance(existing_meta, dict):
                 existing_meta = {}

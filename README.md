@@ -44,7 +44,9 @@ The pipeline is organized around the frozen G0 gate specification
 These are enforced, not aspirational (see [`AGENTS.md`](AGENTS.md)):
 
 - **No provider data in this repository.** Raw payloads live only in the
-  gitignored `data/` directory. `tools/check_hygiene.py` verifies this in CI.
+  gitignored `data/` directory. `tools/check_hygiene.py` scans tracked files
+  for payload shapes and known credential patterns in CI (best-effort
+  detection, not proof of absence).
 - **Evidence is metadata, never payload.** `evidence/` holds manifests,
   SHA-256 hashes, counts, timestamps, and sanitized logs only.
 - **CI is offline.** Tests use synthetic fixtures and injected HTTP getters;

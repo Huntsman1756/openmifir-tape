@@ -37,7 +37,7 @@ from typing import Any
 
 import yaml
 
-from .config import load_all_sources
+from .config import default_config_dir, load_all_sources
 from .harness import SourceRunResult
 from .sources import get_adapter
 from .sources.base import DiscoveredObject, HttpGetter
@@ -451,14 +451,15 @@ def main(argv: list[str] | None = None) -> int:
         prog="omt-g0a3", description="G0-A3 scheduled capture runner (poll/rolling)")
     parser.add_argument("--mode", required=True, choices=["poll", "rolling"])
     parser.add_argument("--source", default="all", choices=["all", "bme_apa", "blb_apae"])
-    parser.add_argument("--config-dir", type=Path, default=Path("config/sources"))
+    parser.add_argument("--config-dir", type=Path, default=None,
+                        help="source descriptors dir (default: checkout's config/sources)")
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
     parser.add_argument("--evidence-dir", type=Path, default=Path("evidence"))
     parser.add_argument("--journal", type=Path, default=Path("data/a3/journal.jsonl"))
     parser.add_argument("--lock-file", type=Path, default=Path("data/a3/.runner.lock"))
     args = parser.parse_args(argv)
 
-    configs = load_all_sources(args.config_dir)
+    configs = load_all_sources(args.config_dir or default_config_dir())
     wanted = list(configs) if args.source == "all" else [args.source]
 
     now = datetime.now(UTC)

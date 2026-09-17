@@ -12,7 +12,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .config import load_all_sources
+from .config import default_config_dir, load_all_sources
 from .harness import run_source, write_evidence
 from .net import make_http_get
 from .sources.base import HttpGetter
@@ -28,13 +28,14 @@ def _run_id() -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="omt-g0a1", description="G0-A1 acquisition")
     parser.add_argument("--source", default="all", choices=["all", "bme_apa", "blb_apae"])
-    parser.add_argument("--config-dir", type=Path, default=Path("config/sources"))
+    parser.add_argument("--config-dir", type=Path, default=None,
+                        help="source descriptors dir (default: checkout's config/sources)")
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
     parser.add_argument("--evidence-dir", type=Path, default=Path("evidence"))
     parser.add_argument("--max-objects", type=int, default=1)
     args = parser.parse_args(argv)
 
-    configs = load_all_sources(args.config_dir)
+    configs = load_all_sources(args.config_dir or default_config_dir())
     wanted = list(configs) if args.source == "all" else [args.source]
 
     run_id = _run_id()

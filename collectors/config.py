@@ -48,3 +48,21 @@ def load_all_sources(sources_dir: Path) -> dict[str, dict]:
         conf = load_source_config(path)
         result[conf["source_id"]] = conf
     return result
+
+
+def default_config_dir() -> Path:
+    """Default source-descriptor directory.
+
+    The descriptors live in the repository checkout (``config/sources/``) and
+    are NOT shipped in the wheel. Resolution order: the package's checkout
+    root, then the current working directory. If neither exists, returns the
+    conventional relative path so the loader fails with a clear ConfigError.
+    """
+    pkg_root = Path(__file__).resolve().parents[1]
+    candidate = pkg_root / "config" / "sources"
+    if candidate.is_dir():
+        return candidate
+    cwd_candidate = Path.cwd() / "config" / "sources"
+    if cwd_candidate.is_dir():
+        return cwd_candidate
+    return candidate
