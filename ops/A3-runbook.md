@@ -74,6 +74,21 @@ schtasks /create /tn "omt-a3-rolling" /sc daily /st 06:15 `
   /tr "\"<repo>\\.venv\\Scripts\\python.exe\" -m collectors.a3 --mode rolling" /ru <user>
 ```
 
+## Version pinning — active G0-A3 window
+
+For the G0-A3 capture window started on 2026-09-16,
+`vpro-prod` is pinned to `efd2268`.
+
+The hardening merge on `main` (`ee32fe8`) is intentionally not deployed
+during this window.
+
+Do not change the deployed collector before A3 verification closes.
+If an emergency deploy is required, record the exact deployed commit SHA
+and UTC deployment timestamp in A3 evidence.
+
+After A3 closes, update `vpro-prod` to the then-current `main` and update
+or remove this active-window note.
+
 ## Exit status / monitoring
 
 Exit 0 = every source SUCCEEDED; exit 1 = any PARTIAL/FAILED/NOT_RUN or a
