@@ -3,10 +3,19 @@
 Semantics live in docs/gates/G0.md; this module only reads the frozen FACTS
 (entrypoints, access mode, retrieval intervals) that operators maintain.
 It never invents a URL and never falls back to a hardcoded default.
+
+The descriptors ship inside the wheel as the ``config.sources`` package
+(the repository's ``config/sources/`` directory is the packaged resource —
+there is exactly one copy). The default resolution is
+``importlib.resources``-based: no cwd probing, because the operator's
+working directory has no contractual relationship with the installed
+package. ``--config-dir`` remains the explicit override.
 """
 
 from __future__ import annotations
 
+from importlib import resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 import yaml
@@ -21,11 +30,11 @@ def _require(conf: dict, field: str, source_id: str) -> None:
         raise ConfigError(f"config/sources/{source_id}.yaml: missing required field '{field}'")
 
 
-def load_source_config(path: Path) -> dict:
+def load_source_config(path: Path | Traversable) -> dict:
     """Load and minimally validate a single source descriptor YAML file."""
     if not path.is_file():
         raise ConfigError(f"source descriptor not found: {path}")
-    with open(path, encoding="utf-8") as fh:
+    with path.open(encoding="utf-8") as fh:
         conf = yaml.safe_load(fh) or {}
     if not isinstance(conf, dict) or "source_id" not in conf:
         raise ConfigError(f"{path}: missing 'source_id'")
@@ -41,35 +50,38 @@ def load_source_config(path: Path) -> dict:
     return conf
 
 
-def load_all_sources(sources_dir: Path) -> dict[str, dict]:
+def load_all_sources(sources_dir: Path | Traversable) -> dict[str, dict]:
     """Load every *.yaml source descriptor in a directory, keyed by source_id.
 
-    A missing directory is a ConfigError, not an empty result: Path.glob on a
-    nonexistent path yields nothing, which would otherwise let a mistyped or
-    unresolvable --config-dir degrade to a silent no-op run.
+    Accepts a filesystem ``Path`` (``--config-dir``) or a packaged
+    ``Traversable`` (``importlib.resources``). A missing directory is a
+    ConfigError, not an empty result: iterating a nonexistent path yields
+    nothing, which would otherwise let a mistyped or unresolvable
+    --config-dir degrade to a silent no-op run.
     """
     if not sources_dir.is_dir():
         raise ConfigError(f"source descriptor directory not found: {sources_dir}")
     result: dict[str, dict] = {}
-    for path in sorted(sources_dir.glob("*.yaml")):
+    for path in sorted(sources_dir.iterdir(), key=lambda p: p.name):
+        if not path.name.endswith(".yaml"):
+            continue
         conf = load_source_config(path)
         result[conf["source_id"]] = conf
     return result
 
 
-def default_config_dir() -> Path:
-    """Default source-descriptor directory.
+def default_config_dir() -> Traversable:
+    """Default source descriptors, shipped inside the distribution.
 
-    The descriptors live in the repository checkout (``config/sources/``) and
-    are NOT shipped in the wheel. Resolution order: the package's checkout
-    root, then the current working directory. If neither exists, returns the
-    conventional relative path so the loader fails with a clear ConfigError.
+    ``config/sources/`` is packaged as the ``config.sources`` package, so
+    the same directory serves both an editable checkout and an installed
+    wheel. A distribution missing its descriptors is a packaging defect and
+    fails closed with ConfigError.
     """
-    pkg_root = Path(__file__).resolve().parents[1]
-    candidate = pkg_root / "config" / "sources"
-    if candidate.is_dir():
-        return candidate
-    cwd_candidate = Path.cwd() / "config" / "sources"
-    if cwd_candidate.is_dir():
-        return cwd_candidate
-    return candidate
+    try:
+        return resources.files("config.sources")
+    except ModuleNotFoundError as exc:
+        raise ConfigError(
+            "packaged source descriptors not found ('config.sources' is not "
+            "installed); reinstall the distribution or pass --config-dir"
+        ) from exc

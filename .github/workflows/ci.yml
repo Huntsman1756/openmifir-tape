@@ -35,3 +35,48 @@ jobs:
         run: python tools/check_hygiene.py
       - name: Test (offline)
         run: python -m pytest
+
+  wheel-smoke:
+    # The console scripts are a supported surface: the wheel must carry its
+    # runtime resources (config/sources descriptors) and work from an empty
+    # cwd, offline. This job never reaches a data provider.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip setuptools
+          pip wheel . --no-deps --no-build-isolation -w dist
+      - name: Wheel contents — descriptors in, dev/evidence dirs out
+        shell: bash
+        run: |
+          python -c "import glob, zipfile; \
+            n = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); \
+            assert 'config/sources/bme_apa.yaml' in n, n; \
+            assert 'config/sources/bloomberg_apae.yaml' in n, n; \
+            assert not any(x.startswith(('fixtures/', 'evidence/', 'tools/', 'data/')) for x in n), n; \
+            print('wheel contents ok')"
+      - name: Install wheel (non-editable)
+        shell: bash
+        run: pip install dist/openmifir_tape-*.whl
+      - name: Smoke — packaged descriptors load from an empty cwd
+        shell: bash
+        run: |
+          cd "$(mktemp -d)"
+          omt-g0a1 --list-sources | tee sources.txt
+          grep -qx bme_apa sources.txt
+          grep -qx blb_apae sources.txt
+      - name: Smoke — explicit --config-dir override wins
+        shell: bash
+        run: |
+          d="$(mktemp -d)"
+          printf 'source_id: smoke\nallowed_hosts: [smoke.test]\n' > "$d/smoke.yaml"
+          cd "$(mktemp -d)"
+          omt-g0a1 --config-dir "$d" --list-sources | grep -qx smoke

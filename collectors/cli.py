@@ -29,13 +29,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="omt-g0a1", description="G0-A1 acquisition")
     parser.add_argument("--source", default="all", choices=["all", "bme_apa", "blb_apae"])
     parser.add_argument("--config-dir", type=Path, default=None,
-                        help="source descriptors dir (default: checkout's config/sources)")
+                        help="source descriptors dir (default: packaged config/sources resource)")
+    parser.add_argument("--list-sources", action="store_true",
+                        help="load descriptors, print configured source_ids, exit (no network)")
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
     parser.add_argument("--evidence-dir", type=Path, default=Path("evidence"))
     parser.add_argument("--max-objects", type=int, default=1)
     args = parser.parse_args(argv)
 
     configs = load_all_sources(args.config_dir or default_config_dir())
+    if args.list_sources:
+        for source_id in sorted(configs):
+            print(source_id)
+        return 0
     wanted = list(configs) if args.source == "all" else [args.source]
 
     run_id = _run_id()
