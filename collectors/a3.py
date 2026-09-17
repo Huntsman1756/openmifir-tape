@@ -386,7 +386,12 @@ def record_skipped_locked(journal_path: Path, run_id: str, mode: str,
 
 
 def _try_lock(fd) -> bool:
-    """One non-blocking lock attempt on the platform's advisory mechanism."""
+    """One non-blocking lock attempt on the platform's advisory mechanism.
+
+    Every contender opens the SAME lock file in "a+b" and locks the SAME
+    byte: range [0, 1). msvcrt byte-range locking requires the byte to exist,
+    so an empty file is padded with one NUL byte first (harmless under fcntl,
+    which locks the whole file)."""
     if fcntl is not None:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
@@ -406,7 +411,7 @@ def _unlock(fd) -> None:
         if fcntl is not None:
             fcntl.flock(fd, fcntl.LOCK_UN)
         elif msvcrt is not None:
-            fd.seek(0)
+            fd.seek(0)  # unlock the SAME range [0, 1) that _try_lock took
             msvcrt.locking(fd.fileno(), msvcrt.LK_UNLCK, 1)
     except OSError:
         pass

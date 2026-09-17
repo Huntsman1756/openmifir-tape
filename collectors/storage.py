@@ -175,12 +175,25 @@ class RawStore:
             meta.update(extra)
 
         # Write-once meta: exclusive create so a concurrent or repeated capture
-        # can never overwrite the provenance recorded at first capture.
+        # can never overwrite the provenance recorded at first capture. A
+        # racing loser REUSES the winner's meta after verifying it describes
+        # this exact capture identity; a mismatch is corruption, not a race.
         try:
             with open(meta_path, "x", encoding="utf-8", newline="\n") as fh:
                 yaml.safe_dump(meta, fh, sort_keys=False)
         except FileExistsError:
-            pass
+            try:
+                existing_meta = yaml.safe_load(
+                    meta_path.read_text(encoding="utf-8")) or {}
+            except yaml.YAMLError:
+                existing_meta = {}
+            if existing_meta.get("raw_sha256") != digest:
+                # FileExistsError is control flow here, not the causal error.
+                raise WriteOnceConflict(
+                    f"{meta_path} exists but records raw_sha256="
+                    f"{existing_meta.get('raw_sha256')!r}, expected {digest!r}; "
+                    f"refusing to proceed (source_object_id={object_key!r})"
+                ) from None
 
         return CaptureRecord(
             source_id=source_id,

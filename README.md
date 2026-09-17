@@ -130,4 +130,7 @@ See [`SECURITY.md`](SECURITY.md). All provider XML is parsed with
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](LICENSE). The license covers the repository's code,
+fixtures, and documentation **only**. Third-party data and source materials
+(BME, Bloomberg, ESMA, GLEIF, …) remain subject to their respective terms of
+use — see [`NOTICE`](NOTICE) and [`docs/legal/`](docs/legal/).

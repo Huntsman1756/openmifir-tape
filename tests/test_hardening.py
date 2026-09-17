@@ -12,7 +12,7 @@ from collectors.harness import run_source
 from collectors.net import default_http_get, is_http_url
 from collectors.sources import bloomberg_apae, bme_apa
 from collectors.sources.base import DiscoveredObject, SourceDiscoveryError
-from collectors.storage import RawStore
+from collectors.storage import RawStore, WriteOnceConflict
 
 
 def _fake_getter(mapping: dict[str, bytes]):
@@ -139,18 +139,37 @@ def _store_once(store: RawStore):
 
 
 def test_store_metadata_is_write_once(tmp_path: Path):
+    import yaml
+
     store = RawStore(tmp_path)
     rec = _store_once(store)
     meta = Path(rec.meta_path).read_bytes()
 
-    # A racing first writer's meta must never be overwritten: plant a sentinel
-    # meta, then store again — the sentinel survives.
-    sentinel = b"planted_by_first_writer: true\n"
+    # A racing first writer's meta must never be overwritten: plant a
+    # sentinel meta describing the SAME capture identity, then store again —
+    # the sentinel survives and the loser reuses it without failing.
+    sentinel_meta = yaml.safe_load(meta)
+    sentinel_meta["planted_by_first_writer"] = True
+    sentinel = yaml.safe_dump(sentinel_meta).encode()
     Path(rec.meta_path).write_bytes(sentinel)
     rec2 = _store_once(store)
     assert rec2.status == "ALREADY_PRESENT"
     assert Path(rec.meta_path).read_bytes() == sentinel
     assert meta != sentinel  # sanity: the original write did happen
+
+
+def test_store_metadata_conflict_fails_closed(tmp_path: Path):
+    """A meta file that does NOT describe the capture identity is corruption,
+    not a legitimate race — refuse rather than silently reuse it."""
+    import yaml
+
+    store = RawStore(tmp_path)
+    rec = _store_once(store)
+    corrupted = yaml.safe_load(Path(rec.meta_path).read_bytes())
+    corrupted["raw_sha256"] = "0" * 64
+    Path(rec.meta_path).write_text(yaml.safe_dump(corrupted), encoding="utf-8")
+    with pytest.raises(WriteOnceConflict):
+        _store_once(store)
 
 
 # --- cross-platform run lock --------------------------------------------------
