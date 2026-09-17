@@ -33,6 +33,7 @@ from pathlib import Path
 
 import yaml
 
+from ._paths import repo_file
 from .firds import FirdsInstrument, iter_firds
 from .fitrs import FitrsRecord, parse_fitrs
 from .gleif import GleifEntity, parse_gleif, resolve_legal_jurisdiction
@@ -40,9 +41,8 @@ from .model import Branch, SecurityRecord
 from .resolver import resolve_disposition
 from .sample import DEFAULT_SAMPLE_MANIFEST, FrozenSample, load_frozen_sample
 
-DEFAULT_VALIDATION_ARTIFACT = (
-    Path(__file__).resolve().parents[1]
-    / "evidence" / "g0-b1" / "F-009_frozen_sample_validation.yaml"
+DEFAULT_VALIDATION_ARTIFACT = repo_file(
+    "evidence", "g0-b1", "F-009_frozen_sample_validation.yaml"
 )
 
 

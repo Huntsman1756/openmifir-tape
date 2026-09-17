@@ -9,7 +9,9 @@ working tree:
   2. Evidence is metadata only — tracked files under evidence/ must use a
      metadata extension and stay small.
   3. No committed secrets — high-signal credential patterns are scanned on
-     tracked text files.
+     tracked text files. This is best-effort DETECTION of known leak
+     shapes, not proof of absence: it cannot recognize every credential
+     format, and it does not scan git history.
   4. data/ stays gitignored.
 
 Runs offline, stdlib only. Exits non-zero and prints every violation found.
@@ -135,7 +137,8 @@ def main() -> int:
         for v in violations:
             print(f"  - {v}")
         return 1
-    print("Repository hygiene check passed.")
+    print("Repository hygiene check passed "
+          "(tracked-file scan - see module docstring for scope).")
     return 0
 
 

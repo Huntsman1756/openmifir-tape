@@ -262,6 +262,22 @@ def test_store_metadata_conflict_fails_closed(tmp_path: Path):
         _store_once(store)
 
 
+@pytest.mark.parametrize("body", [
+    "just a bare string, not yaml mapping\n",   # parses to str, not dict
+    "key: [unclosed\n",                          # unparseable YAML
+    "",                                          # empty -> parses to None
+])
+def test_store_metadata_corrupt_meta_fails_closed(tmp_path: Path, body):
+    """A meta file that is not a mapping carrying this identity — whether
+    unparseable, wrong type, or empty — is corruption: refuse, don't crash
+    with AttributeError and don't silently reuse."""
+    store = RawStore(tmp_path)
+    rec = _store_once(store)
+    Path(rec.meta_path).write_text(body, encoding="utf-8")
+    with pytest.raises(WriteOnceConflict):
+        _store_once(store)
+
+
 # --- cross-platform run lock --------------------------------------------------
 
 def test_run_lock_mutually_excludes_second_holder(tmp_path: Path):

@@ -16,6 +16,7 @@ from typing import Any
 
 import yaml
 
+from ._paths import repo_file
 from .model import SecurityRecord
 from .resolver import (
     branch_counts,
@@ -24,9 +25,7 @@ from .resolver import (
     universe_snapshot_sha256,
 )
 
-DEFAULT_UNIVERSE_FIXTURE = (
-    Path(__file__).resolve().parents[1] / "fixtures" / "universe" / "disposition_cases.yaml"
-)
+DEFAULT_UNIVERSE_FIXTURE = repo_file("fixtures", "universe", "disposition_cases.yaml")
 
 
 class FixtureParseError(Exception):

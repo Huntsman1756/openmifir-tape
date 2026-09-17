@@ -189,8 +189,10 @@ class RawStore:
         except FileExistsError:
             try:
                 existing_meta = yaml.safe_load(
-                    meta_path.read_text(encoding="utf-8")) or {}
-            except yaml.YAMLError:
+                    meta_path.read_text(encoding="utf-8"))
+            except (OSError, yaml.YAMLError):
+                existing_meta = None
+            if not isinstance(existing_meta, dict):
                 existing_meta = {}
             if existing_meta.get("raw_sha256") != digest:
                 # FileExistsError is control flow here, not the causal error.

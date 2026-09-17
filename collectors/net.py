@@ -111,7 +111,8 @@ def make_http_get(allowed_hosts: Iterable[str]) -> Callable[[str], bytes]:
 
     def get(url: str) -> bytes:
         _validate_target(url, hosts)
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        req = urllib.request.Request(  # noqa: S310 - url passed _validate_target (scheme/host/port/public-IP) above
+            url, headers={"User-Agent": USER_AGENT})
         with opener.open(req, timeout=DEFAULT_TIMEOUT_S) as resp:
             return resp.read()
 

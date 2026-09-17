@@ -101,7 +101,7 @@ pip install -e ".[dev]"
 
 python -m pytest              # offline test suite
 ruff check .                  # lint (rule set pinned in pyproject.toml)
-python tools/check_hygiene.py # no payloads / no secrets / evidence is metadata
+python tools/check_hygiene.py # tracked-file guard: payloads, evidence shape, secret patterns
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the task-contract workflow.

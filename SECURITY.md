@@ -19,8 +19,10 @@ The security-relevant surfaces are:
   prevent XML entity-expansion attacks.
 - **Storage integrity** — raw objects are write-once and content-addressed
   (SHA-256). A mismatch on an existing identity raises `WriteOnceConflict`.
-- **Repository hygiene** — `tools/check_hygiene.py` runs in CI to ensure no
-  provider payloads or credential material is committed.
+- **Repository hygiene** — `tools/check_hygiene.py` runs in CI and checks
+  tracked files for provider payloads, non-metadata evidence, and
+  high-signal credential patterns (best-effort detection, not proof of
+  absence).
 
 ## Supported versions
 

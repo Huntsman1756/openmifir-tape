@@ -1,7 +1,7 @@
 """Lifecycle / ledger model for G0-D.
 
 Append-only event log. Records are NEVER overwritten or deleted; they are
-superseded via ``supersedes_source_report_id`` links. A trade is a sequence of
+superseded via ``supersedes_entry_id`` links. A trade is a sequence of
 states reconstructed from successive publications.
 """
 
