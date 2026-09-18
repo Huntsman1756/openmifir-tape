@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Read-only G0-A3 capture-window adjudication (DRAFT v3 — pre-preregistration).
+"""Read-only G0-A3 capture-window adjudication (DRAFT v4 — pre-preregistration).
 
 Adjudicates an A3 evidence bundle against the FROZEN contract
 (docs/gates/G0.md §2 G0-A, baseline g0-freeze-v1) as implemented by the
-DEPLOYED collector (efd2268). Later fixes on main are NOT assumed to have
-applied to the deployed build.
+DEPLOYED collector (efd2268). Deployed primitives are vendored in
+``tools/a3_efd2268_compat.py`` so this adjudicator cannot drift when main
+evolves.
 
 Reads metadata only: the run journal (JSONL), run manifests (YAML), and
 raw-store ``.meta.yaml`` sidecars. Payload bytes are opened exclusively to
@@ -18,50 +19,78 @@ Verdicts:
     REVIEW_REQUIRED     structural anomalies must be resolved before verdict
     COMPONENT_MODE      axis-level evaluation only; can never assert the gate
 
+Time model (all bounds preregistered, no post-hoc choice):
+
+    operational_start     first declared invocation instant
+    subject_period_end    end of the last candidate trading day
+    evidence_tail_end     preregistered recovery tail: the acquisition
+                          schedule is expected to run through it, and
+                          evidence inside it may only (a) observe/recover
+                          objects whose source day belongs to a counted
+                          day, (b) resolve faults originating in the
+                          subject period, (c) demonstrate the final
+                          rescan/recovery state. It can never create a
+                          sixth counted day or repair unrelated faults.
+
 Design rules (frozen-spec-subordinate):
 
-- Polling bound is ``<= 1 hour`` (G0-A.5). An inter-invocation interval
-  >60min between POLL attempts is a scheduler-gap candidate; EXPLAINED only
-  by operator-supplied, evidence-referenced justifications
-  (``--explained-gaps``), never by later data recovery. Rolling attempts
-  live on a separate axis and cannot split a poll interval. Nominal cadence
-  (30min timers, ~48 polls/day) is diagnostic only.
+- Polling bound is ``<= 1 hour`` (G0-A.5). Inter-invocation intervals >60min
+  between ``mode=poll`` attempts over [start, tail_end] are scheduler-gap
+  candidates; EXPLAINED only by operator explanations carrying a verifiable
+  evidence artifact (path + sha256 inside the bundle). Rolling attempts live
+  on a separate axis and cannot split a poll interval. Nominal cadence is
+  diagnostic only.
 - ``run_id`` (created at invocation) is the scheduler-attempt timestamp.
 - A source FAILED/PARTIAL/NOT_RUN row is NOT a scheduler gap: the scheduler
   ran; acquisition failed. It feeds the coverage/recovery axes instead.
 - SKIPPED_LOCKED is a scheduler attempt that ran no sources (own schema,
   no manifests expected); it counts on the axis of its recorded mode.
-- Evidence is scoped: only observations inside the preregistered
-  [start, end] window are eligible for coverage, recovery, and
-  crosschecking. Pre-window smoke and post-window runs are ineligible:
-  they can neither create coverage nor repair faults.
+- Evidence is scoped: only journal rows and manifests inside
+  [start, tail_end] are eligible. Pre-window smoke and post-tail runs can
+  neither create coverage nor repair faults.
 - Exactly five distinct counted trading days are required for the gate
   verdict. Day-1 fallback is deterministic over the preregistered
   candidate set: if the setup day is demonstrated complete it is counted
   and the last candidate drops out; otherwise the first five non-setup
-  candidates are counted. No operator choice after evidence inspection.
+  candidates are counted.
 - Manifests prove observation: every selected object appears in the run
   manifest with that run's observation_utc, including ALREADY_PRESENT.
-  ``.meta.yaml`` is write-once metadata of the FIRST capture at that
-  collection_date and is reconciled field-by-field for integrity.
-- BAPA-POST2 filename tokens have unverified semantics. Token-cadence
-  gaps are anomaly detectors only; they never mark a day uncovered.
+  ``.meta.yaml`` is write-once metadata of the FIRST capture of that
+  version at that collection_date and may legitimately predate the window
+  (pre-operational smoke captures). Rule: ``meta.observation_utc`` must be
+  <= the earliest known observation of that stored version at that
+  collection_date; a meta claiming first write AFTER a manifest-recorded
+  observation is a structural anomaly.
+- BAPA-POST2 filename tokens have unverified semantics. They are treated
+  with the deployed conservative margin (UNVERIFIED_TS_MARGIN = 6h): a
+  demonstrated reach provably covers only [oldest+margin, newest-margin].
+  Token-cadence gaps are anomaly detectors only; they never mark a day
+  uncovered.
 - Recovery states (deterministic):
-      SCHEDULER_OK / SCHEDULER_GAP_EXPLAINED /
-      SCHEDULER_GAP_EXPLAINED_UNVERIFIED / SCHEDULER_GAP_UNEXPLAINED
-      SOURCE_RUN_OK / SOURCE_RUN_FAILED / SOURCE_RUN_PARTIAL
+      SCHEDULER_GAP_EXPLAINED / SCHEDULER_GAP_EXPLAINED_UNVERIFIED /
+      SCHEDULER_GAP_UNEXPLAINED
       RECOVERED / UNRECOVERED / INDETERMINATE
-  A later in-window run can repair coverage but cannot erase the recorded
+  A later eligible run can repair coverage; it never erases the recorded
   failure. Known-key fetch/store faults: RECOVERED requires a later
-  eligible manifest observation of the exact (source_id, object_key).
-  Discovery faults are source-semantic: for bme_apa the expected object
-  set is deterministic (the daily file), so a later observation of the
-  day's file proves recovery; for blb_apae, RECOVERED requires a later
-  successful rescan whose selected publication reach covers the failure
-  instant; otherwise INDETERMINATE.
-- Rolling rescan operation is evaluated per source per day: a successful
-  (or fully-recovered PARTIAL) rolling run on a counted day is required;
-  non-counted-day rolling continuity is diagnostic only.
+  eligible manifest observation of the exact (source_id, object_key);
+  relevant only if the key's day is a counted day.
+  Discovery faults carry an at-risk interval:
+      bme_apa   — deterministic object set: candidate daily files inside
+                  the failed run's discovery lookback. RECOVERED iff every
+                  at-risk counted day's file has >=1 eligible observation.
+      blb_apae  — at-risk interval = (latest previous successful discovery
+                  of that source, failure instant], lower-bounded by the
+                  declared operational start (and the failed run's own
+                  window_cutoff when no earlier success exists). RECOVERED
+                  iff a later successful rescan's demonstrated reach
+                  conservatively covers the whole at-risk interval under
+                  the unverified-token margin; else INDETERMINATE.
+- Rolling operation is per source: at least one effective rolling rescan
+  (SUCCEEDED, or PARTIAL whose faults all recovered) is required within
+  the window. Failed invocations are historical incidents; when their
+  at-risk intervals are demonstrably recovered the mechanism is treated
+  as operating (ROLLING_INCIDENT_RECOVERED). Day-level continuity is
+  diagnostic only.
 - Provenance policy is per-source and restricted to the descriptor fields
   the deployed adapters actually use for acquisition (entrypoint
   listing_url / public_data_page / base_url). Legal or informational URLs
@@ -84,12 +113,17 @@ from urllib.parse import urlparse
 
 import yaml
 
-from collectors.a3 import parse_publication_timestamp  # same logic at efd2268
-from collectors.storage import sanitize_filename  # deployed layout rule
+from tools.a3_efd2268_compat import (
+    META_SUFFIX,
+    UNVERIFIED_TS_MARGIN,
+    parse_publication_timestamp,
+    raw_meta_path,
+    raw_object_path,
+    sanitize_filename,
+)
 
 POLL_BOUND = timedelta(hours=1)                  # frozen G0-A.5: poll <= 1h
 EXPECTED_POLL_INTERVAL = timedelta(minutes=30)   # diagnostic only, never gate
-ROLLING_SLOT = (6, 15)                           # ops/systemd timer schedule
 BLB_GAP_FACTOR = 4                               # anomaly detector only
 BLB_GAP_MIN = timedelta(hours=1)
 REQUIRED_COUNTED_DAYS = 5                        # frozen G0-A.8
@@ -102,14 +136,10 @@ FETCH_ERR_RE = re.compile(r"^fetch (\S+):")
 STORE_ERR_RE = re.compile(r"^store (\S+):")
 DISCOVER_ERR_RE = re.compile(r"^discover")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+EVIDENCE_REF_RE = re.compile(r"^[^/\\]+$")       # plain bundle filename
 
-META_SUFFIX = ".meta.yaml"
 VALID_MODES = {"poll", "rolling"}
 RUN_STATUSES = {"SUCCEEDED", "PARTIAL", "FAILED", "NOT_RUN"}
-SOURCE_RUN_STATES = {"SUCCEEDED": "SOURCE_RUN_OK",
-                     "PARTIAL": "SOURCE_RUN_PARTIAL",
-                     "FAILED": "SOURCE_RUN_FAILED",
-                     "NOT_RUN": "SOURCE_RUN_FAILED"}
 
 # Descriptor fields the DEPLOYED adapters actually use for acquisition
 # (bme: entrypoint.listing_url / entrypoint.base_url fallback;
@@ -169,6 +199,18 @@ def _acq_hosts(conf: dict) -> set[str]:
                 if h:
                     hosts.add(h)
     return hosts
+
+
+def _attempt_time(row: dict) -> datetime | None:
+    """run_id is the invocation timestamp; observed_at is the fallback."""
+    t = _run_id_time(row.get("run_id") or "")
+    return t if t is not None else row.get("_t")
+
+
+def _day_bounds(d: str) -> tuple[datetime, datetime]:
+    dd = _day(d)
+    start = datetime(dd.year, dd.month, dd.day, tzinfo=UTC)
+    return start, start + timedelta(days=1)
 
 
 # ------------------------------------------------------------------ loading
@@ -327,8 +369,9 @@ def crosscheck(rows: list[dict], manifests: dict[tuple, dict],
 # ---------------------------------------------------------- explained gaps
 
 def load_explained(path: Path | None) -> tuple[list[dict], list[str]]:
-    """Explanations must reference operational evidence; a bare reason is
-    not sufficient to mark a gap EXPLAINED."""
+    """Explanations must reference a sealed evidence artifact inside the
+    adjudication bundle: a plain filename + verifiable SHA-256. Free text
+    alone never marks a gap EXPLAINED."""
     entries, problems = [], []
     if path is None:
         return entries, problems
@@ -342,23 +385,32 @@ def load_explained(path: Path | None) -> tuple[list[dict], list[str]]:
         if not ok:
             problems.append(f"explained-gaps entry {i}: bad start/end")
             continue
-        evidenced = bool(e.get("reason")) and bool(e.get("evidence_type")) \
-            and bool(e.get("evidence_ref"))
-        sha = e.get("evidence_sha256")
-        if evidenced and sha is not None:
-            if not isinstance(sha, str) or not SHA256_RE.match(sha):
-                evidenced = False
-                problems.append(f"explained-gaps entry {i}: bad sha256")
+        rec = {"start": s, "end": t, "reason": str(e.get("reason", "")),
+               "evidenced": False, "evidence": None}
+        ref, sha, etype = (e.get("evidence_ref"), e.get("evidence_sha256"),
+                           e.get("evidence_type"))
+        if not (e.get("reason") and ref and etype):
+            entries.append(rec)
+            continue
+        if not isinstance(ref, str) or not EVIDENCE_REF_RE.match(ref) \
+                or ref.startswith("."):
+            problems.append(f"explained-gaps entry {i}: evidence_ref "
+                            f"{ref!r} is not a bundle filename")
+        elif not isinstance(sha, str) or not SHA256_RE.match(sha):
+            problems.append(f"explained-gaps entry {i}: bad sha256")
+        else:
+            f = path.parent / ref
+            if not f.is_file():
+                problems.append(f"explained-gaps entry {i}: evidence "
+                                f"artifact missing: {ref!r}")
+            elif _sha256(f) != sha:
+                problems.append(f"explained-gaps entry {i}: evidence "
+                                f"hash mismatch for {ref!r}")
             else:
-                ref = path.parent / str(e["evidence_ref"])
-                if not ref.is_file() or _sha256(ref) != sha:
-                    evidenced = False
-                    problems.append(
-                        f"explained-gaps entry {i}: evidence hash mismatch "
-                        f"or missing file {e['evidence_ref']!r}")
-        entries.append({"start": s, "end": t,
-                        "reason": str(e.get("reason", "")),
-                        "evidenced": evidenced})
+                rec["evidenced"] = True
+                rec["evidence"] = {"type": str(etype), "ref": ref,
+                                   "sha256": sha}
+        entries.append(rec)
     return entries, problems
 
 
@@ -376,15 +428,17 @@ def poll_axis(rows: list[dict], start: datetime, end: datetime,
             continue
         cover = [e for e in explained if e["start"] <= t0 and e["end"] >= t1]
         state = "SCHEDULER_GAP_UNEXPLAINED"
-        reason = None
+        reason = evidence = None
         if cover:
             state = ("SCHEDULER_GAP_EXPLAINED" if cover[0]["evidenced"]
                      else "SCHEDULER_GAP_EXPLAINED_UNVERIFIED")
             reason = cover[0]["reason"]
+            evidence = cover[0]["evidence"]
         gaps.append({"kind": "poll_interval", "start": t0.isoformat(),
                      "end": t1.isoformat(),
                      "minutes": round((t1 - t0).total_seconds() / 60, 1),
-                     "state": state, "reason": reason})
+                     "state": state, "reason": reason,
+                     "evidence": evidence})
     return {
         "attempts": len(times),
         "expected_attempts_diagnostic": round(
@@ -398,56 +452,70 @@ def poll_axis(rows: list[dict], start: datetime, end: datetime,
     }
 
 
-def rolling_axis(manifests: dict[tuple, dict], sources: set[str],
-                 start: datetime, end: datetime,
-                 counted: set[str], fault_states: dict) -> dict:
-    """Effective rolling operation per source per day: SUCCEEDED (or
-    PARTIAL with all faults RECOVERED) within the daily slot. Required on
-    counted trading days; diagnostic elsewhere."""
+def rolling_operation(manifests: dict[tuple, dict], sources: set[str],
+                      recovery: list[dict]) -> dict:
+    """Per-source rolling-rescan operation.
+
+    ROLLING_EFFECTIVE            >=1 effective run, no failed invocations
+    ROLLING_INCIDENT_RECOVERED   failed invocations, all resolved
+    ROLLING_INCIDENT_UNRESOLVED  failed invocations with unresolved faults
+    ROLLING_NOT_OPERATING        no effective rolling rescan in window
+
+    'Effective' = SUCCEEDED with no recorded errors, or PARTIAL whose
+    faults are all RECOVERED. Day-level continuity is diagnostic only.
+    """
+    faults: dict[tuple, list] = defaultdict(list)
+    for r in recovery:
+        faults[(r["run_id"], r["source"])].append(r)
+
     out = {}
-    day = start.date()
-    while day <= end.date():
-        slot = datetime(day.year, day.month, day.day,
-                        *ROLLING_SLOT, tzinfo=UTC)
-        if start <= slot <= end:
-            per = {}
-            for sid in sorted(sources):
-                st = "ABSENT"
-                for (_rid, msid), m in manifests.items():
-                    res = m["results"]
-                    if msid != sid or (res.get("context") or {}) \
-                            .get("mode") != "rolling":
-                        continue
-                    t = _iso(res.get("observed_at"))
-                    if not t or t.date() != day:
-                        continue
-                    if res.get("status") == "SUCCEEDED":
-                        st = "EFFECTIVE"
-                        break
-                    if res.get("status") == "PARTIAL" and fault_states.get(
-                            m["_path"]) == "ALL_RECOVERED":
-                        st = "EFFECTIVE"
-                        break
-                    st = "INEFFECTIVE"
-                per[sid] = st
-            per["gate_relevant"] = day.isoformat() in counted
-            out[day.isoformat()] = per
-        day += timedelta(days=1)
+    for sid in sorted(sources):
+        runs = [(t, m) for (rid, msid), m in manifests.items()
+                if msid == sid
+                and (m["results"].get("context") or {}).get("mode")
+                == "rolling"
+                for t in [_iso(m["results"].get("observed_at"))] if t]
+        runs.sort(key=lambda x: x[0])
+        effective, incidents = [], []
+        for _t, m in runs:
+            res = m["results"]
+            errs = res.get("errors") or []
+            if res.get("status") == "SUCCEEDED" and not errs:
+                effective.append(m)
+            else:
+                fr = faults.get((m["run_id"], sid), [])
+                if res.get("status") == "PARTIAL" and fr \
+                        and all(r["state"] == "RECOVERED" for r in fr):
+                    effective.append(m)
+                else:
+                    incidents.append(m)
+        unresolved = [r for m in incidents
+                      for r in faults.get((m["run_id"], sid), [])
+                      if r["state"] != "RECOVERED"]
+        if not effective:
+            state = "ROLLING_NOT_OPERATING"
+        elif not incidents:
+            state = "ROLLING_EFFECTIVE"
+        elif unresolved:
+            state = "ROLLING_INCIDENT_UNRESOLVED"
+        else:
+            state = "ROLLING_INCIDENT_RECOVERED"
+        out[sid] = {
+            "state": state,
+            "invocations": len(runs),
+            "effective": len(effective),
+            "incidents": len(incidents),
+            "unresolved_faults": len(unresolved),
+            "days_observed_diagnostic": sorted({
+                t.date().isoformat() for t, _m in runs}),
+        }
     return out
-
-
-def _attempt_time(row: dict) -> datetime | None:
-    """run_id is the invocation timestamp; observed_at is the fallback."""
-    t = _run_id_time(row.get("run_id") or "")
-    return t if t is not None else row.get("_t")
 
 
 # ----------------------------------------------------------- recovery axis
 
 def manifest_observations(manifests: dict[tuple, dict]) -> dict:
-    """(source_id, object_key) -> sorted observation instants.
-    Manifests are the authority for re-observation: .meta.yaml records only
-    the first capture at a collection_date."""
+    """(source_id, object_key) -> sorted observation instants."""
     obs: dict[tuple, list] = defaultdict(list)
     for m in manifests.values():
         t = _iso(m["results"].get("observed_at"))
@@ -466,74 +534,136 @@ def _selected_reach(m: dict) -> tuple[datetime | None, datetime | None]:
                 ctx.get("newest_selected_publication_timestamp"))[0])
 
 
-def recovery_axis(manifests: dict[tuple, dict],
-                  relevant_days: set[str]) -> list[dict]:
-    """Every acquisition fault classified RECOVERED / UNRECOVERED /
-    INDETERMINATE using only ELIGIBLE (in-window) evidence. A later success
-    repairs coverage; it never erases the recorded failure.
+def _clean_success(m: dict) -> bool:
+    """A run may serve as recovery evidence only if it demonstrably
+    captured everything it selected: SUCCEEDED, no recorded errors, and
+    object_count consistent with selected_count when both are present."""
+    res = m["results"]
+    if res.get("status") != "SUCCEEDED" or res.get("errors"):
+        return False
+    sel, cnt = res.get("selected_count"), res.get("object_count")
+    return sel is None or cnt is None or sel == cnt
 
-    relevant_days: the preregistered candidate set — a discovery failure
-    can only have missed objects for days that could actually carry
-    gate-relevant publications (a BME daily file for a non-candidate
-    weekend does not exist and must not force INDETERMINATE)."""
+
+def _reach_covers(m: dict, lo: datetime, hi: datetime) -> bool:
+    """Demonstrated reach conservatively covers [lo, hi]: unverified BAPA
+    tokens carry UNVERIFIED_TS_MARGIN uncertainty, so the provable reach
+    is [oldest+margin, newest-margin]."""
+    old, new = _selected_reach(m)
+    return (old is not None and new is not None
+            and old + UNVERIFIED_TS_MARGIN <= lo
+            and new - UNVERIFIED_TS_MARGIN >= hi)
+
+
+def _interval_hits_counted(lo: datetime, hi: datetime,
+                           counted: set[str]) -> bool:
+    for d in counted:
+        ds, de = _day_bounds(d)
+        if lo < de and hi > ds:
+            return True
+    return False
+
+
+def recovery_axis(manifests: dict[tuple, dict], relevant_days: set[str],
+                  counted: set[str], op_start: datetime,
+                  subject_end: datetime) -> list[dict]:
+    """Every acquisition fault classified RECOVERED / UNRECOVERED /
+    INDETERMINATE using only ELIGIBLE (in-window incl. tail) evidence.
+    A later success repairs coverage; it never erases the recorded failure.
+    """
     obs = manifest_observations(manifests)
     ok_runs: dict[str, list[tuple[datetime, dict]]] = defaultdict(list)
+    ok_discover: dict[str, list[datetime]] = defaultdict(list)
     for (_rid, sid), m in manifests.items():
-        t = _iso(m["results"].get("observed_at"))
-        if t and m["results"].get("status") == "SUCCEEDED":
+        res = m["results"]
+        t = _iso(res.get("observed_at"))
+        if t is None:
+            continue
+        if _clean_success(m):
             ok_runs[sid].append((t, m))
+        if not any(DISCOVER_ERR_RE.match(e)
+                   for e in res.get("errors") or []):
+            ok_discover[sid].append(t)
     for v in ok_runs.values():
         v.sort(key=lambda x: x[0])
+    for v in ok_discover.values():
+        v.sort()
+
+    def _prev_discovery(sid: str, t_fail: datetime) -> datetime | None:
+        """Latest instant before the failure at which that source's
+        discovery demonstrably ran (any run without a discover error)."""
+        prev = [t for t in ok_discover.get(sid, []) if t < t_fail]
+        return prev[-1] if prev else None
 
     out = []
     for (rid, sid), m in sorted(manifests.items(), key=lambda kv: kv[0][0] or ""):
         res = m["results"]
         t_fail = _iso(res.get("observed_at"))
-        fail_day = t_fail.date().isoformat() if t_fail else None
+        if t_fail is None:
+            continue
+        fail_day = t_fail.date().isoformat()
+        ctx = res.get("context") or {}
+        cutoff = _iso(ctx.get("window_cutoff_utc"))
+        lookback_h = float(ctx.get("window_hours") or 24.0)
         for err in res.get("errors") or []:
             fm = FETCH_ERR_RE.match(err) or STORE_ERR_RE.match(err)
             base = {"source": sid, "run_id": rid,
                     "at": res.get("observed_at")}
             if fm:
                 key = fm.group(1)
-                seen = [t for t in obs.get((sid, key), [])
-                        if t_fail and t > t_fail]
+                key_day = _day_of_key(key)
+                seen = [t for t in obs.get((sid, key), []) if t > t_fail]
+                relevant = (key_day in counted if key_day
+                            else t_fail <= subject_end)
                 out.append({**base, "kind": "fetch_or_store", "key": key,
-                            "affected_day": _day_of_key(key) or fail_day,
-                            "state": "RECOVERED" if seen else "UNRECOVERED"})
+                            "affected_day": key_day or fail_day,
+                            "state": "RECOVERED" if seen else "UNRECOVERED",
+                            "gate_relevant": relevant})
             elif DISCOVER_ERR_RE.match(err):
-                if sid == "bme_apa" and fail_day:
+                if sid == "bme_apa":
                     # source-semantic: BME's expected object set is the
-                    # deterministic daily file; later observation of it
-                    # proves recovery even though token reach cannot apply.
-                    prev = (t_fail - timedelta(days=1)).date().isoformat()
-                    days = {fail_day, prev} & relevant_days
-                    missing = [d for d in days if not any(
-                        t > t_fail for t in obs.get(
-                            (sid, f"{d}-bmea-posttrade.json"), []))]
+                    # deterministic daily file inside the discovery
+                    # lookback. A file observed at ANY eligible instant
+                    # demonstrably was not missed by this failure.
+                    back = timedelta(hours=lookback_h)
+                    days = {d for d in relevant_days
+                            if (t_fail - back).date() <= _day(d)
+                            <= t_fail.date()}
+                    missing = [d for d in days
+                               if not obs.get(
+                                   (sid, f"{d}-bmea-posttrade.json"))]
+                    relevant = bool(days & counted)
                     out.append({**base, "kind": "discover",
                                 "affected_day": fail_day,
                                 "days_at_risk": sorted(days),
                                 "state": "INDETERMINATE" if missing
-                                else "RECOVERED"})
+                                else "RECOVERED",
+                                "gate_relevant": relevant})
                 else:
-                    proof = []
-                    for t2, m2 in ok_runs.get(sid, []):
-                        if t_fail is None or t2 <= t_fail:
-                            continue
-                        old, new = _selected_reach(m2)
-                        if old is not None and old <= t_fail \
-                                and (new is None or new >= t_fail):
-                            proof.append(m2["_path"])
+                    # at-risk interval: publications after the latest
+                    # previous successful discovery, up to the failure
+                    # instant; lower-bounded by op start (and by the run's
+                    # own cutoff when no earlier success exists).
+                    prev = _prev_discovery(sid, t_fail)
+                    lo = max(op_start, prev) if prev else \
+                        max(op_start, cutoff) if cutoff else op_start
+                    proof = [m2["_path"] for t2, m2 in ok_runs.get(sid, [])
+                             if t2 > t_fail
+                             and _reach_covers(m2, lo, t_fail)]
+                    relevant = _interval_hits_counted(lo, t_fail, counted)
                     out.append({**base, "kind": "discover",
                                 "affected_day": fail_day,
+                                "at_risk": {"start": lo.isoformat(),
+                                            "end": t_fail.isoformat()},
                                 "state": "RECOVERED" if proof
                                 else "INDETERMINATE",
+                                "gate_relevant": relevant,
                                 "evidence": proof})
             else:
                 out.append({**base, "kind": "other", "error": err,
                             "affected_day": fail_day,
-                            "state": "INDETERMINATE"})
+                            "state": "INDETERMINATE",
+                            "gate_relevant": t_fail <= subject_end})
     return out
 
 
@@ -542,11 +672,12 @@ def recovery_axis(manifests: dict[tuple, dict],
 def coverage_axis(manifests: dict[tuple, dict], raw_root: Path,
                   counted: list[str], recovery: list[dict]) -> dict:
     """Per counted trading day and source: CAPTURED / INDETERMINATE /
-    UNRECOVERED, using eligible observations only.
+    UNRECOVERED, using eligible observations only (in-window incl. tail).
 
     bme_apa: CAPTURED iff the daily file object appears in >=1 eligible
     manifest (CREATED or ALREADY_PRESENT; multiple capture_versions are
-    never required).
+    never required). The file may legitimately be first captured during
+    the recovery tail (it is published after day close).
     blb_apae: tokens cannot prove publication completeness; a day degrades
     only on acquisition evidence — an unrecovered fetch/store fault for
     that day's keys (UNRECOVERED) or an indeterminate discover fault /
@@ -616,24 +747,28 @@ def coverage_axis(manifests: dict[tuple, dict], raw_root: Path,
 def setup_day_proof(setup_day: str, start: datetime,
                     manifests: dict[tuple, dict],
                     recovery: list[dict]) -> dict:
-    """Deterministic Day-1 policy.
+    """Deterministic Day-1 policy, with unverified-token uncertainty.
 
     bme_apa: the daily file object observed in >=1 eligible manifest.
-    blb_apae: an eligible rolling run must demonstrate historical reach
-    covering the entire pre-activation interval [00:00Z, activation]:
-    mode=rolling AND historical_page_scanned AND SUCCEEDED AND
-    oldest_selected <= day_start AND newest_selected >= activation, with
-    no unresolved acquisition fault affecting the setup day.
+    blb_apae: an eligible rolling run must demonstrate conservative
+    coverage of the entire pre-activation interval [00:00Z, activation]:
+    mode=rolling AND historical_page_scanned AND clean SUCCEEDED AND
+    reach_oldest <= day_start - MARGIN AND reach_newest >= activation +
+    MARGIN (the deployed unverified-token uncertainty), with no unresolved
+    blb_apae discover fault in the window.
 
-    What this proves: the rescan demonstrably listed/selected objects
-    spanning the whole interval, i.e. whatever the source exposed for it
-    was within reach and captured. What it does NOT prove: that the source
-    actually published every interval file in that range (BAPA token
-    semantics are unverified).
+    What this proves: a successful rescan produced selected/captured
+    evidence whose observed source-token reach conservatively spans the
+    at-risk interval — supporting acquisition recovery under the gate's
+    observable evidence model. What it does NOT prove: absolute Bloomberg
+    publication completeness for the interval (token semantics remain
+    unverified).
     """
     obs = manifest_observations(manifests)
     bme_seen = obs.get(("bme_apa", f"{setup_day}-bmea-posttrade.json"), [])
     day0 = datetime.combine(_day(setup_day), datetime.min.time(), UTC)
+    lo = day0 - UNVERIFIED_TS_MARGIN
+    hi = start + UNVERIFIED_TS_MARGIN
 
     unresolved = [r for r in recovery
                   if r["source"] == "blb_apae" and r["state"] != "RECOVERED"
@@ -642,18 +777,20 @@ def setup_day_proof(setup_day: str, start: datetime,
     proof = []
     for m in manifests.values():
         res = m["results"]
-        sid = res["source_id"]
         ctx = res.get("context") or {}
-        if sid != "blb_apae" or ctx.get("mode") != "rolling" \
+        if res["source_id"] != "blb_apae" or ctx.get("mode") != "rolling" \
                 or not ctx.get("historical_page_scanned") \
-                or res.get("status") != "SUCCEEDED":
+                or not _clean_success(m):
             continue
         old, new = _selected_reach(m)
-        if old is not None and old <= day0 \
-                and new is not None and new >= start:
+        if old is not None and old <= lo \
+                and new is not None and new >= hi:
             proof.append({"manifest": m["_path"],
-                          "oldest": old.isoformat(),
-                          "newest": new.isoformat()})
+                          "reach_guaranteed": {
+                              "start": (old + UNVERIFIED_TS_MARGIN)
+                              .isoformat(),
+                              "end": (new - UNVERIFIED_TS_MARGIN)
+                              .isoformat()}})
     blb_ok = bool(proof) and not unresolved
     complete = bool(bme_seen) and blb_ok
     return {
@@ -661,6 +798,11 @@ def setup_day_proof(setup_day: str, start: datetime,
         "result": "SETUP_DAY_CAPTURE_COMPLETE" if complete
                   else "NOT_COUNTED_SETUP_DAY",
         "bme_daily_file_observed": bool(bme_seen),
+        "required_guaranteed_reach": {"start": day0.isoformat(),
+                                      "end": start.isoformat(),
+                                      "margin_hours":
+                                          UNVERIFIED_TS_MARGIN
+                                          .total_seconds() / 3600},
         "blb_reach_proofs": proof,
         "blb_unresolved_faults": len(unresolved),
     }
@@ -669,16 +811,26 @@ def setup_day_proof(setup_day: str, start: datetime,
 # ----------------------------------------------------------- raw integrity
 
 def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
+                  all_manifests: dict[tuple, dict],
                   acq_hosts: dict[str, set], anomalies: list[str],
                   diagnostics: dict, start: datetime, end: datetime,
-                  obs_index: dict) -> dict:
+                  obs_all: dict) -> dict:
     """Per-object integrity for ELIGIBLE manifests, resolved at the exact
     deployed path raw/<sid>/<observed_at[:10]>/<sanitized key>/<cv>.
+
     Orphan checks are attributed to the window via collection_date /
     meta.observation_utc; pre-existing raw outside the window is
-    diagnostic, never a gate failure."""
+    diagnostic, never a gate failure.
+
+    meta.observation_utc is first-write metadata: it may legitimately
+    predate the window (pre-operational captures). Rule: meta.observation_utc
+    <= earliest known observation of that stored version at that
+    collection_date; a meta claiming first write AFTER a manifest-recorded
+    observation is an anomaly.
+    """
     checked = failed = 0
     seen_paths = set()
+    referenced_paths = set()
 
     def _meta_observed_in_window(meta: dict | None, coldate: str) -> bool:
         t = _iso((meta or {}).get("observation_utc"))
@@ -686,6 +838,17 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
             return start <= t <= end
         d = _day(coldate)
         return bool(d and start.date() <= d <= end.date())
+
+    # all manifests (eligible or not) count as "recording" a raw object
+    for (_rid, sid), m in all_manifests.items():
+        t = _iso(m["results"].get("observed_at"))
+        cd = t.date().isoformat() if t else None
+        for o in m["results"].get("objects") or []:
+            if o.get("source_object_id") and o.get("capture_version") and cd:
+                referenced_paths.add(
+                    raw_object_path(raw_root, sid, cd,
+                                    o["source_object_id"],
+                                    o["capture_version"]))
 
     # -- manifest-referenced objects: exact path + full reconciliation
     for (rid, sid), m in manifests.items():
@@ -711,7 +874,7 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                     f"object observation_utc != run observed_at: "
                     f"{rid}/{sid}/{key}")
                 failed += 1
-            f = (raw_root / sid / coldate / sanitize_filename(key) / cv)
+            f = raw_object_path(raw_root, sid, coldate, key, cv)
             if (sid, coldate, key, cv) in seen_paths:
                 continue
             seen_paths.add((sid, coldate, key, cv))
@@ -737,7 +900,7 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                     f"provenance host {host!r} outside {sid} acquisition "
                     f"hosts {sorted(acq_hosts.get(sid, set()))}")
                 failed += 1
-            mp = f.with_name(f.name + META_SUFFIX)
+            mp = raw_meta_path(f)
             if not mp.is_file():
                 anomalies.append(f"manifest object without meta: "
                                  f"{rid}/{sid}/{key}")
@@ -767,21 +930,25 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                         f"meta field {f2!r} mismatch {rid}/{sid}/{key}: "
                         f"{meta.get(f2)!r} != {want!r}")
                     failed += 1
-            # meta.observation_utc = first capture instant at THIS
-            # collection_date (deployed meta is write-once per dir)
-            first = [t for t in obs_index.get((sid, key, cv), [])
+            # first-write semantics: meta.observation_utc may legitimately
+            # predate the window, but must never be later than the earliest
+            # known observation of this version at this collection_date.
+            known = [t for t in obs_all.get((sid, key, cv), [])
                      if t.date().isoformat() == coldate]
             meta_obs = _iso(meta.get("observation_utc"))
-            if meta_obs is None or not first or meta_obs != min(first):
+            if meta_obs is None:
                 anomalies.append(
-                    f"meta observation_utc does not match first in-window "
-                    f"capture at {coldate}: {rid}/{sid}/{key}")
+                    f"meta observation_utc missing/naive/unparseable: "
+                    f"{rid}/{sid}/{key}")
+                failed += 1
+            elif known and meta_obs > min(known):
+                anomalies.append(
+                    f"meta observation_utc later than first known "
+                    f"observation at {coldate}: {rid}/{sid}/{key}")
                 failed += 1
 
     # -- orphans attributed to the window (both directions)
     files = [p for p in raw_root.rglob("*") if p.is_file()]
-    manifest_paths = {raw_root / sid / cd / sanitize_filename(k) / cv
-                      for (sid, cd, k, cv) in seen_paths}
     for p in files:
         rel = p.relative_to(raw_root)
         if len(rel.parts) != 4:
@@ -791,7 +958,7 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
         coldate = rel.parts[1]
         is_meta = p.name.endswith(META_SUFFIX)
         mate = (p.with_name(p.name[:-len(META_SUFFIX)]) if is_meta
-                else p.with_name(p.name + META_SUFFIX))
+                else raw_meta_path(p))
         meta = None
         if is_meta:
             try:
@@ -803,7 +970,7 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
         if not mate.is_file():
             problem = ("meta without raw object" if is_meta
                        else "raw object without meta")
-        elif not is_meta and p not in manifest_paths:
+        elif not is_meta and p not in referenced_paths:
             if p.name != _sha256(p):
                 problem = "raw filename != sha256(bytes)"
             else:
@@ -817,7 +984,7 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                                        []).append(f"{problem}: {p}")
     diagnostics["out_of_window_raw_objects"] = sum(
         1 for p in files if not p.name.endswith(META_SUFFIX)
-        and p not in manifest_paths
+        and p not in referenced_paths
         and not _meta_observed_in_window(
             None, p.relative_to(raw_root).parts[1]
             if len(p.relative_to(raw_root).parts) == 4 else ""))
@@ -845,12 +1012,12 @@ def _collect_reasons(rep: dict):
         elif g["state"] == "SCHEDULER_GAP_EXPLAINED_UNVERIFIED":
             reasons.append(f"gap explanation lacks evidence reference: "
                            f"{g['start']}..{g['end']}")
-    for day, per in rep.get("rolling", {}).items():
-        if per.get("gate_relevant"):
-            for sid, st in per.items():
-                if sid != "gate_relevant" and st != "EFFECTIVE":
-                    reasons.append(f"rolling {st} for {sid} on counted day "
-                                   f"{day}")
+    for sid, r in rep["rolling"].items():
+        if r["state"] == "ROLLING_NOT_OPERATING":
+            reasons.append(f"rolling rescan never demonstrated operating "
+                           f"for {sid}")
+        elif r["state"] == "ROLLING_INCIDENT_UNRESOLVED":
+            reasons.append(f"rolling incident(s) unresolved for {sid}")
     for r in rep["recovery"]:
         if r.get("gate_relevant") and r["state"] != "RECOVERED":
             reasons.append(f"{r['state']} {r['kind']} fault: "
@@ -870,11 +1037,16 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
            start: str, end: str, candidate_days: list[str],
            setup_day: str | None = None,
            explained_gaps: Path | None = None,
+           tail_end: str | None = None,
            component: bool = False) -> dict:
     t0, t1 = _iso(start), _iso(end)
     if not t0 or not t1 or t1 <= t0:
         raise ValueError("invalid --start/--end (must be explicit UTC "
                          "ISO-8601, start < end)")
+    tail = _iso(tail_end) if tail_end else t1
+    if tail is None or tail < t1:
+        raise ValueError("invalid --tail-end (must be explicit UTC "
+                         "ISO-8601, >= --end)")
 
     sources, acq_hosts = set(), {}
     anomalies: list[str] = []
@@ -896,23 +1068,23 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
     rows_all = load_journal(journal, anomalies)
     mans_all = load_manifests(runs, anomalies)
 
-    # evidence scoping: only in-window evidence is eligible
+    # evidence scoping: only evidence inside [start, tail_end] is eligible
     def _eligible_row(r):
         t = _attempt_time(r)
-        return t is not None and t0 <= t <= t1
+        return t is not None and t0 <= t <= tail
 
     rows = [r for r in rows_all if _eligible_row(r)]
     eligible_ids = {id(r) for r in rows}
     mans = {k: m for k, m in mans_all.items()
             if (t := _iso(m["results"].get("observed_at")))
-            and t0 <= t <= t1}
+            and t0 <= t <= tail}
 
     shape = check_journal_shape(rows_all, sources, eligible_ids, anomalies)
     crosscheck(rows, mans, anomalies)
 
-    sched = {"poll": poll_axis(rows, t0, t1, explained)}
+    sched = {"poll": poll_axis(rows, t0, tail, explained)}
 
-    # ---- deterministic counted-day derivation
+    # ---- deterministic counted-day derivation (candidate period only)
     cands, bad = [], []
     for d in candidate_days:
         (cands.append if _day(d) else bad.append)(d)
@@ -922,26 +1094,17 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
         anomalies.append("duplicate candidate days")
     cands = sorted(set(cands))
 
-    recovery = recovery_axis(mans, set(cands))
-
     setup_rep = None
-    if setup_day:
-        if setup_day not in cands:
-            anomalies.append(f"setup day {setup_day} not in candidates")
-        else:
-            setup_rep = setup_day_proof(setup_day, t0, mans, recovery)
-
+    if setup_day and setup_day not in cands:
+        anomalies.append(f"setup day {setup_day} not in candidates")
     if component:
         counted = sorted(set(cands))
         fallback = False
-    elif setup_day and setup_rep:
-        if setup_rep["result"] == "SETUP_DAY_CAPTURE_COMPLETE":
-            counted = cands[:REQUIRED_COUNTED_DAYS]
-            fallback = False
-        else:
-            counted = [d for d in cands if d != setup_day][
-                :REQUIRED_COUNTED_DAYS]
-            fallback = True
+    elif setup_day and setup_day in cands:
+        # computed after recovery below; provisional counted set needed
+        # for gate relevance — derive pessimistically first
+        counted = cands[:REQUIRED_COUNTED_DAYS]
+        fallback = False
     else:
         if len(cands) != REQUIRED_COUNTED_DAYS:
             anomalies.append(
@@ -950,6 +1113,25 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
                 f"declared (got {len(cands)})")
         counted = cands[:REQUIRED_COUNTED_DAYS]
         fallback = False
+
+    # provisional counted set for gate relevance (counted ⊂ cands either way)
+    provisional = set(counted) if len(counted) == REQUIRED_COUNTED_DAYS \
+        else set(cands)
+    recovery = recovery_axis(mans, set(cands), provisional, t0, t1)
+
+    if setup_day and setup_day in cands:
+        setup_rep = setup_day_proof(setup_day, t0, mans, recovery)
+        if not component:
+            if setup_rep["result"] == "SETUP_DAY_CAPTURE_COMPLETE":
+                counted = cands[:REQUIRED_COUNTED_DAYS]
+                fallback = False
+            else:
+                counted = [d for d in cands if d != setup_day][
+                    :REQUIRED_COUNTED_DAYS]
+                fallback = True
+            # relevance may change with the final counted set
+            for r in recovery:
+                r["gate_relevant"] = _fault_relevant(r, set(counted), t1)
 
     valid_counted = (
         len(counted) == REQUIRED_COUNTED_DAYS
@@ -960,42 +1142,28 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
             f"counted_days invalid: {counted} (need exactly "
             f"{REQUIRED_COUNTED_DAYS} distinct days inside the window)")
 
-    # gate relevance
-    counted_set = set(counted)
-    for r in recovery:
-        r["gate_relevant"] = (r["affected_day"] in counted_set
-                              if r["affected_day"] else True)
+    rolling = rolling_operation(mans, sources, recovery)
 
-    # PARTIAL rolling whose faults all recovered -> effective
-    fault_states = {}
-    for (rid_, sid), m in mans.items():
-        errs = m["results"].get("errors") or []
-        if not errs:
-            continue
-        states = [r["state"] for r in recovery
-                  if r["run_id"] == rid_ and r["source"] == sid]
-        if states and all(s == "RECOVERED" for s in states):
-            fault_states[m["_path"]] = "ALL_RECOVERED"
-    rolling = rolling_axis(mans, sources, t0, t1, counted_set, fault_states)
-
-    obs_index: dict[tuple, list] = defaultdict(list)
-    for m in mans.values():
+    obs_all: dict[tuple, list] = defaultdict(list)
+    for m in mans_all.values():
         t = _iso(m["results"].get("observed_at"))
         for o in m["results"].get("objects") or []:
             if o.get("source_object_id") and o.get("capture_version") and t:
-                obs_index[(m["results"]["source_id"],
-                           o["source_object_id"],
-                           o["capture_version"])].append(t)
+                obs_all[(m["results"]["source_id"],
+                         o["source_object_id"],
+                         o["capture_version"])].append(t)
 
     diagnostics: dict = {}
-    integrity = raw_integrity(raw, mans, acq_hosts, anomalies, diagnostics,
-                              t0, t1, obs_index)
+    integrity = raw_integrity(raw, mans, mans_all, acq_hosts, anomalies,
+                              diagnostics, t0, tail, obs_all)
     coverage = coverage_axis(mans, raw, counted, recovery)
 
     rep = {
         "authority": {"frozen": "g0-freeze-v1", "deployed_sha": "efd2268",
                       "note": "main-line fixes are NOT assumed deployed"},
-        "window": {"start": t0.isoformat(), "end": t1.isoformat(),
+        "window": {"operational_start": t0.isoformat(),
+                   "subject_period_end": t1.isoformat(),
+                   "evidence_tail_end": tail.isoformat(),
                    "candidate_days": list(candidate_days)},
         "evidence": {"journal_rows_total": len(rows_all),
                      "journal_rows_eligible": len(rows),
@@ -1019,6 +1187,20 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
     return rep
 
 
+def _fault_relevant(r: dict, counted: set[str],
+                    subject_end: datetime) -> bool:
+    if r["kind"] == "fetch_or_store":
+        return r["affected_day"] in counted
+    if r["kind"] == "discover":
+        if r["source"] == "bme_apa":
+            return bool(set(r.get("days_at_risk") or []) & counted)
+        lo = _iso((r.get("at_risk") or {}).get("start"))
+        hi = _iso((r.get("at_risk") or {}).get("end"))
+        return bool(lo and hi and _interval_hits_counted(lo, hi, counted))
+    t = _iso(r.get("at"))
+    return t is not None and t <= subject_end
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--journal", type=Path, required=True)
@@ -1027,9 +1209,14 @@ def main(argv=None) -> int:
     ap.add_argument("--config", type=Path, required=True,
                     help="config/sources dir of the DEPLOYED revision")
     ap.add_argument("--start", required=True,
-                    help="declared operational start, explicit UTC ISO-8601")
+                    help="operational start, explicit UTC ISO-8601")
     ap.add_argument("--end", required=True,
-                    help="window close instant, explicit UTC ISO-8601")
+                    help="subject-period end (end of last candidate day), "
+                         "explicit UTC ISO-8601")
+    ap.add_argument("--tail-end", default=None,
+                    help="evidence/recovery tail end, explicit UTC ISO-8601 "
+                         "(>= --end); scheduled operation is expected to "
+                         "run through it")
     ap.add_argument("--candidate-days", required=True,
                     help="comma list of preregistered candidate trading days")
     ap.add_argument("--setup-day", default=None,
@@ -1038,15 +1225,16 @@ def main(argv=None) -> int:
                          "five counted days")
     ap.add_argument("--explained-gaps", type=Path, default=None,
                     help="YAML [{start,end,reason,evidence_type,"
-                         "evidence_ref,evidence_sha256?}] — operator "
-                         "justifications backed by collected evidence")
+                         "evidence_ref,evidence_sha256}] — operator "
+                         "justifications sealed to bundle artifacts")
     ap.add_argument("--component", action="store_true",
                     help="axis-level evaluation only; can never emit "
                          "COMPLETE_SUPPORTED")
     args = ap.parse_args(argv)
     rep = verify(args.journal, args.runs, args.raw, args.config,
                  args.start, args.end, args.candidate_days.split(","),
-                 args.setup_day, args.explained_gaps, args.component)
+                 args.setup_day, args.explained_gaps, args.tail_end,
+                 args.component)
     print(yaml.safe_dump(rep, sort_keys=False, allow_unicode=True))
     return 0 if rep["verdict"] == "COMPLETE_SUPPORTED" else 1
 
