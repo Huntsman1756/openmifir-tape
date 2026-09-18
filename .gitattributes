@@ -1,0 +1,4 @@
+# Exact-byte fixtures: descriptor fingerprints are SHA-256 over the efd2268
+# bytes (LF). Without this, Windows checkouts (autocrlf) rewrite them to CRLF
+# and the verifier's fingerprint check fails closed.
+tests/fixtures/efd2268_descriptors/*.yaml text eol=lf
