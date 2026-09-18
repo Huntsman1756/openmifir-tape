@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only G0-A3 capture-window adjudication (DRAFT v5 — pre-preregistration).
+"""Read-only G0-A3 capture-window adjudication (DRAFT v5.1 — pre-preregistration).
 
 Adjudicates an A3 evidence bundle against the FROZEN contract
 (docs/gates/G0.md §2 G0-A, baseline g0-freeze-v1) as implemented by the
@@ -27,7 +27,11 @@ Sealed profile (ACTIVE_G0_A3_PROFILE):
     COMPLETE_SUPPORTED is unreachable by bypassing preregistered
     decisions with different CLI parameters. The source descriptors are
     pinned by exact-byte SHA-256 at efd2268: the adjudicator cannot
-    silently inherit a modified acquisition-endpoint policy.
+    silently inherit a modified acquisition-endpoint policy. For the real
+    adjudication, --config must carry the descriptor bytes collected
+    read-only from the deployed efd2268 checkout (alongside a separately
+    sealed `git rev-parse HEAD` artifact); the fingerprints only verify
+    those supplied bytes, they do not by themselves prove provenance.
 
 Time model (all bounds preregistered, no post-hoc choice):
 
@@ -100,9 +104,11 @@ Design rules (frozen-spec-subordinate):
                   the failed run's discovery lookback. Recovery is
                   temporal: RECOVERED iff every at-risk COUNTED day's
                   file has >=1 eligible observation AFTER the failure
-                  instant (a pre-failure snapshot cannot demonstrate
-                  post-failure content coverage — the file mutates
-                  intraday). All observed only pre-failure =>
+                  instant (the daily object may change after an earlier
+                  observation — finality at the failure instant is not
+                  established, so a pre-failure snapshot cannot
+                  demonstrate post-failure content coverage). All
+                  observed only pre-failure =>
                   AT_RISK_OBJECT_ALREADY_CAPTURED_BEFORE_FAILURE
                   (explicit, not recovery); any missing => UNRECOVERED.
       blb_apae  — at-risk interval = (latest previous successful discovery
@@ -112,12 +118,15 @@ Design rules (frozen-spec-subordinate):
                   iff a later successful rescan's demonstrated reach
                   conservatively covers the whole at-risk interval under
                   the unverified-token margin; else INDETERMINATE.
-- Rolling operation is per source: at least one effective rolling rescan
-  (SUCCEEDED, or PARTIAL whose faults all recovered) is required within
-  the window. Failed invocations are historical incidents; when their
-  at-risk intervals are demonstrably recovered the mechanism is treated
-  as operating (ROLLING_INCIDENT_RECOVERED). Day-level continuity is
-  diagnostic only.
+- Rolling operation is per source and censused against the DEPLOYED
+  schedule — a daily 06:15 UTC timer with Persistent=true (missed slots
+  fire late on restart). Every expected 06:15Z slot inside
+  [operational_start, evidence_tail_end] must be accounted for:
+  effective evidence, a demonstrably recovered incident, or a sealed
+  operational explanation plus a later effective rescan. A missing slot
+  without evidence is a missing scheduled invocation — including on
+  non-trading days — and makes the mechanism NOT_OPERATING. One
+  successful run can never stand in for silently absent slots.
 - Provenance policy is per-source and restricted to the descriptor fields
   the deployed adapters actually use for acquisition (entrypoint
   listing_url / public_data_page / base_url). Legal or informational URLs
@@ -576,21 +585,73 @@ def poll_axis(rows: list[dict], start: datetime, end: datetime,
     }
 
 
-def rolling_operation(manifests: dict[tuple, dict], sources: set[str],
-                      recovery: list[dict]) -> dict:
-    """Per-source rolling-rescan operation.
+ROLLING_SLOT_HHMM = (6, 15)   # deployed timer: rolling daily 06:15 UTC
 
-    ROLLING_EFFECTIVE            >=1 effective run, no failed invocations
-    ROLLING_INCIDENT_RECOVERED   failed invocations, all resolved
-    ROLLING_INCIDENT_UNRESOLVED  failed invocations with unresolved faults
-    ROLLING_NOT_OPERATING        no effective rolling rescan in window
 
-    'Effective' = SUCCEEDED with no recorded errors, or PARTIAL whose
-    faults are all RECOVERED. Day-level continuity is diagnostic only.
+def _expected_rolling_slots(t0: datetime, tail: datetime) -> list[datetime]:
+    """Every 06:15 UTC timer slot inside [t0, tail]. This is the DEPLOYED
+    schedule (Persistent=true fires missed slots late), not an invented
+    calendar: a daily slot exists even on non-trading days."""
+    hh, mm = ROLLING_SLOT_HHMM
+    slots, d = [], t0.date()
+    while True:
+        s = datetime(d.year, d.month, d.day, hh, mm, tzinfo=UTC)
+        if s > tail:
+            break
+        if s >= t0:
+            slots.append(s)
+        d += timedelta(days=1)
+    return slots
+
+
+def rolling_operation(rows: list[dict], manifests: dict[tuple, dict],
+                      sources: set[str], recovery: list[dict],
+                      explained: list[dict], t0: datetime,
+                      tail: datetime) -> dict:
+    """Per-source census of every scheduled 06:15Z rolling slot.
+
+    "Available and operating" requires EVERY expected slot inside
+    [operational_start, evidence_tail_end] to be accounted for — a single
+    effective rescan cannot stand in for silently missing invocations.
+    Per slot:
+
+    ROLLING_SLOT_EFFECTIVE            >=1 effective run, no incidents
+    ROLLING_SLOT_INCIDENT_RECOVERED   attempts present; every incident's
+                                      gate-relevant capture impact is
+                                      demonstrably recovered
+    ROLLING_SLOT_EXPLAINED_RECOVERED  no attempt; sealed operational
+                                      evidence covers the slot instant and
+                                      a later effective rescan exists
+    ROLLING_SLOT_UNRESOLVED           attempt/incident without recovery
+    ROLLING_SLOT_MISSING_UNEXPLAINED  no attempt, no sealed explanation
+
+    With Persistent=true a missed timer fires late on restart, so an
+    invocation inside [slot, next_slot) accounts for that slot. The
+    source-level state derives from the slot census: any
+    MISSING_UNEXPLAINED => ROLLING_NOT_OPERATING; any UNRESOLVED =>
+    ROLLING_INCIDENT_UNRESOLVED; all EFFECTIVE => ROLLING_EFFECTIVE;
+    otherwise ROLLING_INCIDENT_RECOVERED. A window containing no expected
+    slot falls back to per-run classification (component axes only).
     """
     faults: dict[tuple, list] = defaultdict(list)
     for r in recovery:
         faults[(r["run_id"], r["source"])].append(r)
+
+    slots = _expected_rolling_slots(t0, tail)
+    skipped_times = sorted(
+        t for r in rows
+        if r.get("status") == "SKIPPED_LOCKED"
+        and r.get("mode") == "rolling"
+        for t in [_attempt_time(r)] if t)
+
+    def _effective(m: dict, sid: str) -> bool:
+        res = m["results"]
+        errs = res.get("errors") or []
+        if res.get("status") == "SUCCEEDED" and not errs:
+            return True
+        fr = faults.get((m["run_id"], sid), [])
+        return (res.get("status") == "PARTIAL" and bool(fr)
+                and all(r["state"] == "RECOVERED" for r in fr))
 
     out = {}
     for sid in sorted(sources):
@@ -600,36 +661,114 @@ def rolling_operation(manifests: dict[tuple, dict], sources: set[str],
                 == "rolling"
                 for t in [_iso(m["results"].get("observed_at"))] if t]
         runs.sort(key=lambda x: x[0])
-        effective, incidents = [], []
-        for _t, m in runs:
-            res = m["results"]
-            errs = res.get("errors") or []
-            if res.get("status") == "SUCCEEDED" and not errs:
-                effective.append(m)
+
+        effective_all = [m for _t, m in runs if _effective(m, sid)]
+        effective_times = sorted(
+            t for t, m in runs if _effective(m, sid))
+
+        def _later_effective(slot_t: datetime,
+                             times: list = effective_times) -> bool:
+            """A missed/no-op slot's rescan duty is fulfilled when a later
+            effective 7-day-lookback rescan exists: the next scheduled
+            rescan covers the interval the missed one would have."""
+            return any(t > slot_t for t in times)
+
+        if not slots:
+            # no scheduled slot inside the window (sub-day component axes):
+            # fall back to per-run classification
+            incidents = [m for _t, m in runs if not _effective(m, sid)]
+            unresolved = [r for m in incidents
+                          for r in faults.get((m["run_id"], sid), [])
+                          if r["state"] != "RECOVERED"]
+            if not effective_all:
+                state = "ROLLING_NOT_OPERATING"
+            elif not incidents:
+                state = "ROLLING_EFFECTIVE"
+            elif unresolved:
+                state = "ROLLING_INCIDENT_UNRESOLVED"
             else:
-                fr = faults.get((m["run_id"], sid), [])
-                if res.get("status") == "PARTIAL" and fr \
-                        and all(r["state"] == "RECOVERED" for r in fr):
-                    effective.append(m)
+                state = "ROLLING_INCIDENT_RECOVERED"
+            out[sid] = {
+                "state": state, "slots_expected": 0, "slots": [],
+                "invocations": len(runs),
+                "effective": len(effective_all),
+                "incidents": len(incidents),
+                "unresolved_faults": len(unresolved),
+                "days_observed_diagnostic": sorted({
+                    t.date().isoformat() for t, _m in runs}),
+            }
+            continue
+
+        slot_reps = []
+        for i, s in enumerate(slots):
+            nxt = slots[i + 1] if i + 1 < len(slots) else None
+            slot_runs = [(t, m) for t, m in runs
+                         if s <= t and (nxt is None or t < nxt)]
+            slot_skip = [t for t in skipped_times
+                         if s <= t and (nxt is None or t < nxt)]
+            eff = [m for _t, m in slot_runs if _effective(m, sid)]
+            inc_mans = [m for _t, m in slot_runs
+                        if not _effective(m, sid)]
+            rec = {"slot": s.isoformat(), "attempts": len(slot_runs)
+                   + len(slot_skip), "effective": len(eff),
+                   "incidents": len(inc_mans) + len(slot_skip),
+                   "explanation": None}
+            if not slot_runs and not slot_skip:
+                cover = [e for e in explained
+                         if e["evidenced"] and e["start"] <= s <= e["end"]]
+                if cover and _later_effective(s):
+                    rec["state"] = "ROLLING_SLOT_EXPLAINED_RECOVERED"
+                    rec["explanation"] = cover[0]["reason"]
+                elif cover:
+                    rec["state"] = "ROLLING_SLOT_UNRESOLVED"
+                    rec["explanation"] = cover[0]["reason"]
                 else:
-                    incidents.append(m)
-        unresolved = [r for m in incidents
-                      for r in faults.get((m["run_id"], sid), [])
-                      if r["state"] != "RECOVERED"]
-        if not effective:
+                    rec["state"] = "ROLLING_SLOT_MISSING_UNEXPLAINED"
+            elif not inc_mans and not slot_skip:
+                rec["state"] = "ROLLING_SLOT_EFFECTIVE"
+            else:
+                def _incident_recovered(m: dict | None,
+                                        slot_t: datetime = s,
+                                        src: str = sid) -> bool:
+                    # m=None => SKIPPED_LOCKED attempt (no manifest): its
+                    # capture impact is only demonstrably recovered by a
+                    # later effective rescan.
+                    if m is None:
+                        return _later_effective(slot_t)
+                    fr = faults.get((m["run_id"], src), [])
+                    if fr:
+                        return all(r["state"] == "RECOVERED" for r in fr)
+                    return _later_effective(slot_t)
+                ok = all(_incident_recovered(m) for m in inc_mans) \
+                    and all(_incident_recovered(None) for _t in slot_skip)
+                rec["state"] = ("ROLLING_SLOT_INCIDENT_RECOVERED" if ok
+                                else "ROLLING_SLOT_UNRESOLVED")
+            slot_reps.append(rec)
+
+        states = {r["state"] for r in slot_reps}
+        if "ROLLING_SLOT_MISSING_UNEXPLAINED" in states:
             state = "ROLLING_NOT_OPERATING"
-        elif not incidents:
-            state = "ROLLING_EFFECTIVE"
-        elif unresolved:
+        elif "ROLLING_SLOT_UNRESOLVED" in states:
             state = "ROLLING_INCIDENT_UNRESOLVED"
+        elif states == {"ROLLING_SLOT_EFFECTIVE"}:
+            state = "ROLLING_EFFECTIVE"
         else:
             state = "ROLLING_INCIDENT_RECOVERED"
         out[sid] = {
             "state": state,
+            "slots_expected": len(slots),
+            "slots": slot_reps,
+            "slots_unaccounted": [
+                r["slot"] for r in slot_reps
+                if r["state"] in ("ROLLING_SLOT_UNRESOLVED",
+                                  "ROLLING_SLOT_MISSING_UNEXPLAINED")],
             "invocations": len(runs),
-            "effective": len(effective),
-            "incidents": len(incidents),
-            "unresolved_faults": len(unresolved),
+            "effective": len(effective_all),
+            "incidents": len(runs) - len(effective_all),
+            "unresolved_faults": sum(
+                1 for _t, m in runs
+                for r in faults.get((m["run_id"], sid), [])
+                if r["state"] != "RECOVERED"),
             "days_observed_diagnostic": sorted({
                 t.date().isoformat() for t, _m in runs}),
         }
@@ -751,7 +890,9 @@ def recovery_axis(manifests: dict[tuple, dict], relevant_days: set[str],
                     # eligible observation is required — a file captured
                     # only BEFORE the fault proves no loss for that
                     # snapshot but cannot demonstrate post-failure
-                    # content coverage (the daily file mutates intraday).
+                    # content coverage: the daily object may change after
+                    # an earlier observation — finality at the failure
+                    # instant is not established.
                     back = timedelta(hours=lookback_h)
                     days = {d for d in relevant_days
                             if (t_fail - back).date() <= _day(d)
@@ -1190,10 +1331,15 @@ def _collect_reasons(rep: dict):
                            f"{g['start']}..{g['end']}")
     for sid, r in rep["rolling"].items():
         if r["state"] == "ROLLING_NOT_OPERATING":
-            reasons.append(f"rolling rescan never demonstrated operating "
-                           f"for {sid}")
+            unacct = r.get("slots_unaccounted")
+            reasons.append(f"rolling rescan not demonstrated operating "
+                           f"for {sid}"
+                           + (f" (slots unaccounted: {unacct})"
+                              if unacct else ""))
         elif r["state"] == "ROLLING_INCIDENT_UNRESOLVED":
-            reasons.append(f"rolling incident(s) unresolved for {sid}")
+            unacct = r.get("slots_unaccounted")
+            reasons.append(f"rolling incident(s) unresolved for {sid}"
+                           + (f" (slots: {unacct})" if unacct else ""))
     for r in rep["recovery"]:
         if r.get("gate_relevant") and r["state"] != "RECOVERED":
             reasons.append(f"{r['state']} {r['kind']} fault: "
@@ -1376,7 +1522,8 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
             f"counted_days invalid: {counted} (need exactly "
             f"{REQUIRED_COUNTED_DAYS} distinct days inside the window)")
 
-    rolling = rolling_operation(mans, sources, recovery)
+    rolling = rolling_operation(rows, mans, sources, recovery, explained,
+                                t0, tail)
 
     obs_recs: dict[tuple, list] = defaultdict(list)
     for m in mans_all.values():

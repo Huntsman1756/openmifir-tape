@@ -470,31 +470,38 @@ def test_rolling_failed_is_not_operating(tmp_path):
     assert rep["verdict"] != "COMPLETE_SUPPORTED"
 
 
-def test_weekend_rolling_gap_is_diagnostic_only(tmp_path):
-    """Missing rolling on a non-counted calendar day must NOT fail the gate
-    (weekend continuity is not a frozen criterion)."""
-    c = Corpus(tmp_path)
-    fill(c, W0, TAIL_FILL, CANDIDATES)
-    make_setup_proof(c)
-    # remove all rolling activity on Sunday 2026-09-20 (including the raw
-    # objects that invocation alone created)
+def _drop_rolling_day(c: Corpus, day: str) -> None:
+    """Remove all rolling activity on one calendar day (and the raw
+    objects that invocation alone created)."""
     removed = [m for m in c.mans if (
         m["results"]["context"]["mode"] == "rolling"
-        and m["results"]["observed_at"][:10] == "2026-09-20")]
+        and m["results"]["observed_at"][:10] == day)]
     for m in removed:
         for o in m["results"]["objects"]:
             if o["status"] == "CREATED":
                 c.drop_raw(o["source_id"], o["capture_version"],
                            m["results"]["observed_at"][:10])
     c.jrows = [r for r in c.jrows if not (
-        r.get("mode") == "rolling" and r["observed_at"][:10] == "2026-09-20")]
+        r.get("mode") == "rolling" and r["observed_at"][:10] == day)]
     c.mans = [m for m in c.mans if m not in removed]
+
+
+def test_weekend_slot_missing_unexplained_is_not_operating(tmp_path):
+    """The deployed timer is DAILY: a missing Sunday 06:15Z invocation is
+    a missing scheduled slot, not ignorable weekend continuity."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    _drop_rolling_day(c, "2026-09-20")
     rep = c.verify()
     for sid in SOURCES:
         assert "2026-09-20" not in \
             rep["rolling"][sid]["days_observed_diagnostic"]
-        assert rep["rolling"][sid]["state"] == "ROLLING_EFFECTIVE"
-    assert rep["verdict"] == "COMPLETE_SUPPORTED", rep["verdict_reasons"]
+        assert rep["rolling"][sid]["state"] == "ROLLING_NOT_OPERATING"
+        slot = next(r for r in rep["rolling"][sid]["slots"]
+                    if r["slot"].startswith("2026-09-20"))
+        assert slot["state"] == "ROLLING_SLOT_MISSING_UNEXPLAINED"
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
 
 
 def test_bme_discover_failure_recovered_by_daily_file(tmp_path):
@@ -1794,4 +1801,183 @@ def test_bme_discover_missing_daily_file_unrecovered(tmp_path):
     disc = [r for r in rep["recovery"] if r["kind"] == "discover"
             and r["source"] == BME and r["run_id"] == rid(ft)]
     assert disc[0]["state"] == "UNRECOVERED"
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+
+
+# ===================================== v5.1: rolling slot census
+
+def test_single_rolling_cannot_cover_all_slots(tmp_path):
+    """(A) One effective rolling invocation in the whole window cannot
+    prove the daily 06:15Z mechanism was operating: every scheduled slot
+    must be accounted for."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES, rolling=False)
+    make_setup_proof(c)  # creates exactly one rolling: Sep-17 06:15
+    rep = c.verify()
+    for sid in SOURCES:
+        r = rep["rolling"][sid]
+        assert r["state"] == "ROLLING_NOT_OPERATING"
+        assert r["slots_expected"] == 8
+        states = {s["slot"][:10]: s["state"] for s in r["slots"]}
+        assert states["2026-09-17"] == "ROLLING_SLOT_EFFECTIVE"
+        for d in ("2026-09-18", "2026-09-19", "2026-09-20", "2026-09-21",
+                  "2026-09-22", "2026-09-23", "2026-09-24"):
+            assert states[d] == "ROLLING_SLOT_MISSING_UNEXPLAINED"
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+
+
+def test_all_slots_accounted_is_effective(window):
+    """(B) Every expected 06:15Z slot present and successful supports the
+    rolling-operating axis."""
+    rep = window.verify()
+    for sid in SOURCES:
+        r = rep["rolling"][sid]
+        assert r["state"] == "ROLLING_EFFECTIVE"
+        assert r["slots_expected"] == 8
+        assert all(s["state"] == "ROLLING_SLOT_EFFECTIVE"
+                   for s in r["slots"])
+        assert r["slots_unaccounted"] == []
+
+
+def test_failed_slot_with_later_recovery_is_accounted(tmp_path):
+    """(C) One FAILED slot whose capture impact is demonstrably recovered
+    stays a visible incident but the mechanism remains operating."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    rt = datetime(2026, 9, 21, 6, 15, tzinfo=UTC)
+    for m in c.mans:
+        if m["run_id"] == rid(rt) and m["results"]["source_id"] == BLB:
+            m["results"]["status"] = "FAILED"
+            m["results"]["errors"] = ["discover: HTTP 503"]
+    for r in c.jrows:
+        if r["run_id"] == rid(rt) and r.get("source_id") == BLB:
+            r["status"] = "FAILED"
+            r["errors"] = ["discover: HTTP 503"]
+    rr = datetime(2026, 9, 21, 8, 0, tzinfo=UTC)
+    c.run(rr, mode="rolling", objs=[
+        c.capture(BLB, tok(datetime(2026, 9, 21, 0, 0, tzinfo=UTC), 1), rr),
+        c.capture(BLB, tok(datetime(2026, 9, 21, 12, 30, tzinfo=UTC), 1),
+                  rr)])
+    rep = c.verify()
+    slot = next(s for s in rep["rolling"][BLB]["slots"]
+                if s["slot"].startswith("2026-09-21"))
+    assert slot["state"] == "ROLLING_SLOT_INCIDENT_RECOVERED"
+    assert rep["rolling"][BLB]["state"] == "ROLLING_INCIDENT_RECOVERED"
+    assert rep["verdict"] == "COMPLETE_SUPPORTED", rep["verdict_reasons"]
+
+
+def test_missing_slot_sealed_evidence_and_recovery(tmp_path):
+    """(D) A missing slot covered by sealed operational evidence whose
+    rescan duty a later effective invocation fulfils is accounted
+    (explained), and the mechanism may remain operating."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    _drop_rolling_day(c, "2026-09-20")
+    ref, sha = evidence_ref_file(c.root)
+    rep = c.verify(explained=[{
+        "start": "2026-09-20T05:00:00Z",
+        "end": "2026-09-20T09:30:00Z",
+        "reason": "host reboot spanning the 06:15Z timer slot",
+        "evidence_type": "journalctl",
+        "evidence_ref": ref,
+        "evidence_sha256": sha,
+    }])
+    for sid in SOURCES:
+        slot = next(s for s in rep["rolling"][sid]["slots"]
+                    if s["slot"].startswith("2026-09-20"))
+        assert slot["state"] == "ROLLING_SLOT_EXPLAINED_RECOVERED"
+        assert rep["rolling"][sid]["state"] == "ROLLING_INCIDENT_RECOVERED"
+    assert rep["verdict"] == "COMPLETE_SUPPORTED", rep["verdict_reasons"]
+
+
+def test_missing_slot_explained_but_unrecovered_fails(tmp_path):
+    """A missing slot with sealed evidence but NO later effective rescan
+    is explained yet unrecovered -> not accounted."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    # drop the LAST expected slot (Sep-24): no later rescan can exist
+    _drop_rolling_day(c, "2026-09-24")
+    ref, sha = evidence_ref_file(c.root)
+    rep = c.verify(explained=[{
+        "start": "2026-09-24T05:00:00Z",
+        "end": "2026-09-24T06:45:00Z",
+        "reason": "host reboot spanning the 06:15Z timer slot",
+        "evidence_type": "journalctl",
+        "evidence_ref": ref,
+        "evidence_sha256": sha,
+    }])
+    for sid in SOURCES:
+        slot = next(s for s in rep["rolling"][sid]["slots"]
+                    if s["slot"].startswith("2026-09-24"))
+        assert slot["state"] == "ROLLING_SLOT_UNRESOLVED"
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+
+
+def test_missing_slot_no_evidence_not_operating(tmp_path):
+    """(E) A missing weekday slot with no sealed evidence is an
+    unexplained missing scheduled invocation -> NOT operating."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    _drop_rolling_day(c, "2026-09-22")
+    rep = c.verify()
+    for sid in SOURCES:
+        assert rep["rolling"][sid]["state"] == "ROLLING_NOT_OPERATING"
+        assert "2026-09-22T06:15:00+00:00" in \
+            rep["rolling"][sid]["slots_unaccounted"]
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+
+
+def test_skipped_locked_slot_then_recovery(tmp_path):
+    """(F) A SKIPPED_LOCKED rolling attempt is a recorded incident, not a
+    silent absence; a later effective rescan accounts it."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    _drop_rolling_day(c, "2026-09-20")
+    c.skipped(datetime(2026, 9, 20, 6, 15, tzinfo=UTC), mode="rolling")
+    rep = c.verify()
+    for sid in SOURCES:
+        slot = next(s for s in rep["rolling"][sid]["slots"]
+                    if s["slot"].startswith("2026-09-20"))
+        assert slot["state"] == "ROLLING_SLOT_INCIDENT_RECOVERED"
+        assert rep["rolling"][sid]["state"] == "ROLLING_INCIDENT_RECOVERED"
+    assert rep["verdict"] == "COMPLETE_SUPPORTED", rep["verdict_reasons"]
+
+
+def test_skipped_locked_slot_unrecovered_fails(tmp_path):
+    """A SKIPPED_LOCKED attempt with no later effective rescan is an
+    unrecovered incident -> not accounted."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    _drop_rolling_day(c, "2026-09-24")
+    c.skipped(datetime(2026, 9, 24, 6, 15, tzinfo=UTC), mode="rolling")
+    rep = c.verify()
+    for sid in SOURCES:
+        slot = next(s for s in rep["rolling"][sid]["slots"]
+                    if s["slot"].startswith("2026-09-24"))
+        assert slot["state"] == "ROLLING_SLOT_UNRESOLVED"
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+
+
+def test_extra_rolling_cannot_hide_missing_slot(tmp_path):
+    """(G) Extra successful rolling invocations on other days cannot
+    compensate for one unexplained missing scheduled slot."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    _drop_rolling_day(c, "2026-09-20")
+    for t in (datetime(2026, 9, 18, 12, 0, tzinfo=UTC),
+              datetime(2026, 9, 22, 9, 30, tzinfo=UTC)):
+        c.run(t, mode="rolling",
+              objs=[c.capture(BME, bme_key("2026-09-18"), t)])
+    rep = c.verify()
+    for sid in SOURCES:
+        assert rep["rolling"][sid]["state"] == "ROLLING_NOT_OPERATING"
+        assert "2026-09-20T06:15:00+00:00" in \
+            rep["rolling"][sid]["slots_unaccounted"]
     assert rep["verdict"] != "COMPLETE_SUPPORTED"
