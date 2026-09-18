@@ -1,0 +1,72 @@
+# config/sources/bme_apa.yaml
+# Canonical source interface descriptor for the BME APA post-trade source.
+# Referenced by docs/gates/G0.md §1 (source_id = bme_apa). Facts, not semantics.
+# Reviewed: 2026-09-14. RESOLVED by inspecting the official page's own JS bundle
+# (observed route, not guessed).
+
+source_id: bme_apa
+display: BME APA
+kind: post-trade transparency
+publication_format: json
+mic: BMEA
+
+entrypoint:
+  status: RESOLVED
+  # The post-trade data is confirmed to be freely accessible JSON files, and the
+  # deterministic machine listing is now known. OBSERVED ROUTE (from the page's
+  # own JS bundle, assetstaxonomyfilterteaserlist clientlib):
+  #   the AEM taxonomy-filter component fetches `${componentPath}.results.json`,
+  #   where componentPath is the page's data-six-component-path. That endpoint
+  #   returns {"results":[{"url":..., "publicationDate":<epoch-millis>}, ...]}.
+  # Source of the route:
+  #   https://www.bolsasymercados.es/etc.clientlibs/bme/components/taxonomy/assetstaxonomyfilterteaserlist/clientlibs.min.ACSHASH1a557443cbc929531f4e1c988e34c8ca.js
+  #   (contains `fetch(`${e}.results.json`)` where e = componentPath)
+  base_doc: https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html
+  listing_url: https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data/_jcr_content/root/containers/container/grid/container0/assetstaxonomyfilter.results.json
+  file_pattern: "https://www.bolsasymercados.es/dam/descargas/servicios-regulatorios/bme-post-trade/<YYYY-MM-DD>-bmea-posttrade.json"
+  base_url: ""            # optional operator override; listing_url is canonical
+
+access_mode: PUBLIC_HTTP_GET
+
+publication_timestamp_semantics:
+  status: RESOLVED
+  note: >-
+    Each result carries publicationDate as Unix epoch MILLISECONDS. The adapter
+    converts it to UTC ISO-8601 and records it as the source publication
+    timestamp. A few historical entries carry sub-second precision; conversion
+    truncates to microseconds. Daily files keyed on the date in the file name.
+
+retrieval_interval:
+  poll_max_seconds: 3600       # <= 1 hour
+  overlap_min_seconds: 7200    # >= 2 hours
+  rescan:
+    daily_window_hours: 24     # previous 24h, keyed on publication_timestamp
+    rolling_days: 7
+
+retry_policy:
+  status: PARTIAL
+  max_attempts: 3
+  backoff_seconds: [10, 60, 300]
+  note: "Fail closed on listing resolution; never rewrite history on retry. Confirm exact policy with operator."
+
+capture_identity_fields:
+  status: RESOLVED
+  fields:
+    - "file_name_date"          # <YYYY-MM-DD>-bmea-posttrade.json
+  note: >-
+    Source object identity is the per-day BME post-trade JSON file. Record-level
+    trade identity is G0-D scope. No heuristics.
+
+terms_of_use:
+  status: VERIFIED
+  summary: >-
+    BME states the data is owned by the Company and may only be downloaded,
+    copied and printed for personal use; the information is intended exclusively
+    for internal use. Any commercial use and/or non-free redistribution to third
+    parties requires prior express authorisation of BME Market Data
+    (marketdata@grupobme.es).
+  artifact_classes:            # preliminary mapping; finalized in G0-L1
+    local_archival: "UNRESOLVED"
+    free_delayed_redistribution: "UNRESOLVED"
+    historical_archive_republication: "UNRESOLVED"
+  source_url: https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html

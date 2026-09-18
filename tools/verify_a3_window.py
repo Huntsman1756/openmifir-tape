@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only G0-A3 capture-window adjudication (DRAFT v4 — pre-preregistration).
+"""Read-only G0-A3 capture-window adjudication (DRAFT v5 — pre-preregistration).
 
 Adjudicates an A3 evidence bundle against the FROZEN contract
 (docs/gates/G0.md §2 G0-A, baseline g0-freeze-v1) as implemented by the
@@ -19,18 +19,30 @@ Verdicts:
     REVIEW_REQUIRED     structural anomalies must be resolved before verdict
     COMPONENT_MODE      axis-level evaluation only; can never assert the gate
 
+Sealed profile (ACTIVE_G0_A3_PROFILE):
+
+    Gate mode (component=False) adjudicates exactly ONE preregistered
+    window — profile parameters and descriptor fingerprints are checked
+    before evaluation and any divergence is a structural anomaly, so
+    COMPLETE_SUPPORTED is unreachable by bypassing preregistered
+    decisions with different CLI parameters. The source descriptors are
+    pinned by exact-byte SHA-256 at efd2268: the adjudicator cannot
+    silently inherit a modified acquisition-endpoint policy.
+
 Time model (all bounds preregistered, no post-hoc choice):
 
     operational_start     first declared invocation instant
     subject_period_end    end of the last candidate trading day
-    evidence_tail_end     preregistered recovery tail: the acquisition
-                          schedule is expected to run through it, and
-                          evidence inside it may only (a) observe/recover
-                          objects whose source day belongs to a counted
-                          day, (b) resolve faults originating in the
-                          subject period, (c) demonstrate the final
-                          rescan/recovery state. It can never create a
-                          sixth counted day or repair unrelated faults.
+    evidence_tail_end     preregistered recovery tail. Chosen to include
+                          the post-midnight polls, the scheduled 06:15Z
+                          rolling rescan, and a following poll / small
+                          observation margin. Evidence inside it may
+                          only (a) observe/recover objects whose source
+                          day belongs to a counted day, (b) resolve
+                          faults originating in the subject period,
+                          (c) demonstrate the final rescan/recovery
+                          state. It can never create a sixth counted
+                          day or repair unrelated faults.
 
 Design rules (frozen-spec-subordinate):
 
@@ -47,7 +59,10 @@ Design rules (frozen-spec-subordinate):
   no manifests expected); it counts on the axis of its recorded mode.
 - Evidence is scoped: only journal rows and manifests inside
   [start, tail_end] are eligible. Pre-window smoke and post-tail runs can
-  neither create coverage nor repair faults.
+  neither create coverage nor repair faults. Structural checks follow
+  the same policy: problems on clearly-timestamped out-of-window records
+  are diagnostics; problems inside the window — or on records with no
+  parseable time at all — remain anomalies (fail closed).
 - Exactly five distinct counted trading days are required for the gate
   verdict. Day-1 fallback is deterministic over the preregistered
   candidate set: if the setup day is demonstrated complete it is counted
@@ -57,10 +72,16 @@ Design rules (frozen-spec-subordinate):
   manifest with that run's observation_utc, including ALREADY_PRESENT.
   ``.meta.yaml`` is write-once metadata of the FIRST capture of that
   version at that collection_date and may legitimately predate the window
-  (pre-operational smoke captures). Rule: ``meta.observation_utc`` must be
-  <= the earliest known observation of that stored version at that
+  (pre-operational smoke captures). Rules: ``meta.observation_utc`` must
+  be <= the earliest known observation of that stored version at that
   collection_date; a meta claiming first write AFTER a manifest-recorded
-  observation is a structural anomaly.
+  observation is a structural anomaly. Identity/integrity fields
+  (source_id, source_object_id, capture_version, filename,
+  collection_date, raw_sha256, size_bytes, write_once) reconcile against
+  every observation; observational fields (publication_timestamp,
+  provenance_url) are first-write records reconciled only against a
+  manifest observation made at meta.observation_utc — later
+  ALREADY_PRESENT observations may legitimately differ.
 - BAPA-POST2 filename tokens have unverified semantics. They are treated
   with the deployed conservative margin (UNVERIFIED_TS_MARGIN = 6h): a
   demonstrated reach provably covers only [oldest+margin, newest-margin].
@@ -76,8 +97,14 @@ Design rules (frozen-spec-subordinate):
   relevant only if the key's day is a counted day.
   Discovery faults carry an at-risk interval:
       bme_apa   — deterministic object set: candidate daily files inside
-                  the failed run's discovery lookback. RECOVERED iff every
-                  at-risk counted day's file has >=1 eligible observation.
+                  the failed run's discovery lookback. Recovery is
+                  temporal: RECOVERED iff every at-risk COUNTED day's
+                  file has >=1 eligible observation AFTER the failure
+                  instant (a pre-failure snapshot cannot demonstrate
+                  post-failure content coverage — the file mutates
+                  intraday). All observed only pre-failure =>
+                  AT_RISK_OBJECT_ALREADY_CAPTURED_BEFORE_FAILURE
+                  (explicit, not recovery); any missing => UNRECOVERED.
       blb_apae  — at-risk interval = (latest previous successful discovery
                   of that source, failure instant], lower-bounded by the
                   declared operational start (and the failed run's own
@@ -148,6 +175,38 @@ RUN_STATUSES = {"SUCCEEDED", "PARTIAL", "FAILED", "NOT_RUN"}
 # payload-provenance allowlists.
 _ACQ_ENTRYPOINT_KEYS = ("listing_url", "public_data_page", "base_url")
 
+# ---------------------------------------------------------------
+# SEALED adjudication profile — the preregistered active G0-A3 window.
+# Gate mode (component=False) adjudicates THIS profile only: any CLI
+# divergence is a structural anomaly and COMPLETE_SUPPORTED is
+# unreachable. Component mode remains parameterized for axis testing.
+#
+# evidence_tail_end rationale: the tail must include the post-midnight
+# polls, the scheduled 06:15Z rolling rescan, and a following poll /
+# small observation margin — NOT merely "first poll + margin".
+#
+# descriptor_sha256: exact-byte fingerprints of the source descriptors
+# at the DEPLOYED revision efd2268. The adjudicator claims to evaluate
+# efd2268; a modified descriptor changes which acquisition hosts are
+# acceptable, so a mismatch is REVIEW_REQUIRED, never silent use.
+ACTIVE_G0_A3_PROFILE = {
+    "profile_id": "g0-a3-es-corporate-bonds-2026-09",
+    "operational_start": "2026-09-16T09:42:46+00:00",
+    "subject_period_end": "2026-09-23T23:59:59+00:00",
+    "evidence_tail_end": "2026-09-24T07:00:00+00:00",
+    "candidate_days": ["2026-09-16", "2026-09-17", "2026-09-18",
+                       "2026-09-21", "2026-09-22", "2026-09-23"],
+    "setup_day": "2026-09-16",
+    "descriptor_sha256": {
+        "bme_apa.yaml":
+            "c1f9a355bdc0f1f8e196af2d18c932f3c37b1a713a1e5484d9b574b0d0606e56",
+        "bloomberg_apae.yaml":
+            "b02049d01c83d3532c8e2e23a385452a5558b541d16b6f9b23c5eb27070322fd",
+    },
+}
+PROFILE_SHA256 = hashlib.sha256(
+    json.dumps(ACTIVE_G0_A3_PROFILE, sort_keys=True).encode()).hexdigest()
+
 
 def _iso(s) -> datetime | None:
     """Strict ISO-8601 with explicit timezone; naive input returns None."""
@@ -213,10 +272,25 @@ def _day_bounds(d: str) -> tuple[datetime, datetime]:
     return start, start + timedelta(days=1)
 
 
+def _scoped(anomalies: list[str], diagnostics: dict, msg: str,
+            t: datetime | None, t0: datetime, tail: datetime) -> None:
+    """Temporal scoping policy: structural problems inside the eligible
+    window are gate-relevant anomalies; clearly timestamped records
+    outside it are diagnostics only; records with NO parseable time are
+    unscopable and stay anomalies (fail closed)."""
+    if t is None or t0 <= t <= tail:
+        anomalies.append(msg)
+    else:
+        diagnostics.setdefault("out_of_window_structural", []).append(msg)
+
+
 # ------------------------------------------------------------------ loading
 
-def load_journal(path: Path, anomalies: list[str]) -> list[dict]:
-    """Byte-level read: invalid UTF-8 per line is an anomaly, not a crash."""
+def load_journal(path: Path, anomalies: list[str], diagnostics: dict,
+                 t0: datetime, tail: datetime) -> list[dict]:
+    """Byte-level read: invalid UTF-8 per line is an anomaly, not a crash.
+    Rows whose only scoping signal (run_id) is outside the window are
+    diagnostics; unscopable rows stay anomalies."""
     rows = []
     try:
         blob = path.read_bytes()
@@ -242,39 +316,67 @@ def load_journal(path: Path, anomalies: list[str]) -> list[dict]:
         row["_line"] = i
         row["_t"] = _iso(row.get("observed_at"))
         if row["_t"] is None:
-            anomalies.append(
-                f"journal line {i}: missing/naive/unparseable observed_at "
-                f"{row.get('observed_at')!r}")
+            _scoped(anomalies, diagnostics,
+                    f"journal line {i}: missing/naive/unparseable "
+                    f"observed_at {row.get('observed_at')!r}",
+                    _run_id_time(row.get("run_id") or ""), t0, tail)
         rows.append(row)
     return rows
 
 
-def load_manifests(runs_dir: Path, anomalies: list[str]) -> dict[tuple, dict]:
+def load_manifests(runs_dir: Path, anomalies: list[str], diagnostics: dict,
+                   t0: datetime, tail: datetime) -> dict[tuple, dict]:
     """Manifests keyed (run_id, source_id); duplicates flagged, not merged.
-    Filename must equal '<run_id>__<source_id>__manifest.yaml' of contents."""
+    Filename must equal '<run_id>__<source_id>__manifest.yaml' of contents.
+    Problems are scoped by observed_at, else run_id (content or filename):
+    inside the window = anomaly, outside = diagnostic, unscopable =
+    anomaly."""
     manifests: dict[tuple, dict] = {}
+
+    def _scope_time(m, fname):
+        if isinstance(m, dict):
+            t = _iso((m.get("results") or {}).get("observed_at"))
+            if t is not None:
+                return t
+            rid_ = m.get("run_id")
+            if rid_:
+                return _run_id_time(str(rid_))
+        return _run_id_time(str(fname).split("__")[0])
+
     for p in sorted(runs_dir.glob("*__manifest.yaml")):
+        m = None
         try:
             m = yaml.safe_load(p.read_bytes().decode("utf-8"))
         except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
-            anomalies.append(f"manifest {p.name}: unreadable/malformed ({exc})")
+            _scoped(anomalies, diagnostics,
+                    f"manifest {p.name}: unreadable/malformed ({exc})",
+                    _scope_time(None, p.name), t0, tail)
             continue
         if not isinstance(m, dict) or not isinstance(m.get("results"), dict):
-            anomalies.append(f"manifest {p.name}: missing 'results' object")
+            _scoped(anomalies, diagnostics,
+                    f"manifest {p.name}: missing 'results' object",
+                    _scope_time(m, p.name), t0, tail)
             continue
         key = (m.get("run_id"), m["results"].get("source_id"))
         if None in key:
-            anomalies.append(f"manifest {p.name}: missing run_id/source_id")
+            _scoped(anomalies, diagnostics,
+                    f"manifest {p.name}: missing run_id/source_id",
+                    _scope_time(m, p.name), t0, tail)
             continue
         if p.name != f"{key[0]}__{key[1]}__manifest.yaml":
-            anomalies.append(f"manifest filename/content mismatch: {p.name}")
+            _scoped(anomalies, diagnostics,
+                    f"manifest filename/content mismatch: {p.name}",
+                    _scope_time(m, p.name), t0, tail)
             continue
         if _iso(m["results"].get("observed_at")) is None:
-            anomalies.append(
-                f"manifest {p.name}: missing/naive/unparseable observed_at")
+            _scoped(anomalies, diagnostics,
+                    f"manifest {p.name}: missing/naive/unparseable "
+                    f"observed_at", _scope_time(m, p.name), t0, tail)
             continue
         if key in manifests:
-            anomalies.append(f"duplicate manifest for {key}: {p.name}")
+            _scoped(anomalies, diagnostics,
+                    f"duplicate manifest for {key}: {p.name}",
+                    _scope_time(m, p.name), t0, tail)
             continue
         m["_path"] = p.name
         manifests[key] = m
@@ -284,43 +386,59 @@ def load_manifests(runs_dir: Path, anomalies: list[str]) -> dict[tuple, dict]:
 # ------------------------------------------------------- structural checks
 
 def check_journal_shape(rows: list[dict], sources: set[str],
-                        eligible: set[int], anomalies: list[str]) -> dict:
-    """Schema + duplicate detection BEFORE any dict conversion."""
+                        eligible: set[int], anomalies: list[str],
+                        diagnostics: dict) -> dict:
+    """Schema + duplicate detection BEFORE any dict conversion. Problems
+    on eligible rows are anomalies; clearly out-of-window rows are
+    diagnostics; unscopable rows stay anomalies."""
     run_rows, skipped = [], []
+
+    def _emit(msg, r):
+        if _attempt_time(r) is None or id(r) in eligible:
+            anomalies.append(msg)
+        else:
+            diagnostics.setdefault("out_of_window_structural",
+                                   []).append(msg)
+
     for r in rows:
         st = r.get("status")
         mode = r.get("mode")
         if mode is not None and mode not in VALID_MODES:
-            anomalies.append(f"journal line {r['_line']}: unknown mode "
-                             f"{mode!r}")
+            _emit(f"journal line {r['_line']}: unknown mode {mode!r}", r)
         if st == "SKIPPED_LOCKED":
             if r.get("source_id"):
-                anomalies.append(f"journal line {r['_line']}: "
-                                 f"SKIPPED_LOCKED carries source_id")
+                _emit(f"journal line {r['_line']}: SKIPPED_LOCKED carries "
+                      f"source_id", r)
             skipped.append(r)
             continue
         if r.get("source_id"):
             for f in ("run_id", "observed_at", "mode", "status"):
                 if r.get(f) is None:
-                    anomalies.append(f"journal line {r['_line']}: "
-                                     f"missing field {f!r}")
+                    _emit(f"journal line {r['_line']}: missing field "
+                          f"{f!r}", r)
             if st not in RUN_STATUSES:
-                anomalies.append(f"journal line {r['_line']}: unknown "
-                                 f"status {st!r}")
+                _emit(f"journal line {r['_line']}: unknown status {st!r}",
+                      r)
             run_rows.append(r)
         else:
-            anomalies.append(f"journal line {r['_line']}: row has neither "
-                             f"source_id nor SKIPPED_LOCKED status")
+            _emit(f"journal line {r['_line']}: row has neither source_id "
+                  f"nor SKIPPED_LOCKED status", r)
 
     counts = Counter((r["run_id"], r["source_id"]) for r in run_rows
                      if r.get("run_id") and r.get("source_id"))
     for (rid_, sid), n in counts.items():
         if n > 1:
-            modes = sorted({r.get("mode") for r in run_rows
-                            if r.get("run_id") == rid_
-                            and r.get("source_id") == sid})
-            anomalies.append(f"duplicate journal rows for "
-                             f"({rid_}, {sid}) modes={modes}: {n}")
+            grp = [r for r in run_rows if r.get("run_id") == rid_
+                   and r.get("source_id") == sid]
+            modes = sorted({r.get("mode") for r in grp})
+            msg = (f"duplicate journal rows for ({rid_}, {sid}) "
+                   f"modes={modes}: {n}")
+            if any(id(r) in eligible or _attempt_time(r) is None
+                   for r in grp):
+                anomalies.append(msg)
+            else:
+                diagnostics.setdefault("out_of_window_structural",
+                                       []).append(msg)
 
     skipped_ids = {r.get("run_id") for r in skipped}
     # per-run source census restricted to eligible rows
@@ -334,7 +452,13 @@ def check_journal_shape(rows: list[dict], sources: set[str],
             anomalies.append(f"run {rid_}: missing source rows "
                              f"{sorted(missing)}")
     for s in sorted({r["source_id"] for r in run_rows} - sources):
-        anomalies.append(f"journal references unconfigured source {s!r}")
+        grp = [r for r in run_rows if r["source_id"] == s]
+        msg = f"journal references unconfigured source {s!r}"
+        if any(id(r) in eligible or _attempt_time(r) is None for r in grp):
+            anomalies.append(msg)
+        else:
+            diagnostics.setdefault("out_of_window_structural",
+                                   []).append(msg)
     return {"run_rows": run_rows, "skipped": skipped}
 
 
@@ -623,22 +747,37 @@ def recovery_axis(manifests: dict[tuple, dict], relevant_days: set[str],
                 if sid == "bme_apa":
                     # source-semantic: BME's expected object set is the
                     # deterministic daily file inside the discovery
-                    # lookback. A file observed at ANY eligible instant
-                    # demonstrably was not missed by this failure.
+                    # lookback. Recovery is TEMPORAL: a post-failure
+                    # eligible observation is required — a file captured
+                    # only BEFORE the fault proves no loss for that
+                    # snapshot but cannot demonstrate post-failure
+                    # content coverage (the daily file mutates intraday).
                     back = timedelta(hours=lookback_h)
                     days = {d for d in relevant_days
                             if (t_fail - back).date() <= _day(d)
                             <= t_fail.date()}
-                    missing = [d for d in days
-                               if not obs.get(
-                                   (sid, f"{d}-bmea-posttrade.json"))]
-                    relevant = bool(days & counted)
+                    days_c = sorted(days & counted)
+                    missing, pre_only = [], []
+                    for d in days_c:
+                        ob = obs.get((sid, f"{d}-bmea-posttrade.json"), [])
+                        if not ob:
+                            missing.append(d)
+                        elif not any(t > t_fail for t in ob):
+                            pre_only.append(d)
+                    if not missing and not pre_only:
+                        state = "RECOVERED"
+                    elif missing:
+                        state = "UNRECOVERED"
+                    else:
+                        state = ("AT_RISK_OBJECT_ALREADY_CAPTURED_"
+                                 "BEFORE_FAILURE")
                     out.append({**base, "kind": "discover",
                                 "affected_day": fail_day,
                                 "days_at_risk": sorted(days),
-                                "state": "INDETERMINATE" if missing
-                                else "RECOVERED",
-                                "gate_relevant": relevant})
+                                "days_at_risk_counted": days_c,
+                                "days_pre_failure_only": pre_only or None,
+                                "state": state,
+                                "gate_relevant": bool(days_c)})
                 else:
                     # at-risk interval: publications after the latest
                     # previous successful discovery, up to the failure
@@ -770,10 +909,29 @@ def setup_day_proof(setup_day: str, start: datetime,
     lo = day0 - UNVERIFIED_TS_MARGIN
     hi = start + UNVERIFIED_TS_MARGIN
 
-    unresolved = [r for r in recovery
-                  if r["source"] == "blb_apae" and r["state"] != "RECOVERED"
-                  and (r["kind"] == "discover"
-                       or r["affected_day"] == setup_day)]
+    # Fault relevance is interval-aware, NOT window-global: the setup
+    # proof covers the pre-activation interval [00:00Z, activation], so
+    # only faults whose at-risk interval intersects it can block. A
+    # discover fault on a later candidate day (e.g. Sep-23) must NOT
+    # make Sep-16 fail its proof — that would create a circular
+    # dependency (fault on candidate N forces fallback onto day N).
+    # Within the eligible-evidence model at-risk lower bounds are
+    # clamped to operational_start, so discover faults cannot reach
+    # the pre-activation interval; fetch/store faults on setup-day
+    # objects still block via affected_day.
+    unresolved = []
+    for r in recovery:
+        if r["source"] != "blb_apae" or r["state"] == "RECOVERED":
+            continue
+        if r["kind"] == "discover":
+            lo2 = _iso((r.get("at_risk") or {}).get("start"))
+            hi2 = _iso((r.get("at_risk") or {}).get("end"))
+            hits = (lo2 is not None and hi2 is not None
+                    and lo2 < start and hi2 > day0)
+        else:
+            hits = r["affected_day"] == setup_day
+        if hits:
+            unresolved.append(r)
     proof = []
     for m in manifests.values():
         res = m["results"]
@@ -814,7 +972,7 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                   all_manifests: dict[tuple, dict],
                   acq_hosts: dict[str, set], anomalies: list[str],
                   diagnostics: dict, start: datetime, end: datetime,
-                  obs_all: dict) -> dict:
+                  obs_recs: dict) -> dict:
     """Per-object integrity for ELIGIBLE manifests, resolved at the exact
     deployed path raw/<sid>/<observed_at[:10]>/<sanitized key>/<cv>.
 
@@ -916,13 +1074,12 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                 anomalies.append(f"meta not a mapping: {mp}")
                 failed += 1
                 continue
+            # Immutable identity/integrity fields reconcile against EVERY
+            # observation (same bytes => same identity, always).
             expected = {"source_id": sid, "source_object_id": key,
                         "capture_version": cv, "filename": f.name,
                         "collection_date": coldate, "raw_sha256": digest,
                         "size_bytes": o.get("size_bytes"),
-                        "publication_timestamp":
-                            o.get("publication_timestamp"),
-                        "provenance_url": o.get("provenance_url"),
                         "write_once": True}
             for f2, want in expected.items():
                 if meta.get(f2) != want:
@@ -933,7 +1090,8 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
             # first-write semantics: meta.observation_utc may legitimately
             # predate the window, but must never be later than the earliest
             # known observation of this version at this collection_date.
-            known = [t for t in obs_all.get((sid, key, cv), [])
+            recs = obs_recs.get((sid, key, cv), [])
+            known = [t for t, _o in recs
                      if t.date().isoformat() == coldate]
             meta_obs = _iso(meta.get("observation_utc"))
             if meta_obs is None:
@@ -946,6 +1104,24 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                     f"meta observation_utc later than first known "
                     f"observation at {coldate}: {rid}/{sid}/{key}")
                 failed += 1
+            # Observational fields (publication_timestamp, provenance_url)
+            # are first-write records: they reconcile ONLY against the
+            # manifest observation made at meta.observation_utc (the
+            # first-write record itself). Later ALREADY_PRESENT
+            # re-observations may legitimately carry different
+            # observational metadata for identical bytes — never compare
+            # them blindly.
+            fw = [of for t, of in recs
+                  if t == meta_obs
+                  and t.date().isoformat() == coldate]
+            if fw:
+                for f2 in ("publication_timestamp", "provenance_url"):
+                    if meta.get(f2) != fw[0].get(f2):
+                        anomalies.append(
+                            f"meta field {f2!r} vs first-write record "
+                            f"mismatch {rid}/{sid}/{key}: "
+                            f"{meta.get(f2)!r} != {fw[0].get(f2)!r}")
+                        failed += 1
 
     # -- orphans attributed to the window (both directions)
     files = [p for p in raw_root.rglob("*") if p.is_file()]
@@ -1048,8 +1224,44 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
         raise ValueError("invalid --tail-end (must be explicit UTC "
                          "ISO-8601, >= --end)")
 
-    sources, acq_hosts = set(), {}
     anomalies: list[str] = []
+    diagnostics: dict = {}
+
+    # ---- sealed profile: gate mode adjudicates ONE preregistered window
+    profile_anoms: list[str] = []
+    if not component:
+        prof = ACTIVE_G0_A3_PROFILE
+        if t0 != _iso(prof["operational_start"]):
+            profile_anoms.append(
+                f"profile: operational_start != preregistered "
+                f"{prof['operational_start']}")
+        if t1 != _iso(prof["subject_period_end"]):
+            profile_anoms.append(
+                f"profile: subject_period_end != preregistered "
+                f"{prof['subject_period_end']}")
+        if tail_end is None:
+            profile_anoms.append(
+                "profile: evidence_tail_end is mandatory for the active "
+                "G0-A3 adjudication and was omitted")
+        elif tail != _iso(prof["evidence_tail_end"]):
+            profile_anoms.append(
+                f"profile: evidence_tail_end != preregistered "
+                f"{prof['evidence_tail_end']}")
+        if setup_day is None:
+            profile_anoms.append(
+                "profile: setup_day is mandatory for the active G0-A3 "
+                "adjudication (six candidates, deterministic fallback)")
+        elif setup_day != prof["setup_day"]:
+            profile_anoms.append(
+                f"profile: setup_day {setup_day!r} != preregistered "
+                f"{prof['setup_day']!r}")
+        if sorted(candidate_days) != prof["candidate_days"]:
+            profile_anoms.append(
+                f"profile: candidate_days != preregistered "
+                f"{prof['candidate_days']}")
+        anomalies.extend(profile_anoms)
+
+    sources, acq_hosts = set(), {}
     for p in sorted(config.glob("*.yaml")):
         conf = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         if conf.get("source_id"):
@@ -1062,11 +1274,32 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
             anomalies.append(f"descriptor {sid}: no acquisition endpoint "
                              f"hosts derivable")
 
+    # ---- descriptor fingerprints: the adjudicator claims to evaluate
+    # efd2268; a modified descriptor silently changes which acquisition
+    # hosts are acceptable. Exact-byte match is the frozen authority.
+    desc_fp = {}
+    expected_desc = ACTIVE_G0_A3_PROFILE["descriptor_sha256"]
+    for name, want in sorted(expected_desc.items()):
+        p = config / name
+        got = _sha256(p) if p.is_file() else None
+        desc_fp[name] = {"expected_sha256": want, "observed_sha256": got,
+                         "match": got == want}
+        if got != want:
+            anomalies.append(
+                f"descriptor fingerprint mismatch {name}: observed "
+                f"{got or 'MISSING'} != efd2268 {want}")
+    extra_desc = sorted(p.name for p in config.glob("*.yaml")
+                        if p.name not in expected_desc)
+    if extra_desc:
+        anomalies.append(
+            f"unexpected source descriptors not in efd2268 profile: "
+            f"{extra_desc}")
+
     explained, exp_problems = load_explained(explained_gaps)
     anomalies.extend(exp_problems)
 
-    rows_all = load_journal(journal, anomalies)
-    mans_all = load_manifests(runs, anomalies)
+    rows_all = load_journal(journal, anomalies, diagnostics, t0, tail)
+    mans_all = load_manifests(runs, anomalies, diagnostics, t0, tail)
 
     # evidence scoping: only evidence inside [start, tail_end] is eligible
     def _eligible_row(r):
@@ -1079,7 +1312,8 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
             if (t := _iso(m["results"].get("observed_at")))
             and t0 <= t <= tail}
 
-    shape = check_journal_shape(rows_all, sources, eligible_ids, anomalies)
+    shape = check_journal_shape(rows_all, sources, eligible_ids,
+                                anomalies, diagnostics)
     crosscheck(rows, mans, anomalies)
 
     sched = {"poll": poll_axis(rows, t0, tail, explained)}
@@ -1144,23 +1378,29 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
 
     rolling = rolling_operation(mans, sources, recovery)
 
-    obs_all: dict[tuple, list] = defaultdict(list)
+    obs_recs: dict[tuple, list] = defaultdict(list)
     for m in mans_all.values():
         t = _iso(m["results"].get("observed_at"))
         for o in m["results"].get("objects") or []:
             if o.get("source_object_id") and o.get("capture_version") and t:
-                obs_all[(m["results"]["source_id"],
-                         o["source_object_id"],
-                         o["capture_version"])].append(t)
+                obs_recs[(m["results"]["source_id"],
+                          o["source_object_id"],
+                          o["capture_version"])].append((t, o))
 
-    diagnostics: dict = {}
     integrity = raw_integrity(raw, mans, mans_all, acq_hosts, anomalies,
-                              diagnostics, t0, tail, obs_all)
+                              diagnostics, t0, tail, obs_recs)
     coverage = coverage_axis(mans, raw, counted, recovery)
 
     rep = {
         "authority": {"frozen": "g0-freeze-v1", "deployed_sha": "efd2268",
                       "note": "main-line fixes are NOT assumed deployed"},
+        "profile": {
+            "id": ACTIVE_G0_A3_PROFILE["profile_id"],
+            "sha256": PROFILE_SHA256,
+            "mode": "component" if component else "gate",
+            "parameters_match": (True if component
+                                 else not profile_anoms)},
+        "descriptor_fingerprints": desc_fp,
         "window": {"operational_start": t0.isoformat(),
                    "subject_period_end": t1.isoformat(),
                    "evidence_tail_end": tail.isoformat(),

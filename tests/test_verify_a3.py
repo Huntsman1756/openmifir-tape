@@ -1,9 +1,10 @@
-"""Synthetic adversarial corpus for tools/verify_a3_window.py (v3).
+"""Synthetic adversarial corpus for tools/verify_a3_window.py (v5).
 
 Every fixture is generated: raw payloads are arbitrary bytes written through
-the real RawStore (so the raw/meta layout matches the deployed collector),
-and journal/manifests reproduce the deployed efd2268 schema. No provider
-data and no accrued A3 evidence is ever read.
+the frozen efd2268 store_capture (so the raw/meta layout matches the deployed
+collector), source descriptors are the exact deployed bytes (sealed by
+fingerprint), and journal/manifests reproduce the deployed efd2268 schema.
+No provider data and no accrued A3 evidence is ever read.
 
 Gate-level tests use the preregistered six-candidate set
 {16,17,18,21,22,23} with deterministic Day-1 fallback. Single-day and
@@ -24,7 +25,7 @@ from tools.a3_efd2268_compat import (
     sanitize_filename,
     store_capture,
 )
-from tools.verify_a3_window import verify
+from tools.verify_a3_window import PROFILE_SHA256, verify
 
 SOURCES = ("bme_apa", "blb_apae")
 HOSTS = {"bme_apa": "www.bolsasymercados.es",
@@ -39,6 +40,11 @@ W0 = datetime(2026, 9, 16, 9, 42, 46, tzinfo=UTC)   # declared op start
 W1 = datetime(2026, 9, 23, 23, 59, 59, tzinfo=UTC)  # subject-period end
 TAIL = datetime(2026, 9, 24, 7, 0, tzinfo=UTC)      # preregistered tail end
 TAIL_FILL = datetime(2026, 9, 24, 6, 42, 46, tzinfo=UTC)  # last tail poll
+
+# Exact deployed source descriptors (efd2268), fingerprinted by the
+# sealed adjudication profile.
+EFD2268_DESC_DIR = (Path(__file__).parent / "fixtures"
+                    / "efd2268_descriptors")
 
 
 def iso(t: datetime) -> str:
@@ -84,18 +90,12 @@ class Corpus:
         self.mans: list[dict] = []
         for d in (self.raw, self.runs, self.cfg):
             d.mkdir(parents=True, exist_ok=True)
-        for sid in SOURCES:
-            # efd2268-era descriptor: no allowed_hosts; acquisition hosts
-            # come only from entrypoint fields the deployed adapters read.
-            (self.cfg / f"{sid}.yaml").write_text(yaml.safe_dump(
-                {"source_id": sid,
-                 "source_url": f"https://{HOSTS[sid]}/post-trade-data.html",
-                 "info_page": "https://www.bloombergapa.net/info"
-                 if sid == BLB else f"https://{HOSTS[sid]}/about",
-                 "entrypoint": {
-                     "listing_url" if sid == BME else "public_data_page":
-                     f"https://{HOSTS[sid]}/listing.json",
-                     "base_url": f"https://{HOSTS[sid]}/"}}))
+        # The deployed efd2268 descriptors verbatim: the verifier seals
+        # them by exact-byte SHA-256, so the corpus must reproduce the
+        # real bytes (checked into tests/fixtures/efd2268_descriptors/).
+        for name in ("bme_apa.yaml", "bloomberg_apae.yaml"):
+            (self.cfg / name).write_bytes(
+                (EFD2268_DESC_DIR / name).read_bytes())
 
     # -- raw objects -----------------------------------------------------
     def capture(self, source, key, t, data=None, pub=None):
@@ -1497,3 +1497,301 @@ def test_verifier_and_corpus_free_of_collectors_dependency():
             "collectors" in (getattr(m, "__module__", "") or "")
             for m in vars(mod).values())
     assert compat.UNVERIFIED_TS_MARGIN == UNVERIFIED_TS_MARGIN
+
+
+# ==================================================== v5: sealed profile
+
+def test_gate_setup_day_mandatory(window):
+    """Omitting setup_day cannot emit the gate verdict: the deterministic
+    six-candidate fallback is a preregistered decision, not optional."""
+    rep = window.verify(setup=None)
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+    assert any("setup_day" in a for a in rep["anomalies"])
+    assert rep["profile"]["parameters_match"] is False
+
+
+def test_gate_tail_mandatory(window):
+    rep = window.verify(tail=None)
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+    assert any("evidence_tail_end" in a for a in rep["anomalies"])
+
+
+def test_gate_five_direct_days_cannot_bypass_setup(window):
+    """Five direct candidate days without the setup-day mechanism is a
+    different adjudication than the preregistered one — rejected."""
+    rep = window.verify(candidates=CANDIDATES[1:], setup=None)
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+
+
+def test_gate_modified_window_bounds_rejected(window):
+    rep = window.verify(start=W0 + timedelta(hours=1))
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+    assert any("profile" in a for a in rep["anomalies"])
+
+
+def test_gate_modified_candidates_rejected(window):
+    rep = window.verify(candidates=["2026-09-16", "2026-09-17",
+                                    "2026-09-18", "2026-09-21",
+                                    "2026-09-22", "2026-09-24"])
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+    assert any("candidate_days" in a for a in rep["anomalies"])
+
+
+def test_profile_identity_and_fingerprint_in_report(window):
+    rep = window.verify()
+    assert rep["profile"]["id"] == "g0-a3-es-corporate-bonds-2026-09"
+    assert rep["profile"]["sha256"] == PROFILE_SHA256
+    assert rep["profile"]["mode"] == "gate"
+    assert rep["profile"]["parameters_match"] is True
+    fp = rep["descriptor_fingerprints"]
+    assert fp["bme_apa.yaml"]["match"] is True
+    assert fp["bloomberg_apae.yaml"]["match"] is True
+    assert fp["bme_apa.yaml"]["expected_sha256"] == \
+        fp["bme_apa.yaml"]["observed_sha256"]
+
+
+def test_descriptor_fingerprint_mismatch_is_review(window):
+    """A modified acquisition endpoint changes which provenance hosts are
+    acceptable — the exact-byte efd2268 fingerprint must catch it."""
+    c = window
+    p = c.cfg / "bme_apa.yaml"
+    p.write_bytes(p.read_bytes().replace(
+        b"www.bolsasymercados.es", b"www.bolsasymercados.evil", 1))
+    rep = c.verify()
+    assert rep["verdict"] == "REVIEW_REQUIRED"
+    assert any("fingerprint" in a for a in rep["anomalies"])
+    assert rep["descriptor_fingerprints"]["bme_apa.yaml"]["match"] is False
+
+
+def test_extra_descriptor_is_review(window):
+    (window.cfg / "extra.yaml").write_text(
+        yaml.safe_dump({"source_id": "extra_src", "entrypoint": {}}),
+        encoding="utf-8")
+    rep = window.verify()
+    assert rep["verdict"] == "REVIEW_REQUIRED"
+    assert any("unexpected source descriptors" in a
+               for a in rep["anomalies"])
+
+
+# ============================================ v5: setup-day non-circularity
+
+def test_sep23_fault_does_not_block_setup_proof(window):
+    """A Bloomberg discover failure on Sep-23 — a candidate that enters
+    counted days ONLY via fallback — must NOT make Sep-16 fail its setup
+    proof. (v4 circular dependency: fault on day N could force fallback
+    onto day N and make itself gate-relevant -> false FAIL.)"""
+    c = window
+    ft = datetime(2026, 9, 23, 10, 12, 46, tzinfo=UTC)
+    _fail_discover(c, BLB, ft)
+    rep = c.verify()
+    assert rep["setup_day"]["result"] == "SETUP_DAY_CAPTURE_COMPLETE"
+    assert rep["counted_days"] == CANDIDATES[:5]
+    assert rep["fallback_applied"] is False
+    disc = [r for r in rep["recovery"] if r["kind"] == "discover"
+            and r["source"] == BLB and r["run_id"] == rid(ft)]
+    assert disc[0]["gate_relevant"] is False
+    assert rep["verdict"] == "COMPLETE_SUPPORTED", rep["verdict_reasons"]
+
+
+def test_setup_proof_blocked_by_setup_day_fault(window):
+    """Inverse: an unrecovered fetch fault on a Sep-16 Bloomberg object
+    still blocks the setup proof (affected_day == setup day)."""
+    c = window
+    key = tok(datetime(2026, 9, 16, 10, 0, tzinfo=UTC), 7)
+    ft = datetime(2026, 9, 16, 11, 12, 46, tzinfo=UTC)
+    for m in c.mans:
+        if m["run_id"] == rid(ft) and m["results"]["source_id"] == BLB:
+            m["results"]["status"] = "PARTIAL"
+            m["results"]["errors"] = [
+                f"fetch {key}: exhausted 3 attempt(s)"]
+    for r in c.jrows:
+        if r["run_id"] == rid(ft) and r.get("source_id") == BLB:
+            r["status"] = "PARTIAL"
+            r["errors"] = [f"fetch {key}: exhausted 3 attempt(s)"]
+    rep = c.verify()
+    assert rep["setup_day"]["result"] == "NOT_COUNTED_SETUP_DAY"
+    assert rep["fallback_applied"] is True
+    # with Sep-16 not counted, its faults are not gate-relevant either
+    fault = [r for r in rep["recovery"] if r.get("key") == key]
+    assert fault[0]["gate_relevant"] is False
+
+
+# ===================================== v5: first-write observational meta
+
+def test_meta_observational_fields_are_first_write(tmp_path):
+    """First-write meta keeps provenance URL A / pub A; a later
+    ALREADY_PRESENT observation carries legitimate observational
+    metadata B for identical bytes. Identity still reconciles; the
+    observational fields are compared only against the first-write
+    record, never blindly against every manifest."""
+    c = Corpus(tmp_path)
+    smoke = datetime(2026, 9, 16, 5, 0, tzinfo=UTC)
+    key = bme_key("2026-09-16")
+    rec_a = store_capture(
+        c.raw, source_id=BME, collection_date="2026-09-16",
+        object_key=key, data=b"synthetic:" + key.encode(),
+        publication_timestamp="2026-09-16",
+        provenance_url="https://www.bolsasymercados.es/dam/path-a.json",
+        observation_utc=iso(smoke))
+    # the smoke manifest records the actual first write (metadata A)
+    c.run(smoke, objs=[rec_a], sources=[BME])
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    # a later ALREADY_PRESENT observation reports different (legitimate)
+    # observational metadata for the same bytes — same host, other path
+    for m in c.mans:
+        res = m["results"]
+        if res["source_id"] != BME:
+            continue
+        for o in res["objects"]:
+            if o["source_object_id"] == key \
+                    and o["status"] == "ALREADY_PRESENT":
+                o["provenance_url"] = ("https://www.bolsasymercados.es"
+                                       "/en/other-services/b.json")
+                o["publication_timestamp"] = "2026-09-16T00:00:01+00:00"
+                break
+        else:
+            continue
+        break
+    rep = c.verify()
+    assert rep["anomalies"] == []
+    assert rep["verdict"] == "COMPLETE_SUPPORTED", rep["verdict_reasons"]
+
+
+def test_meta_first_write_record_mismatch_flagged(tmp_path):
+    """When the bundle DOES contain the first-write manifest, meta's
+    observational fields must reconcile with that record."""
+    c = Corpus(tmp_path)
+    smoke = datetime(2026, 9, 16, 5, 0, tzinfo=UTC)
+    key = bme_key("2026-09-16")
+    rec_a = store_capture(
+        c.raw, source_id=BME, collection_date="2026-09-16",
+        object_key=key, data=b"synthetic:" + key.encode(),
+        publication_timestamp="2026-09-16",
+        provenance_url="https://www.bolsasymercados.es/dam/path-a.json",
+        observation_utc=iso(smoke))
+    # the first-write manifest claims a different provenance than meta
+    rec_a = dict(rec_a, provenance_url=(
+        "https://www.bolsasymercados.es/dam/path-b.json"))
+    c.run(smoke, objs=[rec_a], sources=[BME])
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    rep = c.verify()
+    assert rep["verdict"] == "REVIEW_REQUIRED"
+    assert any("first-write" in a for a in rep["anomalies"])
+
+
+# ================================================ v5: structural scoping
+
+def test_pre_window_duplicate_journal_row_is_diagnostic(window):
+    """A clearly timestamped pre-window duplicate is diagnostic — it
+    cannot contaminate the active window."""
+    c = window
+    pre = datetime(2026, 9, 16, 5, 0, tzinfo=UTC)
+    row = {"run_id": rid(pre), "observed_at": iso(pre), "source_id": BME,
+           "mode": "poll", "status": "SUCCEEDED", "window_hours": 24}
+    c.jrows.extend([dict(row), dict(row)])   # duplicate pair, pre-window
+    rep = c.verify()
+    assert rep["verdict"] == "COMPLETE_SUPPORTED", rep["verdict_reasons"]
+    assert any("duplicate" in d
+               for d in rep["diagnostics"]["out_of_window_structural"])
+
+
+def test_in_window_duplicate_still_review(window):
+    """Control: the same duplicate inside the eligible window stays a
+    gate-relevant anomaly."""
+    c = window
+    dup = dict(c.jrows[0])
+    dup["mode"] = "rolling"
+    c.jrows.append(dup)
+    rep = c.verify()
+    assert rep["verdict"] == "REVIEW_REQUIRED"
+    assert any("duplicate" in a for a in rep["anomalies"])
+
+
+def test_malformed_unscopable_journal_line_is_review(window):
+    """A record with NO parseable time cannot be scoped safely — it stays
+    an anomaly even though it might be pre-window."""
+    c = window
+    c.flush()
+    with c.journal.open("a", encoding="utf-8") as f:
+        f.write("{not json\n")
+    rep = verify(c.journal, c.runs, c.raw, c.cfg, iso(W0), iso(W1),
+                 CANDIDATES, SETUP, None, iso(TAIL))
+    assert rep["verdict"] == "REVIEW_REQUIRED"
+
+
+# ========================================== v5: BME temporal recovery
+
+def _strip_observations(c, source, key, after):
+    """Remove manifest observations of `key` strictly after `after`,
+    dropping raw copies those observations alone created."""
+    for m in c.mans:
+        res = m["results"]
+        if res["source_id"] != source:
+            continue
+        t = datetime.fromisoformat(res["observed_at"])
+        if t <= after:
+            continue
+        for o in res["objects"]:
+            if o["source_object_id"] == key and o["status"] == "CREATED":
+                c.drop_raw(source, o["capture_version"],
+                           res["observed_at"][:10])
+        res["objects"] = [o for o in res["objects"]
+                          if o["source_object_id"] != key]
+        res["object_count"] = len(res["objects"])
+
+
+def test_bme_discover_pre_failure_only_is_not_recovery(tmp_path):
+    """The at-risk daily file exists ONLY in pre-failure observations:
+    that proves 'no known loss' of that snapshot, not post-failure
+    coverage — classified explicitly, never RECOVERED."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    ft = datetime(2026, 9, 21, 10, 12, 46, tzinfo=UTC)
+    _fail_discover(c, BME, ft)
+    _strip_observations(c, BME, bme_key("2026-09-21"), ft)
+    rep = c.verify()
+    disc = [r for r in rep["recovery"] if r["kind"] == "discover"
+            and r["source"] == BME and r["run_id"] == rid(ft)]
+    assert disc[0]["state"] == \
+        "AT_RISK_OBJECT_ALREADY_CAPTURED_BEFORE_FAILURE"
+    assert disc[0]["days_pre_failure_only"] == ["2026-09-21"]
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
+
+
+def test_bme_discover_recovered_by_later_new_version(tmp_path):
+    """A post-failure observation with a NEW capture_version (the file
+    mutated) demonstrates recovery just as ALREADY_PRESENT does."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    ft = datetime(2026, 9, 21, 10, 12, 46, tzinfo=UTC)
+    _fail_discover(c, BME, ft)
+    nt = datetime(2026, 9, 21, 11, 12, 46, tzinfo=UTC)
+    obj = c.capture(BME, bme_key("2026-09-21"), nt, data=b"v2-bytes")
+    for m in c.mans:
+        if m["run_id"] == rid(nt) and m["results"]["source_id"] == BME:
+            m["results"]["objects"].append(obj)
+    rep = c.verify()
+    disc = [r for r in rep["recovery"] if r["kind"] == "discover"
+            and r["source"] == BME and r["run_id"] == rid(ft)]
+    assert disc[0]["state"] == "RECOVERED"
+
+
+def test_bme_discover_missing_daily_file_unrecovered(tmp_path):
+    """The at-risk counted daily file is never observed at all:
+    UNRECOVERED."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    ft = datetime(2026, 9, 21, 10, 12, 46, tzinfo=UTC)
+    _fail_discover(c, BME, ft)
+    _strip_observations(c, BME, bme_key("2026-09-21"),
+                        datetime(2026, 9, 20, tzinfo=UTC))
+    rep = c.verify()
+    disc = [r for r in rep["recovery"] if r["kind"] == "discover"
+            and r["source"] == BME and r["run_id"] == rid(ft)]
+    assert disc[0]["state"] == "UNRECOVERED"
+    assert rep["verdict"] != "COMPLETE_SUPPORTED"
