@@ -2041,8 +2041,7 @@ def test_pre_window_manifest_cannot_register_in_window_raw(tmp_path):
     rec = store_capture(
         c.raw, source_id=BLB, collection_date="2026-09-16",
         object_key=key, data=b"synthetic:leak",
-        publication_timestamp=None
-        or "20260916-03:33:00.000-03",
+        publication_timestamp="20260916-03:33:00.000-03",
         provenance_url=f"https://{HOSTS[BLB]}/{key}",
         observation_utc=iso(datetime(2026, 9, 16, 10, 0, tzinfo=UTC)))
     c.run(smoke, objs=[rec], mode="rolling")
