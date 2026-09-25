@@ -74,18 +74,28 @@ def _run_id_time(name: str) -> datetime | None:
         return None
 
 
-def _resolve_raw(raw_root: Path, source_id: str, cv: str) -> Path | None:
-    """raw/<sid>/<collection_date>/<sanitized key>/<cv>. The same capture
-    version may be stored under several collection dates (re-captures write
-    per-observation-date copies of identical bytes); any existing copy is
-    the same bytes — capture_version IS the content sha256."""
-    sid_dir = raw_root / source_id
-    if not sid_dir.is_dir():
-        return None
-    for p in sorted(sid_dir.glob(f"*/*/{cv}")):
-        if p.is_file():
-            return p
-    return None
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _index_raw(raw_root: Path) -> dict[tuple[str, str], Path]:
+    """Single-pass index (source_id, capture_version) -> raw path.
+
+    raw/<sid>/<collection_date>/<sanitized key>/<cv>: the same capture
+    version may exist under several collection dates (re-captures write
+    per-observation-date copies of identical bytes). cv IS the content
+    sha256, so any copy is the same bytes; the first sorted path wins
+    deterministically.
+    """
+    index: dict[tuple[str, str], Path] = {}
+    for source_id in ("bme_apa", "blb_apae"):
+        sid_dir = raw_root / source_id
+        if not sid_dir.is_dir():
+            continue
+        for p in sorted(sid_dir.rglob("*")):
+            if p.is_file() and not p.name.endswith(".meta.yaml") \
+                    and _HEX64.match(p.name):
+                index.setdefault((source_id, p.name), p)
+    return index
 
 
 def select_eligible(
@@ -170,9 +180,10 @@ def select_eligible(
             object_observations += 1
             unique[(sid, key, cv)] = None   # capture-identity dedup
 
+    raw_index = _index_raw(raw_root)
     versions: list[CaptureVersionRef] = []
     for sid, key, cv in sorted(unique):
-        path = _resolve_raw(raw_root, sid, cv)
+        path = raw_index.get((sid, cv))
         if path is None:
             raise SelectionError(
                 f"eligible manifest references missing raw bytes: "
