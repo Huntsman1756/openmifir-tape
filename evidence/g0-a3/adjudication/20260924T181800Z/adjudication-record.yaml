@@ -1,0 +1,72 @@
+# G0-A3 post-tail adjudication record — issue #12 preregistration
+# Metadata only. No provider payloads. Raw evidence stays in the local
+# sealed bundle (data/adjudication/, gitignored) and on vpro-prod.
+adjudication_id: g0-a3-adjudication-20260924T181800Z
+issue: Huntsman1756/openmifir-tape#12
+frozen_authority: g0-freeze-v1
+executed_utc: "2026-09-24T18:16Z"   # single adjudicating run (see invocation.txt)
+
+adjudicator:
+  tag: g0-a3-adjudicator-v1
+  tag_object: a2da2069febcd418d57809965a3b1167a50e33b3
+  commit: e0bc9b697c3d5c939fcb70ad6d09a53c93c62e28
+  profile_sha256: 42159277962006371e2b07df049657baa3452d1111f3eebb06a4e8ec41edb6ba
+  python: 3.11.15
+  invocation: python -m tools.verify_a3_window (module form; see note)
+  exit_code: 1
+
+verdict: REVIEW_REQUIRED
+
+bundle:
+  id: g0-a3-bundle-20260924T181127Z
+  collected_from: vpro-prod:/opt/openmifir-tape (read-only)
+  collection_window_utc: ["2026-09-24T18:11:27Z", "2026-09-24T18:11:41Z"]
+  services_during_collection: {omt-a3-poll.service: inactive, omt-a3-rolling.service: inactive}
+  files: 24500   # 24499 collected + collection-meta.yaml
+  manifest_sha256: d9efcfd9f62758ca8d967f4a3e799542b5e64306e98a3575813a8382a37fb611  # SHA256SUMS.txt
+  transport_archive_sha256: 3a5c56ac9daab58d6bddd99a87d731bed87eb515be65a574df3f1589a24a1a07
+  location: data/adjudication/g0-a3-bundle-20260924T181127Z/ (local, gitignored)
+
+deployment:
+  vps_head: efd2268cfd9b120df9c89818d778e5813247a0c1   # matches preregistered
+  checkout_state: clean; only untracked accrued run manifests under evidence/g0-a3/runs/
+  descriptor_sha256_observed:
+    bme_apa.yaml: c1f9a355bdc0f1f8e196af2d18c932f3c37b1a713a1e5484d9b574b0d0606e56      # match
+    bloomberg_apae.yaml: b02049d01c83d3532c8e2e23a385452a5558b541d16b6f9b23c5eb27070322fd  # match
+
+window_axes:   # all clean — included for reviewer context, verbatim from report
+  poll: {attempts: 379, gaps_over_60min: 0, unexplained: 0}
+  rolling: {bme_apa: ROLLING_EFFECTIVE, blb_apae: ROLLING_EFFECTIVE, slots_expected: 8, slots_accounted: 8}
+  recovery: []
+  counted_days: ["2026-09-17", "2026-09-18", "2026-09-21", "2026-09-22", "2026-09-23"]  # fallback applied
+  setup_day: NOT_COUNTED_SETUP_DAY
+  coverage: all 5 counted days CAPTURED (both sources)
+  journal: {rows_total: 822, rows_eligible: 776}
+  manifests: {total: 825, eligible: 776}
+  integrity: {objects_checked: 11785, failures: 1328}
+
+anomaly:
+  count: 1328
+  class: "meta observation_utc later than first known observation at 2026-09-16"
+  affected: blb_apae objects; all 1328 objects of manifest 20260916T052127Z__blb_apae
+  cause_classification: structural evidence inconsistency (NOT packaging, NOT deployment, NOT descriptor)
+  mechanism: >-
+    Three pre-operational smoke-run manifests (20260916T044454Z poll x2,
+    20260916T052127Z rolling blb_apae) were committed to the repository at
+    aef0e90 and ship inside deployed efd2268 evidence/g0-a3/runs/. The VPS
+    checkout seeded them into the operational runs/ dir. The deployed raw
+    store never contained the smoke payloads (data/ created 09:43:11Z), so
+    run 20260916T094320Z legitimately wrote those objects CREATED with
+    meta.observation_utc=09:43:20Z — later than the smoke manifest's
+    recorded observation (05:21:27Z) of identical (key, capture_version).
+    Under frozen v5.1 the adjudicator cannot distinguish "repo-seeded
+    pre-deployment manifest" from "meta rewritten after observation";
+    fail-closed => REVIEW_REQUIRED. Corroboration: byte-identical manifest
+    SHA-256 repo-vs-bundle; journal.jsonl starts 09:43:08Z (no pre-window
+    rows); dir mtimes (data/* 09:43:11Z, evidence/g0-a3 09:41:45Z).
+  smoke_manifest_sha256:
+    20260916T044454Z__blb_apae__manifest.yaml: 3db60a9eb58216500dbefd71c74e3629cc6c8d323e729cfdf1f4ec9536e04344
+    20260916T044454Z__bme_apa__manifest.yaml: f6cd24081c6bcdfa9b9702fcedd4a3e711579c2b7c9587bc7cbd38925d92c885
+    20260916T052127Z__blb_apae__manifest.yaml: 58d284e7f22357e9f7a6dd9f7540d0511b75fb4ab57a0cb58d80dbc16eaa799c
+
+e1_status: BLOCKED   # per issue #12: E1 must not open/execute on non-PASS

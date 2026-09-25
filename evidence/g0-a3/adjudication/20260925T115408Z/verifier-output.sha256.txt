@@ -1,0 +1,2 @@
+196227fa31fce05880acd83ebb44c28efc3893e1f58c18548c63e5d4fa77d1ff *F:/_Proyectos/OpenMifir/data/adjudication/g0-a3-verdict-20260925T115408Z/stdout.yaml
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 *F:/_Proyectos/OpenMifir/data/adjudication/g0-a3-verdict-20260925T115408Z/stderr.txt

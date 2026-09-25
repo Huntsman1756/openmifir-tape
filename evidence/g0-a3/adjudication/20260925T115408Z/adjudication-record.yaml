@@ -1,0 +1,95 @@
+# G0-A3 post-tail adjudication record — issue #12, adjudicator v2
+# Metadata only. No provider payloads. Raw evidence stays in the local
+# sealed bundle (data/adjudication/, gitignored) and on vpro-prod.
+adjudication_id: g0-a3-adjudication-20260925T115408Z
+issue: Huntsman1756/openmifir-tape#12
+frozen_authority: g0-freeze-v1
+executed_utc: "2026-09-25T11:54Z"   # single adjudicating run (see invocation.txt)
+
+adjudicator:
+  tag: g0-a3-adjudicator-v2
+  tag_object: 65b10da170301b99400f4b6a01c4d363a34f5e8a   # annotated tag object ID (SHA-1)
+  commit: ab886bcf713256979f0667622a72f747c2ef63f2
+  branch: fix/g0-a3-adjudicator-v2-window-scoping
+  verifier: tools/verify_a3_window.py v5.2
+  profile_sha256: 42159277962006371e2b07df049657baa3452d1111f3eebb06a4e8ec41edb6ba  # unchanged
+  python: 3.11.15
+  invocation: python -m tools.verify_a3_window
+  exit_code: 0
+  preregistration: issue #12 comment, posted before this execution (v2 authority block)
+
+verdict: COMPLETE_SUPPORTED
+
+rerun_authority:
+  rule: issue #12 — code change requires new adjudicator version + explicit
+    preregistration; rerun documented with reason on the same tagged
+    profile / input bundle.
+  reason: v1 verdict REVIEW_REQUIRED traced to a verifier evidence-scoping
+    defect, NOT to the captured week. Repo-committed pre-operational smoke
+    manifests (aef0e90, shipped inside deployed efd2268) seeded the VPS
+    runs/ dir; v1 built the first-write observation index and
+    manifest-referenced raw paths from ALL manifests, so an out-of-window
+    record bound a gate-relevant invariant (1,328 anomalies, single class).
+    Prior record: evidence/g0-a3/adjudication/20260924T181800Z/.
+  fix: v5.2 scopes gate-relevant invariants (earliest known observation;
+    "recorded" attestation; window attribution of stray files) to
+    window-eligible evidence. Out-of-window records remain
+    diagnostic/provenance context — they can only flag, never clear.
+    No gate methodology changed; sealed profile byte-identical.
+  unchanged_inputs: active-window profile, candidate/counted-day rules,
+    rolling-slot census, descriptor fingerprints, collection contract,
+    verdict criteria, sealed bundle g0-a3-bundle-20260924T181127Z.
+
+bundle:
+  id: g0-a3-bundle-20260924T181127Z   # same sealed bundle as v1 adjudication
+  collected_from: vpro-prod:/opt/openmifir-tape (read-only)
+  collection_window_utc: ["2026-09-24T18:11:27Z", "2026-09-24T18:11:41Z"]
+  files: 24500
+  manifest_sha256: d9efcfd9f62758ca8d967f4a3e799542b5e64306e98a3575813a8382a37fb611
+  location: data/adjudication/g0-a3-bundle-20260924T181127Z/ (local, gitignored)
+
+deployment:
+  vps_head: efd2268cfd9b120df9c89818d778e5813247a0c1   # matches preregistered
+  descriptor_sha256_observed:
+    bme_apa.yaml: c1f9a355bdc0f1f8e196af2d18c932f3c37b1a713a1e5484d9b574b0d0606e56      # match
+    bloomberg_apae.yaml: b02049d01c83d3532c8e2e23a385452a5558b541d16b6f9b23c5eb27070322fd  # match
+
+window_axes:   # verbatim from v2 report
+  poll: {attempts: 379, gaps_over_60min: 0, unexplained: 0}
+  rolling: {bme_apa: ROLLING_EFFECTIVE, blb_apae: ROLLING_EFFECTIVE, slots_expected: 8, slots_unaccounted: []}
+  recovery: []
+  counted_days: ["2026-09-17", "2026-09-18", "2026-09-21", "2026-09-22", "2026-09-23"]  # fallback applied
+  setup_day: NOT_COUNTED_SETUP_DAY
+  coverage: all 5 counted days CAPTURED (both sources)
+  journal: {rows_total: 822, rows_eligible: 776}
+  manifests: {total: 825, eligible: 776}
+  integrity: {objects_checked: 11785, failures: 0}
+  anomalies: []
+
+v1_anomaly_resolution:
+  prior_class: "meta observation_utc later than first known observation at 2026-09-16"
+  prior_count: 1328   # all blb_apae objects of manifest 20260916T052127Z__blb_apae
+  resolution: cleared under eligible-evidence scoping — the bounding record
+    was the out-of-window repo-seeded smoke manifest; the operational first
+    write (run 20260916T094320Z, meta.observation_utc=09:43:20Z) is the
+    earliest ELIGIBLE observation and reconciles cleanly. Smoke manifests
+    remain in the bundle as diagnostic/provenance context.
+  diagnostics_residual:
+    out_of_window_orphan_entries: 43
+    by_source:
+      blb_apae: 23
+      bme_apa: 20
+    classification: diagnostic_only
+    explanation: >-
+      These raw versions have no eligible-manifest reference because their
+      first-write observation is after evidence_tail_end. They remain in
+      the sealed bundle because collection occurred later while
+      acquisition continued. They are outside the adjudicated window and
+      have no gate effect.
+    correction: initial wording of this entry (and the #12 verdict
+      comment) stated 2 — that summarized only the head of the list.
+      The authoritative raw verifier report always contained all 43
+      diagnostic entries. Metadata-only correction per PR #13 review;
+      verdict, report SHA-256, bundle, tag and all gate axes unchanged.
+
+e1_status: UNBLOCKED   # issue #12 blocked E1 on non-PASS; A3 now COMPLETE_SUPPORTED

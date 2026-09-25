@@ -1,0 +1,341 @@
+authority:
+  frozen: g0-freeze-v1
+  deployed_sha: efd2268
+  note: main-line fixes are NOT assumed deployed
+profile:
+  id: g0-a3-es-corporate-bonds-2026-09
+  sha256: 42159277962006371e2b07df049657baa3452d1111f3eebb06a4e8ec41edb6ba
+  mode: gate
+  parameters_match: true
+descriptor_fingerprints:
+  bloomberg_apae.yaml:
+    expected_sha256: b02049d01c83d3532c8e2e23a385452a5558b541d16b6f9b23c5eb27070322fd
+    observed_sha256: b02049d01c83d3532c8e2e23a385452a5558b541d16b6f9b23c5eb27070322fd
+    match: true
+  bme_apa.yaml:
+    expected_sha256: c1f9a355bdc0f1f8e196af2d18c932f3c37b1a713a1e5484d9b574b0d0606e56
+    observed_sha256: c1f9a355bdc0f1f8e196af2d18c932f3c37b1a713a1e5484d9b574b0d0606e56
+    match: true
+window:
+  operational_start: '2026-09-16T09:42:46+00:00'
+  subject_period_end: '2026-09-23T23:59:59+00:00'
+  evidence_tail_end: '2026-09-24T07:00:00+00:00'
+  candidate_days:
+  - '2026-09-16'
+  - '2026-09-17'
+  - '2026-09-18'
+  - '2026-09-21'
+  - '2026-09-22'
+  - '2026-09-23'
+evidence:
+  journal_rows_total: 822
+  journal_rows_eligible: 776
+  manifests_total: 825
+  manifests_eligible: 776
+skipped_locked: 0
+expected_acq_hosts:
+  blb_apae:
+  - www.bloombergapa.com
+  bme_apa:
+  - www.bolsasymercados.es
+anomalies: []
+diagnostics:
+  out_of_window_orphans:
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-06_54_46.023-01.csv\77abf49446c19bdca35120e82dcadab48cdefb19eb156b49eb9c360bd7a80b38'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-07_24_45.953-02.csv\d034772004b4adde5f9611402c5307dd36ebfd0170c725ded400490c73181190'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-07_54_45.937-02.csv\1d71762e6df83ea504463602a32524136603983547624403cbdbc33a47f1eef4'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-08_24_45.962-02.csv\c95b0b9b5818e22b7dc222eab65c7ac3b996ceea48fed3163f669564c8b4a6b2'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-08_54_45.938-02.csv\b57d1ef40ddf4b5edc1d5e0891c9ebacca367471677b1ea3eccc28f25a779cc5'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-09_24_46.031-01.csv\45bc929bf43a5e900ffad1e8787891e7a7e75877a6599d245f85a611fcc88413'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-09_52_45.948-02.csv\a509c6996ec4ca392eb98b8b712099942e1bcda348e87055f4cbdf049904019b'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-10_24_45.962-02.csv\16e1b373ee542dda5ac2ff557c704dfdc166eecbc0328bbecccdbc142bfc17f4'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-10_53_46.020-01.csv\5c62c2bce1fc9730d54d5c1efd428debe1667a5098adbb6029cbb95a516991aa'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-11_24_45.961-02.csv\cb0b98c4c0a2f0f29bc50e196a38c7a57bb9fd04a443d7b88607a0c11a5a76b7'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-11_55_45.948-02.csv\1c020b0677163b02943c93ab6d838422f87aaf59dcd74849baa2d2646f57540e'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-12_24_45.948-02.csv\406b5d1b0577f026cfd32f0c53849590d0e00f81f0f1d1700c4c9dc9f63405f5'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-12_54_46.074-01.csv\d2cef5a548457e6a3fdb20b5d57e02025b81888d9e67fdcccc350d64f0a4b48a'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-13_24_46.046-02.csv\f3de2dc9de98d7a6911958ba787250bef913cee90771f476e6f6c64c7060c0ba'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-13_55_45.957-04.csv\a5d1b635bc8d9f9df69f6bdbd456d73bafbb5d910416be58e391f20b3387ff9d'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-14_24_45.978-02.csv\6ede1d09ab807e6627d5b08173cb1b4169f046813043b00d1e02730402e54464'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-14_54_45.977-02.csv\957b5af25b5bceb7887037903ca0089d8a628a78963b9c27a0174a3a4561316b'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-15_24_46.011-02.csv\ade5a3507097c88a695230547f9786223dc7b014be087fd9a8e0f12183ce4d49'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-15_54_45.971-02.csv\804917ed58875e4e0d90ab0ef4536632ade8c64a827a5b70a3976b90011e0e99'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-16_24_45.973-02.csv\7551adc005b0b36b30b60793d294b9a3096513dd4c9a62171515e4c37701c628'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-16_54_45.974-02.csv\2f42bc720289adc71d40aaabb8c2c4b8fffa2d74103aab8ec6647bfa4ef86c06'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-17_24_46.060-01.csv\3dd4e6fc9a26ac2273fe681e6416ee43e9bfadbabc99c2897243cfb943557ef0'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\blb_apae\2026-09-24\BAPA-POST2-20260924-17_55_46.065-01.csv\be236a2a27ad07aab0bd801365670cd3162e128cd94a0cdf1ee562da707ee28e'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\13d2dd2ef3469fdca8edcfe614adf607271138376341b7aa0b74f79e2858ed3f'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\1ca843b6d94ce1b097b4ded769b316284c523f7e808601609013020cff304a91'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\5a40ea629c2228c5c4e702b0094f2e49615410e92dc594a1ebf4bd2d1f53d5d9'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\6556661104103ca120fa165c8789f3854399b743e3eb3ade2ef7a926e4f296f1'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\70f568ab2ae73e0f87d0b5d0458e4503c862b55b5376129e5d8dbc884e9c0067'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\7170db01be73a46651bc2f64dd15fe294616a0a89ffff78c9626a7d446dfe867'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\738aeaebd29012369d2382c30af844f2372806a04068d5c8e82a6f9d9d5cefe8'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\75589ebe5cf56f4fc3cf0db8faaec25c7f95d3da00abd7004ef320b96f04c73d'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\8213695b32206ff3eb5811c92a337b55cf85a1e88aaf47d44af49943601d4c5e'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\925d78fe1f33458e0274b674ed1e014a7dc0331ae8f4e70a4a1f32eaf49e8f05'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\9cec120fa4633fbf7e0f84c63b19405f958aaf4732e32e47301528f84fb65d8b'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\a5bd578fa88c4c1ab1b83fa81736964433122b23f1ade97a1bb3aff662b8454f'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\ad51de0999a596888091ae46adf7a1ff948e04ff5411c3a133091195d0eb49aa'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\b4e0a03e864044d72c5e4c1566658afbbb44b760f540792867de9f76e49bb437'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\b7cbe14dc38080f875c54b7bcb419abc8d44343b05c13792c55403146fe95a47'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\cb3686406cacb222dd906b7c9d19ec8833218197598663527c8b0dbda0698bcb'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\e7a8fd2b967a93f1c470f0d0b3159dd129812f0a2ad6af91db97c71da540d013'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\f4f27913d2339133dcd42da8ce7fe6fcfc48b1f20a0a40860ef0cdcb9edf908d'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\f7b9c3d702fc296b912cd08e3a4942759809499b2018d084f246ebf464e9beef'
+  - 'raw object never recorded in an eligible manifest: data\adjudication\g0-a3-bundle-20260924T181127Z\raw\bme_apa\2026-09-24\2026-09-24-bmea-posttrade.json\fb7d417bcf935dab50a2d72c83497971b6f36b007bd2ae1cd45b2dbfa3f377ad'
+  out_of_window_raw_objects: 0
+scheduler:
+  poll:
+    attempts: 379
+    expected_attempts_diagnostic: 378.6
+    gaps: []
+    unexplained: []
+    unverified: []
+rolling:
+  blb_apae:
+    state: ROLLING_EFFECTIVE
+    slots_expected: 8
+    slots:
+    - slot: '2026-09-17T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-18T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-19T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-20T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-21T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-22T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-23T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-24T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    slots_unaccounted: []
+    invocations: 9
+    effective: 9
+    incidents: 0
+    unresolved_faults: 0
+    days_observed_diagnostic:
+    - '2026-09-16'
+    - '2026-09-17'
+    - '2026-09-18'
+    - '2026-09-19'
+    - '2026-09-20'
+    - '2026-09-21'
+    - '2026-09-22'
+    - '2026-09-23'
+    - '2026-09-24'
+  bme_apa:
+    state: ROLLING_EFFECTIVE
+    slots_expected: 8
+    slots:
+    - slot: '2026-09-17T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-18T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-19T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-20T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-21T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-22T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-23T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    - slot: '2026-09-24T06:15:00+00:00'
+      attempts: 1
+      effective: 1
+      incidents: 0
+      explanation: null
+      state: ROLLING_SLOT_EFFECTIVE
+    slots_unaccounted: []
+    invocations: 9
+    effective: 9
+    incidents: 0
+    unresolved_faults: 0
+    days_observed_diagnostic:
+    - '2026-09-16'
+    - '2026-09-17'
+    - '2026-09-18'
+    - '2026-09-19'
+    - '2026-09-20'
+    - '2026-09-21'
+    - '2026-09-22'
+    - '2026-09-23'
+    - '2026-09-24'
+recovery: []
+coverage:
+  '2026-09-17':
+    bme_apa:
+      state: CAPTURED
+      object: 2026-09-17-bmea-posttrade.json
+      observations: 37
+      distinct_capture_versions: 22
+      first_observed: '2026-09-17T06:37:01.118490+00:00'
+      last_observed: '2026-09-23T06:15:03.654133+00:00'
+      fault_evidence: []
+    blb_apae:
+      state: CAPTURED
+      objects: 1166
+      median_interval_min: 1.0
+      candidate_gaps_diagnostic_only:
+      - from: '2026-09-17T21:03:55.844000+00:00'
+        to: '2026-09-17T23:39:20.616000+00:00'
+        minutes: 155.4
+      fault_evidence: []
+  '2026-09-18':
+    bme_apa:
+      state: CAPTURED
+      object: 2026-09-18-bmea-posttrade.json
+      observations: 37
+      distinct_capture_versions: 20
+      first_observed: '2026-09-18T06:37:03.643886+00:00'
+      last_observed: '2026-09-24T06:15:03.664996+00:00'
+      fault_evidence: []
+    blb_apae:
+      state: CAPTURED
+      objects: 1095
+      median_interval_min: 1.0
+      candidate_gaps_diagnostic_only: []
+      fault_evidence: []
+  '2026-09-21':
+    bme_apa:
+      state: CAPTURED
+      object: 2026-09-21-bmea-posttrade.json
+      observations: 34
+      distinct_capture_versions: 22
+      first_observed: '2026-09-21T06:37:03.660803+00:00'
+      last_observed: '2026-09-24T06:15:03.664996+00:00'
+      fault_evidence: []
+    blb_apae:
+      state: CAPTURED
+      objects: 1007
+      median_interval_min: 1.0
+      candidate_gaps_diagnostic_only:
+      - from: '2026-09-21T21:47:45.969000+00:00'
+        to: '2026-09-21T23:47:45.948000+00:00'
+        minutes: 120.0
+      fault_evidence: []
+  '2026-09-22':
+    bme_apa:
+      state: CAPTURED
+      object: 2026-09-22-bmea-posttrade.json
+      observations: 33
+      distinct_capture_versions: 22
+      first_observed: '2026-09-22T06:37:02.573208+00:00'
+      last_observed: '2026-09-24T06:15:03.664996+00:00'
+      fault_evidence: []
+    blb_apae:
+      state: CAPTURED
+      objects: 1083
+      median_interval_min: 1.0
+      candidate_gaps_diagnostic_only:
+      - from: '2026-09-22T21:53:45.944000+00:00'
+        to: '2026-09-22T23:22:45.944000+00:00'
+        minutes: 89.0
+      fault_evidence: []
+  '2026-09-23':
+    bme_apa:
+      state: CAPTURED
+      object: 2026-09-23-bmea-posttrade.json
+      observations: 32
+      distinct_capture_versions: 22
+      first_observed: '2026-09-23T06:37:03.636943+00:00'
+      last_observed: '2026-09-24T06:15:03.664996+00:00'
+      fault_evidence: []
+    blb_apae:
+      state: CAPTURED
+      objects: 1064
+      median_interval_min: 1.0
+      candidate_gaps_diagnostic_only:
+      - from: '2026-09-23T21:05:45.949000+00:00'
+        to: '2026-09-23T22:46:45.963000+00:00'
+        minutes: 101.0
+      fault_evidence: []
+setup_day:
+  day: '2026-09-16'
+  result: NOT_COUNTED_SETUP_DAY
+  bme_daily_file_observed: true
+  required_guaranteed_reach:
+    start: '2026-09-16T00:00:00+00:00'
+    end: '2026-09-16T09:42:46+00:00'
+    margin_hours: 6.0
+  blb_reach_proofs: []
+  blb_unresolved_faults: 0
+counted_days:
+- '2026-09-17'
+- '2026-09-18'
+- '2026-09-21'
+- '2026-09-22'
+- '2026-09-23'
+fallback_applied: true
+integrity:
+  objects_checked: 11785
+  failures: 0
+verdict_reasons: []
+verdict: COMPLETE_SUPPORTED
+

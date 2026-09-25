@@ -1,0 +1,72 @@
+# config/sources/bloomberg_apae.yaml
+# Canonical source interface descriptor for the Bloomberg APAE delayed trade
+# reports source. Referenced by docs/gates/G0.md §1 (source_id = blb_apae).
+# Facts, not semantics. Reviewed: 2026-09-14.
+
+source_id: blb_apae
+display: Bloomberg APAE
+kind: delayed trade reports
+publication_format: csv
+mic: ""
+
+entrypoint:
+  status: RESOLVED
+  # Verified live on 2026-09-14: public, unauthenticated delayed post-trade
+  # reports published by Bloomberg's EU APA (Bloomberg Data Reporting
+  # Services B.V.). Confirmed that the PUBLIC DATA page lists per-interval CSV
+  # files (e.g. BAPA-POST2-<timestamp>.csv) with no authentication.
+  base_url: https://www.bloombergapa.com/
+  public_data_page: https://www.bloombergapa.com/
+  historical_page: https://www.bloombergapa.com/historyfiles
+  file_pattern: "BAPA-POST2-<timestamp>.csv"
+  info_page: https://www.bloombergapa.net
+  retrieval_note: >-
+    Retrieve the latest BAPA-POST2-<timestamp>.csv from the PUBLIC DATA
+    post-trade section; use the historical page for backfill. Object identity
+    keyed by the timestamp embedded in the file name.
+
+access_mode: PUBLIC_HTTP_GET
+
+publication_timestamp_semantics:
+  status: RESOLVED
+  note: >-
+    Files are generated per publishing interval and named with the interval
+    start timestamp (BAPA-POST2-<timestamp>). Exact semantics (UTC vs local,
+    interval start vs end) MUST be confirmed against the CSV column schema on
+    first capture; record the observation timestamp alongside. Confirmed the
+    page is post-trade delayed reports.
+
+retrieval_interval:
+  poll_max_seconds: 3600       # <= 1 hour
+  overlap_min_seconds: 7200    # >= 2 hours
+  rescan:
+    daily_window_hours: 24     # previous 24h, keyed on publication_timestamp
+    rolling_days: 7
+
+retry_policy:
+  status: PARTIAL
+  max_attempts: 3
+  backoff_seconds: [10, 60, 300]
+  note: "Fail closed on descriptor/index resolution; never rewrite history on retry. Confirm exact policy with operator."
+
+capture_identity_fields:
+  status: PARTIAL
+  fields:
+    - "file_name_timestamp"   # from BAPA-POST2-<timestamp>; not yet a source-exact record key
+  note: >-
+    Source-exact record-level identity must be confirmed against the CSV schema
+    before dedup/identity decisions (G0-D scope). No heuristics.
+
+terms_of_use:
+  status: VERIFIED_PRESENT
+  summary: >-
+    The site states Transparency Data is subject to a linked Terms of Use, and
+    notes that provisions held inconsistent with EU Regulation 600/2014
+    obligations do not apply (remainder survives). Full ToS classification
+    (local archival / free delayed redistribution / historical republication)
+    is performed in G0-L1.
+  artifact_classes:
+    local_archival: "UNRESOLVED"
+    free_delayed_redistribution: "UNRESOLVED"
+    historical_archive_republication: "UNRESOLVED"
+  source_url: https://www.bloombergapa.com/
