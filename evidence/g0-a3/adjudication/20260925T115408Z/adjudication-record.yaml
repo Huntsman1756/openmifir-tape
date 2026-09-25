@@ -74,8 +74,22 @@ v1_anomaly_resolution:
     write (run 20260916T094320Z, meta.observation_utc=09:43:20Z) is the
     earliest ELIGIBLE observation and reconciles cleanly. Smoke manifests
     remain in the bundle as diagnostic/provenance context.
-  diagnostics_residual: 2 out-of-window orphan raws under collection_date
-    2026-09-24 (post-subject-period captures during the evidence tail),
-    diagnostic only — no gate effect.
+  diagnostics_residual:
+    out_of_window_orphan_entries: 43
+    by_source:
+      blb_apae: 23
+      bme_apa: 20
+    classification: diagnostic_only
+    explanation: >-
+      These raw versions have no eligible-manifest reference because their
+      first-write observation is after evidence_tail_end. They remain in
+      the sealed bundle because collection occurred later while
+      acquisition continued. They are outside the adjudicated window and
+      have no gate effect.
+    correction: initial wording of this entry (and the #12 verdict
+      comment) stated 2 — that summarized only the head of the list.
+      The authoritative raw verifier report always contained all 43
+      diagnostic entries. Metadata-only correction per PR #13 review;
+      verdict, report SHA-256, bundle, tag and all gate axes unchanged.
 
 e1_status: UNBLOCKED   # issue #12 blocked E1 on non-PASS; A3 now COMPLETE_SUPPORTED
