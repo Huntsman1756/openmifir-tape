@@ -1,30 +1,40 @@
 """Offline tests for G0-E1 cross-source metrics (metrics/).
 
-Synthetic NormalizedRecords / raw files only — no provider data, no
-network. Covers: metric definitions (unique trade = ledger chain),
-source partitioning / intersection / exclusives, notional aggregation,
-sample observation rate, interpretation-limit invariants and
-NO_COVERAGE_CLAIM enforcement.
+Synthetic NormalizedRecords / manifests / raw files only — no provider
+data, no network. Covers: eligible-evidence input selection (A3 manifest
+scoping), single-authority ledger heads, source partitioning /
+intersection / exclusives, notional aggregation, sample observation rate,
+interpretation-limit invariants and NO_COVERAGE_CLAIM enforcement.
 """
 
 import json
+from datetime import UTC, datetime
 
+import pytest
 import yaml
 
+from lifecycle import build_ledger, reconstruct_chains
 from metrics.cross_source import (
     INTERPRETATION_LIMITS,
     compute_cross_source,
     scan_forbidden_claims,
 )
 from metrics.evidence import build_report, generate_report
+from metrics.selection import SelectionError, select_eligible
 from normalization import normalize_record
+from tools.a3_efd2268_compat import store_capture
 
 BME = "bme_apa"
 BLB = "blb_apae"
 
-# Synthetic validated scope (stands in for the 16-INCLUDE F-009 artifact —
-# the metric logic is scope-agnostic; the real artifact is exercised by
-# load_validated_scope tests in test_universe.py).
+START = datetime(2026, 9, 16, 9, 42, 46, tzinfo=UTC)
+TAIL = datetime(2026, 9, 24, 7, 0, 0, tzinfo=UTC)
+WINDOW = {"operational_start": "2026-09-16T09:42:46Z",
+          "subject_period_end": "2026-09-23T23:59:59Z",
+          "evidence_tail_end": "2026-09-24T07:00:00Z"}
+
+# Synthetic validated scope (the metric logic is scope-agnostic; the real
+# F-009 artifact is exercised by load_validated_scope in test_universe.py).
 SCOPE = frozenset({"ISIN-A", "ISIN-B", "ISIN-C", "ISIN-D"})
 
 
@@ -93,7 +103,6 @@ def test_rescanned_identical_publications_collapse_to_one_trade():
     recs = [_nbme(), _nbme(), _nbme()]  # same (source, tid), identical bytes
     m = compute_cross_source(recs, SCOPE)
     assert m["unique_trades"]["by_source"][BME] == 1
-    assert m["unique_trades"]["ledger_consistent"] is True
     assert m["records_by_source"][BME] == 3   # observations kept; trades dedup
 
 
@@ -121,7 +130,31 @@ def test_missing_transaction_id_never_merges():
     m = compute_cross_source(recs, SCOPE)
     assert m["unique_trades"]["by_source"][BME] == 2
     assert m["unique_trades"]["unchainable_singletons_by_source"][BME] == 2
-    assert m["unique_trades"]["ledger_consistent"] is True
+
+
+def test_ledger_is_the_single_head_authority():
+    """Adversarial (PR #15 review): same source+tid, two records with the
+    SAME publication_utc but different economic material. The ledger
+    orders them by entry_id; E1 must take exactly chain[-1] — no parallel
+    record-level grouping may pick a different head."""
+    recs = [
+        _nbme(price="98.50", quantity="100000", notional_amount="98500"),
+        _nbme(price="98.90", quantity="200000", notional_amount="197800",
+              amnd="true", flags="AMND"),
+    ]
+    entries = build_ledger(recs)
+    chains = reconstruct_chains(entries)
+    assert len(chains) == 1
+    head = next(iter(chains.values()))[-1]
+
+    m = compute_cross_source(recs, SCOPE)
+    assert m["unique_trades"]["by_source"][BME] == 1
+    # notional is summed over the AUTHORITATIVE head only — it must equal
+    # the ledger head's notional, proving head identity, not just counts.
+    sums = m["notional_by_source"][BME]["sum_by_currency"]
+    assert sums == {"EUR": head.notional_amount}
+    dist = m["unique_trades"]["head_state_distribution_by_source"][BME]
+    assert dist == {head.state: 1}
 
 
 # ------------------------- source partition / intersection ----------------
@@ -197,12 +230,147 @@ def test_notional_sums_per_currency_and_unparseable():
     assert nb["heads_with_ambiguous_or_missing_currency"] == 0
 
 
+def test_currency_join_ambiguity_is_reported_not_guessed():
+    """Identical ledger-identity records carrying conflicting currencies
+    must surface as ambiguity — never an invented currency."""
+    recs = [_nbme(notional_currency="EUR"),
+            _nbme(notional_currency="USD")]
+    m = compute_cross_source(recs, SCOPE)
+    nb = m["notional_by_source"][BME]
+    assert nb["heads_with_ambiguous_or_missing_currency"] == 1
+    assert "" in nb["sum_by_currency"]      # bucketed under empty key
+
+
 def test_scope_excludes_non_scope_records():
     recs = [_nbme(), _nbme(instrument_identification_code="ISIN-OUTSIDE",
                            transaction_identification_code="TX-X")]
     m = compute_cross_source(recs, SCOPE)
     assert m["records_by_source"][BME] == 1
     assert m["unique_trades"]["by_source"][BME] == 1
+
+
+# ------------------- eligible-evidence input selection --------------------
+
+def _store(raw_root, source, coldate, key, payload,
+           obs="2026-09-17T10:00:05Z"):
+    """Store raw bytes under a collection date; returns manifest object."""
+    data = payload if isinstance(payload, bytes) else (
+        json.dumps(payload) if source == BME else payload).encode()
+    return store_capture(
+        raw_root, source_id=source, collection_date=coldate,
+        object_key=key, data=data, publication_timestamp="PUB",
+        provenance_url=f"https://host/{key}", observation_utc=obs)
+
+
+def _manifest(runs_dir, run_id, source, observed_at, objects):
+    man = {
+        "run_id": run_id, "gate": "G0-A3", "purpose": "synthetic",
+        "results": {
+            "source_id": source, "attempted": True, "status": "SUCCEEDED",
+            "observed_at": observed_at, "object_count": len(objects),
+            "objects": list(objects), "errors": [], "log": [],
+            "context": {"mode": "poll"},
+        },
+    }
+    (runs_dir / f"{run_id}__{source}__manifest.yaml").write_text(
+        yaml.safe_dump(man), encoding="utf-8")
+    return man
+
+
+def _fixture(tmp_path):
+    """Minimal store+runs: one eligible BME daily file (2 scope records)."""
+    raw = tmp_path / "raw"
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    return raw, runs
+
+
+def test_selection_A_post_tail_manifest_cannot_add_records(tmp_path):
+    """Regression A: a validated-scope raw referenced ONLY by a post-tail
+    manifest contributes nothing to E1."""
+    raw, runs = _fixture(tmp_path)
+    payload = [_bme()]
+    obj = _store(raw, BME, "2026-09-24", "d.json", payload)
+    _manifest(runs, "20260924T090000Z", BME, "2026-09-24T09:00:00Z", [obj])
+    sel = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    assert sel["versions"] == []
+    assert sel["census"]["post_tail_manifests_excluded"] == 1
+    assert sel["census"]["manifests_eligible"] == 0
+
+
+def test_selection_B_pre_window_manifest_cannot_add_records(tmp_path):
+    """Regression B: a pre-window (smoke) manifest is excluded by time."""
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-16", "d.json", [_bme()])
+    _manifest(runs, "20260916T052127Z", BME, "2026-09-16T05:21:27Z", [obj])
+    sel = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    assert sel["versions"] == []
+    assert sel["census"]["pre_window_manifests_excluded"] == 1
+
+
+def test_selection_C_same_capture_version_parsed_once(tmp_path):
+    """Regression C: repeated manifest observations of the same
+    (source_id, source_object_id, capture_version) dedupe to ONE input —
+    capture-identity dedup, not trade dedup."""
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-17", "d.json", [_bme()])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [obj])
+    _manifest(runs, "20260917T110000Z", BME, "2026-09-17T11:00:00Z", [obj])
+    sel = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    assert sel["census"]["object_observations_eligible"] == 2
+    assert sel["census"]["unique_capture_versions_eligible"] == 1
+    assert len(sel["versions"]) == 1
+
+
+def test_selection_D_distinct_capture_versions_stay_distinct(tmp_path):
+    """Regression D: two capture_versions of the same source object are two
+    distinct input publications."""
+    raw, runs = _fixture(tmp_path)
+    o1 = _store(raw, BME, "2026-09-17", "d.json", [_bme()])
+    o2 = _store(raw, BME, "2026-09-18", "d.json", [_bme(price="98.60")])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [o1])
+    _manifest(runs, "20260918T100000Z", BME, "2026-09-18T10:00:00Z", [o2])
+    sel = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    assert sel["census"]["unique_capture_versions_eligible"] == 2
+    assert len(sel["versions"]) == 2
+
+
+def test_selection_E_eligible_manifest_missing_raw_fails_closed(tmp_path):
+    """Regression E: an eligible manifest pointing at absent bytes aborts —
+    never a silent skip."""
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-17", "d.json", [_bme()])
+    (raw / BME / "2026-09-17" / "d.json" / obj["capture_version"]).unlink()
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [obj])
+    with pytest.raises(SelectionError, match="missing raw"):
+        select_eligible(runs, raw, start=START, tail_end=TAIL)
+
+
+def test_selection_pre_window_publication_is_fine_if_observed_in_window(tmp_path):
+    """publication_timestamp is NOT a selection criterion: a source object
+    published before operational_start but captured by an eligible manifest
+    belongs to E1 (24h/rolling rescans legitimately reach back)."""
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-17", "old.json",
+                 [_bme(trading_date_and_time="2026-09-10T10:00:00.000Z",
+                      publication_date_and_time="2026-09-10T10:00:05.000Z")])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [obj])
+    sel = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    assert len(sel["versions"]) == 1
+
+
+def test_selection_malformed_in_window_fails_closed(tmp_path):
+    raw, runs = _fixture(tmp_path)
+    (runs / "20260917T100000Z__bme_apa__manifest.yaml").write_bytes(b"\x00\xff")
+    with pytest.raises(SelectionError):
+        select_eligible(runs, raw, start=START, tail_end=TAIL)
+
+
+def test_selection_malformed_out_of_window_is_diagnostic(tmp_path):
+    raw, runs = _fixture(tmp_path)
+    (runs / "20260925T120000Z__bme_apa__manifest.yaml").write_bytes(b"\x00\xff")
+    sel = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    assert sel["census"]["malformed_out_of_window_manifests"] == 1
 
 
 # ------------------------- interpretation limits / NO_COVERAGE_CLAIM -----
@@ -238,60 +406,68 @@ def test_metrics_payload_contains_no_forbidden_claims():
 REAL_SCOPE_ISIN = "XS2984223102"   # validated INCLUDE per F-009 artifact
 
 
-def _write_raw_tree(root):
-    bme_dir = root / BME / "2026-09-17" / "file.json"
-    bme_dir.mkdir(parents=True)
-    bme_dir.joinpath("aa" * 32).write_text(
-        json.dumps([_bme(instrument_identification_code=REAL_SCOPE_ISIN)]),
-        encoding="utf-8")
-    blb_dir = root / BLB / "2026-09-17" / "file.csv"
-    blb_dir.mkdir(parents=True)
-    row = _blb(**{"Instrument identification code": REAL_SCOPE_ISIN})
-    blb_dir.joinpath("bb" * 32).write_text(
-        "noise line\n" + ",".join(row) + "\n" +
-        ",".join(row.values()) + "\n", encoding="utf-8")
+def _write_raw_tree(tmp_path):
+    """Store + eligible manifests: 1 BME file + 1 BLB file in scope."""
+    raw = tmp_path / "raw"
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    bme_obj = _store(raw, BME, "2026-09-17", "f.json",
+                     [_bme(instrument_identification_code=REAL_SCOPE_ISIN)])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z",
+              [bme_obj])
+    blb_row = _blb(**{"Instrument identification code": REAL_SCOPE_ISIN})
+    csv_data = "noise\n" + ",".join(blb_row) + "\n" + \
+        ",".join(blb_row.values()) + "\n"
+    blb_obj = _store(raw, BLB, "2026-09-17", "f.csv", csv_data)
+    _manifest(runs, "20260917T100000Z", BLB, "2026-09-17T10:00:00Z",
+              [blb_obj])
+    return raw, runs
 
 
 def test_build_and_generate_report(tmp_path):
-    raw = tmp_path / "raw"
-    _write_raw_tree(raw)
-    rep = build_report(raw, date="2026-09-25",
+    raw, runs = _write_raw_tree(tmp_path)
+    rep = build_report(raw, runs, window=WINDOW, date="2026-09-25",
                        generated_utc="2026-09-25T00:00:00Z")
     assert rep["report"] == "COVERAGE_MEASURED"
     assert rep["gate"] == "G0-E"
     assert rep["metrics"]["unique_trades"]["by_source"][BME] == 1
     assert rep["metrics"]["unique_trades"]["by_source"][BLB] == 1
     assert rep["evidence_basis"]["frozen_sample_isin_count"] == 20
+    cen = rep["metrics"]["input_census"]
+    assert cen["manifests_eligible"] == 2
+    assert cen["unique_capture_versions_eligible"] == 2
+    assert cen["raw_versions_parsed"] == 2
 
-    out = generate_report(raw, tmp_path / "ev", date="2026-09-25",
-                          generated_utc="2026-09-25T00:00:00Z")
+    out = generate_report(raw, runs, tmp_path / "ev", window=WINDOW,
+                          date="2026-09-25", generated_utc="2026-09-25T00:00:00Z")
     loaded = yaml.safe_load(out.read_text(encoding="utf-8"))
     assert loaded["report"] == "COVERAGE_MEASURED"
+    sha_file = out.with_name("G0-E1_coverage_measured.sha256.txt")
+    assert sha_file.exists()
 
 
 def test_report_deterministic(tmp_path):
-    raw = tmp_path / "raw"
-    _write_raw_tree(raw)
-    a = build_report(raw, date="d", generated_utc="t")
-    b = build_report(raw, date="d", generated_utc="t")
+    raw, runs = _write_raw_tree(tmp_path)
+    a = build_report(raw, runs, window=WINDOW, date="d", generated_utc="t")
+    b = build_report(raw, runs, window=WINDOW, date="d", generated_utc="t")
     assert yaml.safe_dump(a) == yaml.safe_dump(b)
 
 
-def test_unparseable_raw_is_diagnostic_not_fatal(tmp_path):
-    """A legitimately captured empty/undecodable raw object (e.g. the 0-byte
-    BME daily seen in the A3 bundle) must surface as an explicit diagnostic
-    — never crash the run, never silently vanish."""
-    raw = tmp_path / "raw"
-    _write_raw_tree(raw)
-    bad_dir = raw / BME / "2026-09-21" / "bad.json"
-    bad_dir.mkdir(parents=True)
-    bad_dir.joinpath("e3" * 32).write_bytes(b"")   # captured empty payload
-    rep = build_report(raw, date="d", generated_utc="t")
+def test_unparseable_eligible_raw_is_diagnostic_not_fatal(tmp_path):
+    """An eligible capture whose bytes cannot decode (e.g. the 0-byte BME
+    daily in the A3 bundle) surfaces as an explicit diagnostic identified
+    by (source_id, source_object_id, capture_version)."""
+    raw, runs = _write_raw_tree(tmp_path)
+    bad = _store(raw, BME, "2026-09-21", "bad.json", b"")
+    _manifest(runs, "20260921T100000Z", BME, "2026-09-21T10:00:00Z", [bad])
+    rep = build_report(raw, runs, window=WINDOW, date="d",
+                       generated_utc="t")
     unpar = rep["metrics"]["unparseable_raw_objects"]
     assert len(unpar) == 1
-    assert unpar[0]["source"] == BME
-    assert "bad.json" in unpar[0]["relpath"]
-    # good records still counted
+    assert unpar[0]["source_id"] == BME
+    assert unpar[0]["source_object_id"] == "bad.json"
+    assert unpar[0]["capture_version"] == bad["capture_version"]
+    assert rep["metrics"]["input_census"]["raw_versions_parsed"] == 2
     assert rep["metrics"]["unique_trades"]["by_source"][BME] == 1
 
 

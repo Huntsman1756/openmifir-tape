@@ -14,10 +14,13 @@ from .cross_source import (
     compute_cross_source,
     scan_forbidden_claims,
 )
+from .selection import SelectionError, select_eligible
 
 __all__ = [
     "FORBIDDEN_CLAIM_PATTERNS",
     "INTERPRETATION_LIMITS",
+    "SelectionError",
     "compute_cross_source",
     "scan_forbidden_claims",
+    "select_eligible",
 ]
