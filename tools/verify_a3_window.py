@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Read-only G0-A3 capture-window adjudication (DRAFT v5.1 — pre-preregistration).
+"""Read-only G0-A3 capture-window adjudication (v5.2).
+
+v5.2 fixes an evidence-scoping defect found by the first real G0-A3
+adjudication (v1 = g0-a3-adjudicator-v1, verdict REVIEW_REQUIRED):
+first-write observation indexing and manifest-referenced raw paths were
+built from ALL manifests, so a clearly out-of-window, repo-seeded smoke
+manifest could bound the gate-relevant first-write invariant and register
+in-window raw objects as recorded. v5.2 scopes those gate decisions to
+window-eligible evidence only; out-of-window records remain diagnostic
+context. No gate methodology changed.
 
 Adjudicates an A3 evidence bundle against the FROZEN contract
 (docs/gates/G0.md §2 G0-A, baseline g0-freeze-v1) as implemented by the
@@ -1113,7 +1122,7 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                   all_manifests: dict[tuple, dict],
                   acq_hosts: dict[str, set], anomalies: list[str],
                   diagnostics: dict, start: datetime, end: datetime,
-                  obs_recs: dict) -> dict:
+                  obs_recs: dict, obs_recs_all: dict) -> dict:
     """Per-object integrity for ELIGIBLE manifests, resolved at the exact
     deployed path raw/<sid>/<observed_at[:10]>/<sanitized key>/<cv>.
 
@@ -1123,13 +1132,24 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
 
     meta.observation_utc is first-write metadata: it may legitimately
     predate the window (pre-operational captures). Rule: meta.observation_utc
-    <= earliest known observation of that stored version at that
-    collection_date; a meta claiming first write AFTER a manifest-recorded
-    observation is an anomaly.
+    <= earliest ELIGIBLE observation of that stored version at that
+    collection_date; a meta claiming first write AFTER an eligible
+    manifest-recorded observation is an anomaly.
+
+    Evidence classes (v5.2): ``obs_recs``/``manifests`` carry only
+    window-eligible observations and drive every gate-relevant invariant.
+    ``obs_recs_all``/``all_manifests`` additionally contain clearly
+    out-of-window records (e.g. repo-seeded pre-operational smoke
+    manifests) — diagnostic/provenance context only. They still reconcile
+    a meta's observational fields against the actual first-write record
+    wherever it sits in the bundle (a mismatch can only flag, never
+    clear), but they MUST NOT bound earliest known observation nor attest
+    that an in-window raw object was recorded.
     """
     checked = failed = 0
     seen_paths = set()
-    referenced_paths = set()
+    referenced_eligible = set()   # gate: in-window raws need eligible refs
+    referenced_all = set()        # diagnostics: historical context
 
     def _meta_observed_in_window(meta: dict | None, coldate: str) -> bool:
         t = _iso((meta or {}).get("observation_utc"))
@@ -1138,16 +1158,22 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
         d = _day(coldate)
         return bool(d and start.date() <= d <= end.date())
 
-    # all manifests (eligible or not) count as "recording" a raw object
-    for (_rid, sid), m in all_manifests.items():
-        t = _iso(m["results"].get("observed_at"))
-        cd = t.date().isoformat() if t else None
-        for o in m["results"].get("objects") or []:
-            if o.get("source_object_id") and o.get("capture_version") and cd:
-                referenced_paths.add(
-                    raw_object_path(raw_root, sid, cd,
-                                    o["source_object_id"],
-                                    o["capture_version"]))
+    # Eligible manifests attest acquisition for this gate; out-of-window
+    # manifests remain historical context only (they cannot register an
+    # in-window raw object as recorded).
+    def _referenced(man_map, out):
+        for (_rid, sid), m in man_map.items():
+            t = _iso(m["results"].get("observed_at"))
+            cd = t.date().isoformat() if t else None
+            for o in m["results"].get("objects") or []:
+                if o.get("source_object_id") and o.get("capture_version") \
+                        and cd:
+                    out.add(raw_object_path(raw_root, sid, cd,
+                                            o["source_object_id"],
+                                            o["capture_version"]))
+
+    _referenced(manifests, referenced_eligible)
+    _referenced(all_manifests, referenced_all)
 
     # -- manifest-referenced objects: exact path + full reconciliation
     for (rid, sid), m in manifests.items():
@@ -1230,7 +1256,7 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                     failed += 1
             # first-write semantics: meta.observation_utc may legitimately
             # predate the window, but must never be later than the earliest
-            # known observation of this version at this collection_date.
+            # ELIGIBLE observation of this version at this collection_date.
             recs = obs_recs.get((sid, key, cv), [])
             known = [t for t, _o in recs
                      if t.date().isoformat() == coldate]
@@ -1248,11 +1274,13 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
             # Observational fields (publication_timestamp, provenance_url)
             # are first-write records: they reconcile ONLY against the
             # manifest observation made at meta.observation_utc (the
-            # first-write record itself). Later ALREADY_PRESENT
-            # re-observations may legitimately carry different
-            # observational metadata for identical bytes — never compare
-            # them blindly.
-            fw = [of for t, of in recs
+            # first-write record itself — which may legitimately live in
+            # an out-of-window manifest, e.g. a pre-operational capture).
+            # Later ALREADY_PRESENT re-observations may legitimately carry
+            # different observational metadata for identical bytes —
+            # never compare them blindly. Reconciliation can only flag,
+            # never satisfy a gate invariant.
+            fw = [of for t, of in obs_recs_all.get((sid, key, cv), [])
                   if t == meta_obs
                   and t.date().isoformat() == coldate]
             if fw:
@@ -1276,10 +1304,16 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
         is_meta = p.name.endswith(META_SUFFIX)
         mate = (p.with_name(p.name[:-len(META_SUFFIX)]) if is_meta
                 else raw_meta_path(p))
+        # Window attribution follows the recorded first-write instant:
+        # for a raw file the sibling meta's observation_utc is the precise
+        # timestamp (e.g. a post-tail capture under an in-window calendar
+        # date); collection_date is only the day-granularity fallback when
+        # no meta parses.
         meta = None
-        if is_meta:
+        meta_src = p if is_meta else mate
+        if meta_src.is_file():
             try:
-                meta = yaml.safe_load(p.read_bytes().decode("utf-8"))
+                meta = yaml.safe_load(meta_src.read_bytes().decode("utf-8"))
             except (OSError, UnicodeDecodeError, yaml.YAMLError):
                 meta = {}
         in_window = _meta_observed_in_window(meta, coldate)
@@ -1287,11 +1321,12 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
         if not mate.is_file():
             problem = ("meta without raw object" if is_meta
                        else "raw object without meta")
-        elif not is_meta and p not in referenced_paths:
+        elif not is_meta and p not in referenced_eligible:
             if p.name != _sha256(p):
                 problem = "raw filename != sha256(bytes)"
             else:
-                problem = "raw object never recorded in a manifest"
+                problem = ("raw object never recorded in an eligible "
+                           "manifest")
         if problem:
             if in_window:
                 anomalies.append(f"{problem}: {p}")
@@ -1301,7 +1336,7 @@ def raw_integrity(raw_root: Path, manifests: dict[tuple, dict],
                                        []).append(f"{problem}: {p}")
     diagnostics["out_of_window_raw_objects"] = sum(
         1 for p in files if not p.name.endswith(META_SUFFIX)
-        and p not in referenced_paths
+        and p not in referenced_all
         and not _meta_observed_in_window(
             None, p.relative_to(raw_root).parts[1]
             if len(p.relative_to(raw_root).parts) == 4 else ""))
@@ -1525,8 +1560,20 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
     rolling = rolling_operation(rows, mans, sources, recovery, explained,
                                 t0, tail)
 
+    # v5.2: two observation universes. Eligible (in-window) records are
+    # the only ones that may satisfy gate-relevant invariants; the full
+    # set remains diagnostic/provenance context (first-write record
+    # reconciliation, historical attribution).
     obs_recs: dict[tuple, list] = defaultdict(list)
+    obs_recs_all: dict[tuple, list] = defaultdict(list)
     for m in mans_all.values():
+        t = _iso(m["results"].get("observed_at"))
+        for o in m["results"].get("objects") or []:
+            if o.get("source_object_id") and o.get("capture_version") and t:
+                obs_recs_all[(m["results"]["source_id"],
+                              o["source_object_id"],
+                              o["capture_version"])].append((t, o))
+    for m in mans.values():
         t = _iso(m["results"].get("observed_at"))
         for o in m["results"].get("objects") or []:
             if o.get("source_object_id") and o.get("capture_version") and t:
@@ -1535,7 +1582,8 @@ def verify(journal: Path, runs: Path, raw: Path, config: Path,
                           o["capture_version"])].append((t, o))
 
     integrity = raw_integrity(raw, mans, mans_all, acq_hosts, anomalies,
-                              diagnostics, t0, tail, obs_recs)
+                              diagnostics, t0, tail, obs_recs,
+                              obs_recs_all)
     coverage = coverage_axis(mans, raw, counted, recovery)
 
     rep = {

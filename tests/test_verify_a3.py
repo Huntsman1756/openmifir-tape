@@ -1981,3 +1981,89 @@ def test_extra_rolling_cannot_hide_missing_slot(tmp_path):
         assert "2026-09-20T06:15:00+00:00" in \
             rep["rolling"][sid]["slots_unaccounted"]
     assert rep["verdict"] != "COMPLETE_SUPPORTED"
+
+
+# ==================== v5.2: temporal scoping of first-write integrity ====
+#
+# v1 defect (real G0-A3 adjudication, REVIEW_REQUIRED): the deployed
+# checkout carried repo-committed pre-operational smoke manifests inside
+# evidence/g0-a3/runs/. v1 built the first-write observation index from
+# ALL manifests, so a clearly out-of-window record defined
+# earliest_known_observation for a gate-relevant invariant — contradicting
+# the preregistered scoping rule (out-of-window records are diagnostics).
+# v5.2 splits the evidence classes: eligible observations drive gate
+# invariants; the full set remains available as diagnostic/provenance
+# context (e.g. reconciling a meta's observational fields against the
+# actual first-write record wherever it lives in the bundle).
+
+def test_pre_window_manifest_cannot_bound_first_write(tmp_path):
+    """A pre-window manifest recording (key, cv) that the adjudicated store
+    never held must NOT define earliest_known_observation. Reproduces the
+    v1 defect: smoke manifest at 05:21 + in-window first write at 10:12
+    -> v1 emitted a false 'meta observation_utc later than first known
+    observation' anomaly."""
+    c = Corpus(tmp_path)
+    smoke = datetime(2026, 9, 16, 5, 21, 27, tzinfo=UTC)
+    key = tok(datetime(2026, 9, 15, 0, 5, tzinfo=UTC), 2)
+    # the smoke run records K/V — but those bytes were never written to
+    # THIS raw store (manifest committed from a different environment)
+    rec = c.capture(BLB, key, smoke)
+    c.run(smoke, objs=[rec], mode="rolling")
+    c.drop_raw(BLB, rec["capture_version"],
+               collection_date=smoke.date().isoformat())
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    # the operational first write of identical bytes happens in-window
+    t2 = datetime(2026, 9, 16, 10, 12, 46, tzinfo=UTC)
+    rec2 = c.capture(BLB, key, t2)
+    assert rec2["status"] == "CREATED"
+    for m in c.mans:
+        if m["run_id"] == rid(t2) and m["results"]["source_id"] == BLB:
+            m["results"]["objects"].append(rec2)
+    rep = c.verify()
+    assert not any("first known observation" in a
+                   for a in rep["anomalies"])
+    assert rep["anomalies"] == []
+    assert rep["verdict"] == "COMPLETE_SUPPORTED", rep["verdict_reasons"]
+
+
+def test_pre_window_manifest_cannot_register_in_window_raw(tmp_path):
+    """referenced-path scoping: an in-window raw object whose only manifest
+    record is a pre-window manifest is NOT recorded for this gate — it is
+    the same class of out-of-window leak, and must stay an anomaly."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    smoke = datetime(2026, 9, 16, 5, 21, 27, tzinfo=UTC)
+    key = tok(datetime(2026, 9, 16, 3, 33, tzinfo=UTC), 3)
+    # raw/meta first-written INSIDE the window, but only a pre-window
+    # manifest references (sid, coldate, key, cv)
+    rec = store_capture(
+        c.raw, source_id=BLB, collection_date="2026-09-16",
+        object_key=key, data=b"synthetic:leak",
+        publication_timestamp=None
+        or "20260916-03:33:00.000-03",
+        provenance_url=f"https://{HOSTS[BLB]}/{key}",
+        observation_utc=iso(datetime(2026, 9, 16, 10, 0, tzinfo=UTC)))
+    c.run(smoke, objs=[rec], mode="rolling")
+    rep = c.verify()
+    assert rep["verdict"] == "REVIEW_REQUIRED"
+    assert any("never recorded" in a for a in rep["anomalies"])
+
+
+def test_in_window_meta_after_first_observation_is_review(tmp_path):
+    """Control: a meta claiming first write AFTER an eligible manifest
+    observation is still a gate-relevant anomaly — the scoping fix must
+    not weaken real in-window first-write detection."""
+    c = Corpus(tmp_path)
+    fill(c, W0, TAIL_FILL, CANDIDATES)
+    make_setup_proof(c)
+    key = tok(W0, 2)   # captured by the first poll at W0 (09:42:46Z)
+    mp = next((c.raw / BLB / "2026-09-16" / sanitize_filename(key))
+              .glob("*.meta.yaml"))
+    meta = yaml.safe_load(mp.read_text())
+    meta["observation_utc"] = iso(W0 + timedelta(hours=1))
+    mp.write_text(yaml.safe_dump(meta), encoding="utf-8")
+    rep = c.verify()
+    assert rep["verdict"] == "REVIEW_REQUIRED"
+    assert any("first known observation" in a for a in rep["anomalies"])
