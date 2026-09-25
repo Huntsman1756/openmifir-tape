@@ -17,10 +17,20 @@ Identity dedup only: repeated manifest observations of the same
 that is capture identity, not economic/trade deduplication. Two distinct
 capture_versions of the same source object stay distinct.
 
+Identity binding: a manifest reference resolves ONLY under the physical
+namespace of the recorded logical object —
+``raw/<sid>/<coldate>/<sanitize_filename(source_object_id)>/<cv>`` — and
+the sibling ``<cv>.meta.yaml`` (RawStore write-once provenance) must
+independently attest the exact UNSANITIZED identity. ``sanitize_filename``
+is not injective; the path check alone is insufficient (G1-A prerequisite,
+issue #17).
+
 Fail closed: an eligible manifest referencing raw bytes absent from the
-store (or bytes whose sha256 diverges from the recorded capture_version)
-aborts the run — never a silent skip. A malformed manifest that cannot be
-scoped to a time outside the window likewise aborts.
+store, resolvable only under a different logical object key, failing meta
+reconciliation, or whose bytes diverge from the recorded capture_version
+sha256 aborts the run — never a silent skip, never a cross-key fallback.
+A malformed manifest that cannot be scoped to a time outside the window
+likewise aborts.
 """
 
 from __future__ import annotations
@@ -33,7 +43,10 @@ from typing import Any
 
 import yaml
 
+from collectors.storage import sanitize_filename
+
 MANIFEST_GLOB = "*__manifest.yaml"
+META_SUFFIX = ".meta.yaml"
 _RUN_ID_RE = re.compile(r"^(\d{8}T\d{6})Z")
 
 
@@ -77,25 +90,90 @@ def _run_id_time(name: str) -> datetime | None:
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
-def _index_raw(raw_root: Path) -> dict[tuple[str, str], Path]:
-    """Single-pass index (source_id, capture_version) -> raw path.
+def _index_raw(
+    raw_root: Path,
+) -> tuple[dict[tuple[str, str, str], list[Path]],
+           dict[tuple[str, str], list[Path]]]:
+    """Single-pass index over raw/<sid>/<collection_date>/<keydir>/<cv>.
 
-    raw/<sid>/<collection_date>/<sanitized key>/<cv>: the same capture
-    version may exist under several collection dates (re-captures write
-    per-observation-date copies of identical bytes). cv IS the content
-    sha256, so any copy is the same bytes; the first sorted path wins
-    deterministically.
+    Returns ``(index, cv_index)``:
+
+    - ``index[(sid, sanitized_key_dir, cv)] -> [Path...]`` (sorted) —
+      candidate copies for one logical capture identity;
+    - ``cv_index[(sid, cv)] -> [Path...]`` — diagnostics only, used to
+      distinguish "missing" from "exists only under a different object
+      key"; it NEVER satisfies a reference.
     """
-    index: dict[tuple[str, str], Path] = {}
+    index: dict[tuple[str, str, str], list[Path]] = {}
+    cv_index: dict[tuple[str, str], list[Path]] = {}
     for source_id in ("bme_apa", "blb_apae"):
         sid_dir = raw_root / source_id
         if not sid_dir.is_dir():
             continue
         for p in sorted(sid_dir.rglob("*")):
-            if p.is_file() and not p.name.endswith(".meta.yaml") \
+            if p.is_file() and not p.name.endswith(META_SUFFIX) \
                     and _HEX64.match(p.name):
-                index.setdefault((source_id, p.name), p)
-    return index
+                index.setdefault((source_id, p.parent.name, p.name),
+                                 []).append(p)
+                cv_index.setdefault((source_id, p.name), []).append(p)
+    return index, cv_index
+
+
+def _meta_check(meta_path: Path, sid: str, key: str, cv: str,
+                collection_date: str) -> str | None:
+    """Reconcile a candidate's write-once meta against the EXACT logical
+    identity attested by the manifest. Returns a rejection reason or None.
+    Every contract field must match exactly — no inference, no fuzzy match.
+    """
+    if not meta_path.is_file():
+        return "missing .meta.yaml"
+    try:
+        meta = yaml.safe_load(meta_path.read_bytes().decode("utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        return f"malformed meta ({exc})"
+    if not isinstance(meta, dict):
+        return "meta is not a mapping"
+    for field, expected in (
+            ("source_id", sid),
+            ("source_object_id", key),       # exact UNSANITIZED identity
+            ("capture_version", cv),
+            ("raw_sha256", cv),
+            ("collection_date", collection_date)):
+        if meta.get(field) != expected:
+            return f"meta {field}={meta.get(field)!r} != {expected!r}"
+    return None
+
+
+def _resolve_version(
+    raw_index: dict[tuple[str, str, str], list[Path]],
+    cv_index: dict[tuple[str, str], list[Path]],
+    sid: str, key: str, cv: str,
+) -> Path:
+    """Resolve one eligible (source_id, source_object_id, capture_version)
+    to an exact-identity raw path — or fail closed."""
+    candidates = raw_index.get((sid, sanitize_filename(key), cv), [])
+    valid: list[Path] = []
+    first_reject: str | None = None
+    for p in candidates:
+        reason = _meta_check(p.with_name(p.name + META_SUFFIX),
+                             sid, key, cv, p.parent.parent.name)
+        if reason is None:
+            valid.append(p)
+        elif first_reject is None:
+            first_reject = reason
+    if valid:
+        return sorted(valid)[0]
+    ident = f"{sid}/{key}/{cv}"
+    if candidates:
+        raise SelectionError(
+            f"{ident}: every candidate failed meta reconciliation "
+            f"({first_reject})")
+    if cv_index.get((sid, cv)):
+        raise SelectionError(
+            f"{ident}: capture_version exists only under a different "
+            f"source_object_id — refusing cross-key fallback")
+    raise SelectionError(
+        f"{ident}: eligible manifest references missing raw bytes")
 
 
 def select_eligible(
@@ -180,15 +258,12 @@ def select_eligible(
             object_observations += 1
             unique[(sid, key, cv)] = None   # capture-identity dedup
 
-    raw_index = _index_raw(raw_root)
+    raw_index, cv_index = _index_raw(raw_root)
     versions: list[CaptureVersionRef] = []
     for sid, key, cv in sorted(unique):
-        path = raw_index.get((sid, cv))
-        if path is None:
-            raise SelectionError(
-                f"eligible manifest references missing raw bytes: "
-                f"{sid}/{key}/{cv}")
-        versions.append(CaptureVersionRef(sid, key, cv, path))
+        versions.append(CaptureVersionRef(
+            sid, key, cv, _resolve_version(raw_index, cv_index,
+                                           sid, key, cv)))
 
     return {
         "versions": versions,
