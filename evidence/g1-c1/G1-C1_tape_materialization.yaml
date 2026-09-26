@@ -1,0 +1,127 @@
+gate: G1
+issue_id: G1-C1
+report: G1-C1_TAPE_MATERIALIZATION
+date: '2026-09-26'
+generated_utc: '2026-09-26T14:30:00Z'
+frozen_authority:
+  spec: "docs/gates/G1.md \xA74.1/\xA74.2"
+  freeze_tag: g1-freeze-v0
+  freeze_commit: 2a5e4684b9a3f6066e6d2a53cbc37b920e2c9ffa
+generator:
+  module: metrics.g1c1
+  code_commit: d297ef73ee9235139ad94b9a9fb4037418d44147
+  deterministic: true
+tape_schema_version: 1
+input_authority:
+  selector: metrics.selection.select_eligible (#17-hardened)
+  input_layout: sealed_bundle/{runs,raw}
+  capture_window_utc:
+    operational_start: '2026-09-16T09:42:46Z'
+    evidence_tail_end: '2026-09-24T07:00:00Z'
+  g1a:
+    artifact: evidence/g1-a1/G1-A1_observed_instrument_set.yaml
+    semantic_digest: f87b1b2fe5c35a506885036ad153494d93a67cedc7fe74062e893223c5139f71
+    verification: canonical digest recomputed over instrument entries; publication
+      ISIN surface == observed set enforced
+    observed_identifier_count: 8077
+  g1b:
+    rows: evidence/g1-b1/G1-B1_disposition_rows.jsonl
+    rows_sha256: 1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8
+    report: evidence/g1-b1/G1-B1_observed_universe_disposition.yaml
+    report_sha256: 3d75da51a3b30b4f0e1139afc8891c3983bc28bdbb134cd49d8690c348633c8f
+    reference_basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
+    verification: report bytes sha256-verified; report.dispositions.rows_sha256 bound
+      to the independently hashed rows file; reference_basis_id recomputed from the
+      three family set_digests (metrics.g1b.reference_basis_id) and required to equal
+      embedded == expected
+tables:
+  publications:
+    file: data/g1/tape/publications.parquet
+    columns:
+    - source
+    - source_object_id
+    - capture_version
+    - raw_sha256
+    - capture_record_ordinal
+    - known_at
+    - last_observed_at
+    - observation_count
+    - publication_utc
+    - trading_utc
+    - isin
+    - transaction_id
+    - price
+    - quantity
+    - notional
+    - currency
+    - price_currency
+    - price_notation
+    - flags
+    - source_report_id
+    - lifecycle_state
+    - ledger_entry_id
+    - supersedes_entry_id
+    - ledger_markers
+    - universe_disposition
+    - universe_disposition_reason
+    - issuer_lei
+    row_count: 52008
+    semantic_digest: ab14b5fd190ca8dd68f7827f748602e36f5f89e4d65960c06f5ee5a701900d8b
+  trade_chains:
+    file: data/g1/tape/trade_chains.parquet
+    columns:
+    - source
+    - chain_id
+    - isin
+    - transaction_id
+    - head_entry_id
+    - head_state
+    - event_count
+    - first_publication_utc
+    - latest_publication_utc
+    - first_known_at
+    - head_known_at
+    row_count: 30419
+    semantic_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+dataset_semantic_digest: 2fa0427733d2adfc1debb18e4917308dfd4fb3567268198afd4f3200a029ab4a
+lifecycle_reconciliation:
+  ledger_entries: 52008
+  chains: 30419
+  supersession_links: 21589
+  unchainable_singletons: 0
+  entry_id_collisions: 21201
+  head_state_counts:
+    AMENDED: 755
+    CANCELLED: 400
+    DEFERRED: 36
+    FULLY_PUBLISHED: 22403
+    PARTIALLY_PUBLISHED: 6825
+  publication_state_counts:
+    AMENDED: 1011
+    CANCELLED: 1496
+    DEFERRED: 324
+    FULLY_PUBLISHED: 42317
+    PARTIALLY_PUBLISHED: 6860
+diagnostics:
+  input_census:
+    manifests_total: 825
+    manifests_eligible: 776
+    object_observations_eligible: 12029
+    unique_capture_versions_eligible: 8268
+    pre_window_manifests_excluded: 3
+    post_tail_manifests_excluded: 46
+    malformed_out_of_window_manifests: 0
+  unparseable_capture_versions:
+  - source_id: bme_apa
+    source_object_id: 2026-09-21-bmea-posttrade.json
+    capture_version: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    reason: JSONDecodeError
+  publications_parseable_without_isin: 0
+  duckdb_smoke:
+    publications_rows: 52008
+    trade_chains_rows: 30419
+    pubs_on_head_join_rows: 30419
+hygiene:
+  provider_payloads_in_repo: false
+  parquet_files_committed: false
+  semantic_identity_basis: canonical JSONL digests; Parquet physical bytes are non-authoritative
