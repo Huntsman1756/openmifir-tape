@@ -477,3 +477,132 @@ def test_forbidden_patterns_do_not_self_trigger_on_limits():
     # never trip the gate.
     for text in INTERPRETATION_LIMITS.values():
         assert isinstance(text, str) and text
+
+
+# ------------- #17: source_object_id binding / meta reconciliation ---------
+
+def _obj(source, key, cv):
+    """Minimal manifest object entry (fields selection consumes)."""
+    return {"source_id": source, "source_object_id": key,
+            "capture_version": cv}
+
+
+def _rewrite_meta(raw, sid, coldate, key_dir, cv, **fields):
+    """Overwrite the sibling meta with modified fields (synthetic tamper)."""
+    meta_p = raw / sid / coldate / key_dir / f"{cv}.meta.yaml"
+    meta = yaml.safe_load(meta_p.read_bytes())
+    meta.update(fields)
+    meta_p.write_text(yaml.safe_dump(meta), encoding="utf-8")
+
+
+def test_identity_exact_succeeds(tmp_path):
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-17", "k.json", [_bme()])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [obj])
+    sel = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    assert len(sel["versions"]) == 1
+    assert sel["versions"][0].source_object_id == "k.json"
+
+
+def test_identity_wrong_object_key_fails(tmp_path):
+    """Same source, identical bytes/cv, but only under another object key —
+    the manifest reference must not be satisfied by a cross-key copy."""
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-17", "k2.json", [_bme()])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z",
+              [_obj(BME, "k1.json", obj["capture_version"])])
+    with pytest.raises(SelectionError, match="different source_object_id"):
+        select_eligible(runs, raw, start=START, tail_end=TAIL)
+
+
+def test_identity_correct_and_wrong_key_coexist(tmp_path):
+    """Identical bytes under K1 and K2 dirs; manifest asks K1 — the exact
+    K1 copy wins deterministically; the K2 copy must not poison it."""
+    raw, runs = _fixture(tmp_path)
+    data = json.dumps([_bme()]).encode()
+    o1 = _store(raw, BME, "2026-09-17", "k1.json", data)
+    _store(raw, BME, "2026-09-17", "k2.json", data)
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [o1])
+    sel = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    assert len(sel["versions"]) == 1
+    assert sel["versions"][0].path.parent.name == "k1.json"
+
+
+def test_identity_sanitization_collision_fails_closed(tmp_path):
+    """Adversarial: K1='a:b.json' and K2='a?b.json' sanitize to the same
+    'a_b.json' dir. Bytes/meta physically belong to K2; manifest asks K1.
+    Path-name check alone is insufficient — meta reconciliation fails."""
+    raw, runs = _fixture(tmp_path)
+    o2 = _store(raw, BME, "2026-09-17", "a?b.json", [_bme()])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z",
+              [_obj(BME, "a:b.json", o2["capture_version"])])
+    with pytest.raises(SelectionError):
+        select_eligible(runs, raw, start=START, tail_end=TAIL)
+
+
+def test_identity_missing_meta_fails(tmp_path):
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-17", "k.json", [_bme()])
+    (raw / BME / "2026-09-17" / "k.json"
+     / f"{obj['capture_version']}.meta.yaml").unlink()
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [obj])
+    with pytest.raises(SelectionError, match="meta reconciliation"):
+        select_eligible(runs, raw, start=START, tail_end=TAIL)
+
+
+def test_identity_malformed_meta_fails(tmp_path):
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-17", "k.json", [_bme()])
+    meta_p = (raw / BME / "2026-09-17" / "k.json"
+              / f"{obj['capture_version']}.meta.yaml")
+    meta_p.write_bytes(b"\x00\xff[")
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [obj])
+    with pytest.raises(SelectionError):
+        select_eligible(runs, raw, start=START, tail_end=TAIL)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("source_id", "other_src"),
+    ("source_object_id", "other-key.json"),
+    ("capture_version", "0" * 64),
+    ("raw_sha256", "0" * 64),
+    ("collection_date", "2026-09-18"),
+])
+def test_identity_meta_field_mismatch_fails(tmp_path, field, value):
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-17", "k.json", [_bme()])
+    _rewrite_meta(raw, BME, "2026-09-17", "k.json",
+                  obj["capture_version"], **{field: value})
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [obj])
+    with pytest.raises(SelectionError, match="meta reconciliation"):
+        select_eligible(runs, raw, start=START, tail_end=TAIL)
+
+
+def test_identity_same_tuple_across_collection_dates(tmp_path):
+    """Same logical identity stored under two collection dates: both valid,
+    resolution deterministic."""
+    raw, runs = _fixture(tmp_path)
+    data = json.dumps([_bme()]).encode()
+    o1 = _store(raw, BME, "2026-09-17", "k.json", data)
+    _store(raw, BME, "2026-09-18", "k.json", data)   # same bytes, new date
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [o1])
+    _manifest(runs, "20260918T100000Z", BME, "2026-09-18T10:00:00Z", [o1])
+    a = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    b = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    assert len(a["versions"]) == 1
+    assert a["versions"][0].path == b["versions"][0].path
+    assert "2026-09-17" in str(a["versions"][0].path)   # earliest coldate
+
+
+def test_identity_content_hash_tamper_fails_at_load(tmp_path):
+    """Exact path + valid meta but tampered bytes: the load-stage sha256
+    check remains a hard failure (SelectionError)."""
+    from metrics.evidence import _load_eligible_records
+    raw, runs = _fixture(tmp_path)
+    obj = _store(raw, BME, "2026-09-17", "k.json", [_bme()])
+    (raw / BME / "2026-09-17" / "k.json"
+     / obj["capture_version"]).write_bytes(b"tampered")
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [obj])
+    sel = select_eligible(runs, raw, start=START, tail_end=TAIL)
+    with pytest.raises(SelectionError, match="divergence"):
+        _load_eligible_records(sel)
