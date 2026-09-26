@@ -54,13 +54,22 @@ def _canon_ts(dt: datetime) -> str:
             .strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z")
 
 
-def _digest_entries(entries: list[dict[str, Any]]) -> str:
+def digest_entries(entries: list[dict[str, Any]]) -> str:
     """Semantic digest: sha256 over canonical JSON lines — no machine
-    paths, stable key order, one line per instrument."""
+    paths, stable key order, one line per instrument.
+
+    Public: G1-B recomputes this digest over a G1-A artifact's entries to
+    verify input authority cryptographically, never trusting the embedded
+    string alone.
+    """
     canon = "\n".join(
         json.dumps(e, sort_keys=True, separators=(",", ":"))
         for e in entries)
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+# Backward-compatible alias for the pre-promotion name.
+_digest_entries = digest_entries
 
 
 def build_observed_instrument_set(
@@ -140,7 +149,7 @@ def build_observed_instrument_set(
         "by_source_instrument_counts": by_source,
         "instruments_in_multiple_sources": both,
         "instruments": instruments,
-        "semantic_digest": _digest_entries(instruments),
+        "semantic_digest": digest_entries(instruments),
         "input_census": selection["census"],
         "excluded_manifest_names": selection["excluded"],
         "unparseable_raw_objects": unparseable,

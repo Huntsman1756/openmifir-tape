@@ -225,10 +225,23 @@ def load_acquired_entities(
             else:
                 entities[lei] = entity
         elif outcome == OUTCOME_NOT_FOUND:
-            # Authoritative absence: the resolver sees an unresolved LEI.
-            entities[lei] = GleifEntity(lei=lei,
-                                        legal_jurisdiction_country=None,
-                                        resolved=False)
+            # Validate the marker's contents (a corrupt/mismatched marker
+            # is an acquisition defect, not an authoritative absence).
+            try:
+                marker = json.loads(
+                    notfound_path(gleif_dir, lei).read_bytes()
+                    .decode("utf-8"))
+            except Exception:  # noqa: BLE001 - corrupt pinned marker -> acquisition defect
+                marker = None
+            if (not isinstance(marker, dict)
+                    or marker.get("lei") != lei
+                    or marker.get("result") != "NOT_FOUND"):
+                outcome = OUTCOME_ACQUISITION_FAILED
+            else:
+                # Authoritative absence: the resolver sees unresolved.
+                entities[lei] = GleifEntity(lei=lei,
+                                            legal_jurisdiction_country=None,
+                                            resolved=False)
         census[lei] = outcome
     incomplete = {k: v for k, v in census.items()
                   if v in (OUTCOME_ACQUISITION_FAILED, OUTCOME_NOT_ATTEMPTED)}

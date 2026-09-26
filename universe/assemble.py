@@ -27,7 +27,8 @@ from dataclasses import dataclass, field
 from .firds import FirdsInstrument
 from .fitrs import FitrsRecord
 from .gleif import GleifEntity, resolve_legal_jurisdiction
-from .model import LEI_PATTERN, SecurityRecord
+from .model import Branch, Reason, SecurityRecord
+from .resolver import resolve_disposition
 
 
 def single_distinct(values: Iterable[str | None]) -> tuple[str | None, bool]:
@@ -97,24 +98,20 @@ def assemble_security_record(
         notes.append("FIRDS records disagree on issuer LEI -> "
                      "IDENTITY_CONFLICT")
 
-    # On a contradiction the frozen precedence needs a present LEI for the
-    # identity-conflict branch to fire (a missing LEI is checked earlier).
-    # The deterministic sorted-first attested value is carried ONLY for
-    # that; ``Assembly.issuer_lei`` stays None so downstream output never
-    # presents a contradictory value as resolved identity, and the GLEIF
-    # lookup is skipped — no jurisdiction is consulted for a conflict.
-    record_lei = lei
-    if lei_ambiguous:
-        record_lei = sorted(
-            {f.issuer_lei for f in firds_instruments if f.issuer_lei})[0]
-
+    # Frozen precedence is preserved verbatim: a contradiction carries NO
+    # representative value — ``issuer_lei=None`` + ``identity_conflict=True``
+    # — and the unchanged ``resolve_disposition`` precedence decides (a
+    # missing LEI is therefore QUARANTINE / MISSING_ISSUER_LEI, checked
+    # before the conflict branch). No GLEIF lookup is performed for an
+    # ambiguous LEI. Any change to that ordering belongs to an explicit
+    # spec freeze, not to record assembly.
     gleif = (resolve_legal_jurisdiction(lei or "", gleif_entities)
              if lei else None)
 
     record = SecurityRecord(
         instrument_mifir_id=mifir_id,
         instrument_bond_type=bond_type,
-        issuer_lei=record_lei,
+        issuer_lei=lei,
         gleif_legal_jurisdiction_country=(
             gleif.legal_jurisdiction_country if gleif else None),
         gleif_resolved=gleif.resolved if gleif else False,
@@ -153,22 +150,31 @@ def assemble_security_record(
 
 def required_gleif_leis(
     isins: Iterable[str],
+    fitrs_by_isin: dict[str, list[FitrsRecord]],
     firds_by_isin: dict[str, list[FirdsInstrument]],
 ) -> set[str]:
     """LEIs that actually require a GLEIF jurisdiction outcome.
 
-    A LEI is required iff it is the single distinct issuer LEI FIRDS yields
-    for an observed ISIN and it is ISO 17442 shaped — exactly the inputs
-    that can reach the resolver's jurisdiction step. Absent/ambiguous/
-    invalid LEIs are decided earlier by the resolver and never require a
-    lookup.
+    Computed by PROBING the frozen resolver, not by re-implementing its
+    precedence: each ISIN is assembled against an EMPTY GLEIF index, which
+    leaves every earlier frozen decision intact while making the
+    jurisdiction step unresolvable. An ISIN's LEI is required iff the probe
+    returns QUARANTINE / UNRESOLVABLE_LEGAL_JURISDICTION — i.e. the frozen
+    chain demonstrably reaches that step. ISINs decided earlier
+    (NOT_BOND/NOT_CRPB/MISSING_*/INVALID_ISSUER_LEI/IDENTITY_CONFLICT)
+    never require a lookup, so a failed acquisition for their LEI can never
+    manufacture a false HOLD.
     """
     required: set[str] = set()
     for isin in isins:
-        lei, ambiguous = single_distinct(
-            f.issuer_lei for f in firds_by_isin.get(isin, []))
-        if lei and not ambiguous:
-            norm = lei.strip().upper()
-            if LEI_PATTERN.match(norm):
-                required.add(norm)
+        assembled = assemble_security_record(
+            isin,
+            fitrs_by_isin.get(isin) or [],
+            firds_by_isin.get(isin) or [],
+            {},
+        )
+        probe = resolve_disposition(assembled.record)
+        if (probe.branch is Branch.QUARANTINE
+                and probe.reason is Reason.UNRESOLVABLE_LEGAL_JURISDICTION):
+            required.add(assembled.issuer_lei.strip().upper())
     return required

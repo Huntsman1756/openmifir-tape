@@ -10,24 +10,40 @@ frozen ``es_legal_issuer_v1`` chain (docs/gates/G0.md §3, unchanged):
 
 Branch decisions come EXCLUSIVELY from
 ``universe.resolver.resolve_disposition`` — this module assembles the
-resolver's inputs (shared ``universe.assemble`` semantics) and records the
-outcomes; it implements no precedence of its own.
+resolver's inputs (shared ``universe.assemble`` semantics, identical to the
+frozen G0-B1/F-009 path) and records the outcomes; it implements no
+precedence of its own and never steers a record toward a branch.
 
-Input authority is pinned, not recomputed: the G1-A artifact MUST carry the
-verified semantic digest or the run fails closed. Reference inputs are
-frozen BUILD_SNAPSHOT sets cited per family as canonical
-``{name, sha256, bytes}`` entries + ``set_digest`` (``universe.reference``,
-G1 §4.4 representation — the same shape G1-C capsules will cite).
+Input authority is verified cryptographically, not recomputed and not
+trusted by declaration: the embedded G1-A ``semantic_digest`` is checked
+against a recomputation over the artifact's instrument entries AND against
+the verified expected value — any mutation fails closed.
+
+Reference inputs are frozen BUILD_SNAPSHOT sets cited per family as
+canonical ``{name, sha256, bytes}`` entries + ``set_digest``
+(``universe.reference``, G1 §4.4 representation). The GLEIF family covers
+EXACTLY the artifacts for the LEIs the resolver demonstrably reaches —
+unrelated cache residue can never alter the reference basis.
 
 GLEIF completeness rule (hard): ``LEI absent from local cache`` is NOT
-"authoritatively unresolved". Every LEI that reaches the resolver's
-jurisdiction step must have an explicit acquisition outcome —
-RESOLVED / NOT_FOUND(authoritative) / ACQUISITION_FAILED / NOT_ATTEMPTED.
-Any FAILED/NOT_ATTEMPTED required LEI raises ``AcquisitionIncomplete`` —
-a HOLD, never a fabricated QUARANTINE.
+"authoritatively unresolved". Required LEIs are derived by probing the
+frozen resolver itself against an empty GLEIF index — an LEI is required
+iff the probe reaches ``UNRESOLVABLE_LEGAL_JURISDICTION``. Every required
+LEI needs an explicit acquisition outcome — RESOLVED /
+NOT_FOUND(authoritative) / ACQUISITION_FAILED / NOT_ATTEMPTED. Any
+FAILED/NOT_ATTEMPTED required LEI raises ``AcquisitionIncomplete`` — a
+HOLD, never a fabricated QUARANTINE.
 
-Output: metadata-only report YAML + canonical ISIN-sorted disposition rows
-(JSONL). No provider payload bytes, no filesystem paths, deterministic.
+Traceability: besides the disposition rows, a ``reference_links`` artifact
+binds every ISIN to the concrete reference observations that supported its
+disposition — deterministic handles ``<file>:<member>:<ordinal>`` resolved
+against each family's canonical entry order, source-published report ids
+when present, and the exact pinned GLEIF artifact per required LEI. The
+three family digests collapse to one ``reference_basis_id``; later G1-C
+capsules cite (isin, reference_basis_id, handles).
+
+Output: metadata-only report YAML + canonical ISIN-sorted rows + link
+JSONL. No provider payload bytes, no filesystem paths, deterministic.
 """
 
 from __future__ import annotations
@@ -38,6 +54,8 @@ import json
 import sys
 import zipfile
 from collections import Counter
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -45,25 +63,29 @@ import yaml
 
 from universe._paths import repo_file
 from universe.assemble import assemble_security_record, required_gleif_leis
-from universe.firds import FirdsInstrument, iter_firds
-from universe.fitrs import FitrsRecord, parse_fitrs
+from universe.firds import iter_firds
+from universe.fitrs import parse_fitrs
 from universe.gleif import GleifEntity
 from universe.gleif_acquire import (
-    MANIFEST_NAME,
+    NOTFOUND_SUFFIX,
     OUTCOME_ACQUISITION_FAILED,
     OUTCOME_NOT_ATTEMPTED,
     OUTCOME_NOT_FOUND,
     OUTCOMES,
     load_acquired_entities,
+    notfound_path,
+    payload_path,
 )
 from universe.model import Branch
 from universe.reference import (
-    reference_set_from_dir,
+    canonical_reference_set,
+    reference_entry,
     reference_set_from_files,
 )
 from universe.resolver import resolve_disposition
 
 from .evidence import _git_head
+from .g1a import digest_entries
 
 # Verified G1-A1 authority (issue #20). The batch run consumes exactly this
 # observed set — anything else fails closed before any resolution happens.
@@ -73,6 +95,7 @@ EXPECTED_G1A_SEMANTIC_DIGEST = \
     "f87b1b2fe5c35a506885036ad153494d93a67cedc7fe74062e893223c5139f71"
 
 ROWS_NAME = "G1-B1_disposition_rows.jsonl"
+LINKS_NAME = "G1-B1_reference_links.jsonl"
 REPORT_NAME = "G1-B1_observed_universe_disposition.yaml"
 
 # Row-schema legend (JSONL rows stay compact to remain well inside the
@@ -96,7 +119,8 @@ ROW_SCHEMA = {
     "gleif": {
         "acq": "acquisition outcome for the resolved LEI "
                "(RESOLVED/NOT_FOUND; null = lookup not required)",
-        "ok": "GLEIF entity resolved with a LegalJurisdiction country",
+        "ok": "GLEIF entity resolved with a LegalJurisdiction country "
+              "(null when the jurisdiction step was not reached)",
         "cc": "LegalJurisdiction.country (ISO 3166 alpha-2)",
     },
     "branch": "frozen disposition (INCLUDE/EXCLUDE/QUARANTINE/CONFLICT)",
@@ -104,10 +128,35 @@ ROW_SCHEMA = {
     "notes": "diagnostics (absent = none)",
 }
 
+LINK_SCHEMA = {
+    "i": "observed instrument identifier (row key)",
+    "fitrs": [{
+        "h": "handle '<file>:<member>:<ordinal>' — index of the reference "
+             "file basename in the family's canonical sorted entries, index "
+             "of the XML member in that archive's sorted member list, and "
+             "the record's ordinal in that member's parse stream",
+        "rid": "source-published report id when present",
+    }],
+    "firds": "same handle grammar",
+    "gleif": "exact GLEIF family entry name consulted "
+             "(<LEI>.json / <LEI>.notfound.json; null when no lookup)",
+}
+
 
 class G1BError(Exception):
     """Fail-closed abort for G1-B (input-authority mismatch, broken
     invariants, missing inputs)."""
+
+
+@dataclass(frozen=True)
+class RefObs:
+    """One concrete reference observation plus its deterministic handle."""
+
+    file: str       # reference file basename (zip entry of the family set)
+    member: int     # index in the archive's sorted *.xml member list
+    ordinal: int    # record ordinal within that member's parse stream
+    report_id: str | None
+    record: Any     # FitrsRecord | FirdsInstrument
 
 
 def load_observed_isins(
@@ -117,20 +166,28 @@ def load_observed_isins(
 ) -> list[str]:
     """Load the verified G1-A observed set; fail closed on any deviation.
 
-    The semantic digest IS the authority check: a regenerated or mutated
-    observed set cannot pass. ISINs are returned canonically sorted.
+    The embedded ``semantic_digest`` is never trusted alone: the canonical
+    G1-A digest is recomputed over the artifact's instrument entries and
+    MUST equal the embedded value AND the expected authority. A mutated
+    entry with a stale embedded digest fails closed.
     """
     if not artifact_path.is_file():
         raise G1BError(f"G1-A artifact not found: {artifact_path}")
     doc = yaml.safe_load(artifact_path.read_bytes().decode("utf-8"))
     observed = (doc or {}).get("observed_instrument_set") or {}
-    digest = observed.get("semantic_digest")
-    if digest != expected_digest:
+    instruments = observed.get("instruments") or []
+    embedded = observed.get("semantic_digest")
+    recomputed = digest_entries(instruments)
+    if embedded != recomputed:
         raise G1BError(
-            f"G1-A semantic digest mismatch: {digest!r} != "
+            f"G1-A embedded semantic_digest {embedded!r} != recomputed "
+            f"{recomputed!r} — artifact entries do not match their "
+            "declared digest")
+    if recomputed != expected_digest:
+        raise G1BError(
+            f"G1-A semantic digest {recomputed!r} != expected authority "
             f"{expected_digest!r} — refusing to resolve an unverified "
             "observed set")
-    instruments = observed.get("instruments") or []
     isins = [e.get("isin") for e in instruments if isinstance(e, dict)]
     if any(not isinstance(i, str) or not i.strip() for i in isins):
         raise G1BError("G1-A artifact contains an empty/non-string ISIN")
@@ -146,49 +203,65 @@ def load_observed_isins(
 def scan_fitrs(
     zip_paths: list[Path],
     wanted: set[str],
-) -> dict[str, list[FitrsRecord]]:
-    """Stream the pinned FITRS zips; keep records for observed ISINs only.
+) -> dict[str, list[RefObs]]:
+    """Stream the pinned FITRS zips; keep handled records for observed
+    ISINs only.
 
     ``parse_fitrs`` iterparses each member, so multi-hundred-MB XML is never
     materialized as a DOM; records outside the observed set are dropped
-    immediately.
+    immediately while still yielding a deterministic
+    (file, member, ordinal) handle for every kept observation.
     """
-    by_isin: dict[str, list[FitrsRecord]] = {}
+    by_isin: dict[str, list[RefObs]] = {}
     for zp in sorted(zip_paths, key=lambda p: p.name):
         if not zp.is_file():
             raise G1BError(f"FITRS snapshot missing: {zp}")
         with zipfile.ZipFile(zp) as z:
-            for name in sorted(z.namelist()):
-                if not name.lower().endswith(".xml"):
-                    continue
+            members = sorted(
+                n for n in z.namelist() if n.lower().endswith(".xml"))
+            for member_idx, name in enumerate(members):
                 with z.open(name) as fh:
-                    for record in parse_fitrs(fh):
+                    for ordinal, record in enumerate(parse_fitrs(fh)):
                         if record.instrument_isin in wanted:
                             by_isin.setdefault(
-                                record.instrument_isin, []).append(record)
+                                record.instrument_isin, []).append(RefObs(
+                                    file=zp.name, member=member_idx,
+                                    ordinal=ordinal,
+                                    report_id=record.source_report_id,
+                                    record=record))
     return by_isin
 
 
 def scan_firds(
     zip_paths: list[Path],
     wanted: set[str],
-) -> dict[str, list[FirdsInstrument]]:
-    """Stream the pinned FIRDS zips; keep records for observed ISINs only."""
-    by_isin: dict[str, list[FirdsInstrument]] = {}
+) -> dict[str, list[RefObs]]:
+    """Stream the pinned FIRDS zips; keep handled records for observed
+    ISINs only (same handle grammar as :func:`scan_fitrs`)."""
+    by_isin: dict[str, list[RefObs]] = {}
     for zp in sorted(zip_paths, key=lambda p: p.name):
         if not zp.is_file():
             raise G1BError(f"FIRDS snapshot missing: {zp}")
         with zipfile.ZipFile(zp) as z:
-            for name in sorted(z.namelist()):
-                if not name.lower().endswith(".xml"):
-                    continue
+            members = sorted(
+                n for n in z.namelist() if n.lower().endswith(".xml"))
+            for member_idx, name in enumerate(members):
                 with z.open(name) as fh:
-                    for instrument in iter_firds(fh):
+                    for ordinal, instrument in enumerate(iter_firds(fh)):
                         if instrument.instrument_isin in wanted:
                             by_isin.setdefault(
                                 instrument.instrument_isin, []).append(
-                                    instrument)
+                                    RefObs(
+                                        file=zp.name, member=member_idx,
+                                        ordinal=ordinal,
+                                        report_id=instrument
+                                        .source_report_id,
+                                        record=instrument))
     return by_isin
+
+
+def _records(obs: Iterable[RefObs]) -> list:
+    return [o.record for o in obs]
 
 
 def _desc_is_diagnostic(assembled) -> bool:
@@ -220,11 +293,16 @@ def _row(isin: str, assembled, disp, gleif_acquisition: str | None) -> dict:
     }
     if assembled.lei_conflict:
         firds["conflict"] = True
+    # GLEIF fields are populated only when the jurisdiction step was
+    # actually reached (the LEI was a required LEI); otherwise the lookup
+    # never happened and every field is null.
+    consulted = gleif_acquisition is not None
     gleif: dict[str, Any] = {
         "acq": gleif_acquisition,
-        "ok": bool(assembled.gleif and assembled.gleif.resolved),
+        "ok": (bool(assembled.gleif and assembled.gleif.resolved)
+               if consulted else None),
         "cc": (assembled.gleif.legal_jurisdiction_country
-               if assembled.gleif else None),
+               if consulted and assembled.gleif else None),
     }
     row: dict[str, Any] = {
         "isin": isin,
@@ -249,10 +327,96 @@ def canonical_rows_bytes(rows: list[dict[str, Any]]) -> bytes:
         .encode("utf-8")
 
 
+def canonical_links_bytes(links: list[dict[str, Any]]) -> bytes:
+    """Canonical serialization of reference-link lines (same grammar)."""
+    ordered = sorted(links, key=lambda r: r["i"])
+    return ("\n".join(
+        json.dumps(r, sort_keys=True, separators=(",", ":"),
+                   ensure_ascii=False) for r in ordered) + "\n") \
+        .encode("utf-8")
+
+
+def reference_basis_id(set_digests: dict[str, str]) -> str:
+    """One canonical id binding the FITRS/FIRDS/GLEIF family digests."""
+    return hashlib.sha256(json.dumps(
+        {"fitrs": set_digests["fitrs"], "firds": set_digests["firds"],
+         "gleif": set_digests["gleif"]},
+        sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _handle(obs: RefObs, file_index: dict[str, int]) -> dict[str, Any]:
+    """Deterministic metadata-only observation handle."""
+    h: dict[str, Any] = {
+        "h": f"{file_index[obs.file]}:{obs.member}:{obs.ordinal}"}
+    if obs.report_id:
+        h["rid"] = obs.report_id
+    return h
+
+
+def build_reference_links(
+    isins: list[str],
+    fitrs_obs: dict[str, list[RefObs]],
+    firds_obs: dict[str, list[RefObs]],
+    gleif_census: dict[str, str],
+    *,
+    fitrs_set: dict,
+    firds_set: dict,
+    gleif_set: dict,
+) -> list[dict[str, Any]]:
+    """ISIN-keyed concrete reference-observation bindings (LINK_SCHEMA).
+
+    Every handle resolves against the family's canonical ``entries`` order;
+    the GLEIF link names the exact pinned artifact entry for the required
+    LEI, or null when the jurisdiction step was never reached.
+    """
+    file_index = {
+        "fitrs": {e["name"]: i
+                  for i, e in enumerate(fitrs_set["entries"])},
+        "firds": {e["name"]: i
+                  for i, e in enumerate(firds_set["entries"])},
+    }
+    gleif_names = {e["name"] for e in gleif_set["entries"]}
+    links: list[dict[str, Any]] = []
+    for isin in sorted(isins):
+        freps = [_handle(o, file_index["fitrs"])
+                 for o in sorted(fitrs_obs.get(isin, []),
+                                 key=lambda o: (o.file, o.member,
+                                                o.ordinal))]
+        rreps = [_handle(o, file_index["firds"])
+                 for o in sorted(firds_obs.get(isin, []),
+                                 key=lambda o: (o.file, o.member,
+                                                o.ordinal))]
+        link: dict[str, Any] = {"i": isin}
+        if freps:
+            link["fitrs"] = freps
+        if rreps:
+            link["firds"] = rreps
+        # The GLEIF handle exists only when the resolver reached the
+        # jurisdiction step for this ISIN's LEI (i.e. the LEI was required).
+        gleif_ref = None
+        leis = {o.record.issuer_lei.strip().upper()
+                for o in firds_obs.get(isin, [])
+                if o.record.issuer_lei and o.record.issuer_lei.strip()}
+        single = next(iter(leis)) if len(leis) == 1 else None
+        if single and single in gleif_census:
+            suffix = (NOTFOUND_SUFFIX
+                      if gleif_census[single] == OUTCOME_NOT_FOUND
+                      else ".json")
+            name = f"{single}{suffix}"
+            if name not in gleif_names:
+                raise G1BError(
+                    f"GLEIF link target {name!r} absent from the GLEIF "
+                    "reference set")
+            gleif_ref = name
+        link["gleif"] = gleif_ref
+        links.append(link)
+    return links
+
+
 def build_dispositions(
     isins: list[str],
-    fitrs_by_isin: dict[str, list[FitrsRecord]],
-    firds_by_isin: dict[str, list[FirdsInstrument]],
+    fitrs_obs: dict[str, list[RefObs]],
+    firds_obs: dict[str, list[RefObs]],
     gleif_entities: dict[str, GleifEntity],
     gleif_census: dict[str, str],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -277,8 +441,8 @@ def build_dispositions(
     for isin in sorted(isins):
         assembled = assemble_security_record(
             isin,
-            fitrs_by_isin.get(isin) or [],
-            firds_by_isin.get(isin) or [],
+            _records(fitrs_obs.get(isin) or []),
+            _records(firds_obs.get(isin) or []),
             gleif_entities,
         )
         disp = resolve_disposition(assembled.record)
@@ -297,7 +461,8 @@ def build_dispositions(
             diagnostics["isins_absent_from_fitrs"] += 1
         if not assembled.firds_count:
             diagnostics["isins_absent_from_firds"] += 1
-        if assembled.gleif and assembled.gleif.resolved:
+        if gleif_acq is not None and assembled.gleif \
+                and assembled.gleif.resolved:
             diagnostics["gleif_resolved_isins"] += 1
         if gleif_acq == OUTCOME_NOT_FOUND:
             diagnostics["gleif_not_found_isins"] += 1
@@ -321,6 +486,25 @@ def build_dispositions(
     return rows, diagnostics
 
 
+def _gleif_set_for_required(gleif_dir: Path, required: set[str]) -> dict:
+    """Canonical GLEIF family over EXACTLY the required LEIs' terminal
+    artifacts — unrelated cache residue can never enter the basis."""
+    entries = []
+    for lei in sorted(required):
+        payload = payload_path(gleif_dir, lei)
+        marker = notfound_path(gleif_dir, lei)
+        if payload.is_file():
+            entries.append(reference_entry(payload.name,
+                                           payload.read_bytes()))
+        elif marker.is_file():
+            entries.append(reference_entry(marker.name,
+                                           marker.read_bytes()))
+        else:
+            raise G1BError(
+                f"required LEI {lei} has no pinned GLEIF artifact")
+    return canonical_reference_set(entries)
+
+
 def build_report(
     observed_path: Path,
     fitrs_paths: list[Path],
@@ -330,8 +514,9 @@ def build_report(
     date: str,
     generated_utc: str,
     expected_g1a_digest: str = EXPECTED_G1A_SEMANTIC_DIGEST,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Build the OBSERVED_UNIVERSE_DISPOSITION report + canonical rows.
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build the OBSERVED_UNIVERSE_DISPOSITION report + canonical rows +
+    reference links.
 
     Raises ``AcquisitionIncomplete`` (HOLD) when any required LEI lacks a
     terminal acquisition outcome; raises ``G1BError`` on input-authority or
@@ -343,18 +528,34 @@ def build_report(
 
     fitrs_set = reference_set_from_files(fitrs_paths)
     firds_set = reference_set_from_files(firds_paths)
-    fitrs_by_isin = scan_fitrs(fitrs_paths, wanted)
-    firds_by_isin = scan_firds(firds_paths, wanted)
+    fitrs_obs = scan_fitrs(fitrs_paths, wanted)
+    firds_obs = scan_firds(firds_paths, wanted)
 
-    required = required_gleif_leis(isins, firds_by_isin)
-    gleif_entities, gleif_census = load_acquired_entities(gleif_dir, required)
-    gleif_set = reference_set_from_dir(gleif_dir,
-                                     exclude_names=(MANIFEST_NAME,))
+    # Required-LEI derivation by probing the frozen resolver — FIRDS alone
+    # cannot decide reachability (an early NOT_BOND/NOT_CRPB/… exit means
+    # the jurisdiction step is never needed).
+    required = required_gleif_leis(
+        isins,
+        {k: _records(v) for k, v in fitrs_obs.items()},
+        {k: _records(v) for k, v in firds_obs.items()})
+    gleif_entities, gleif_census = load_acquired_entities(gleif_dir,
+                                                        required)
+    gleif_set = _gleif_set_for_required(gleif_dir, required)
 
     rows, diagnostics = build_dispositions(
-        isins, fitrs_by_isin, firds_by_isin, gleif_entities, gleif_census)
+        isins, fitrs_obs, firds_obs, gleif_entities, gleif_census)
+    links = build_reference_links(
+        isins, fitrs_obs, firds_obs, gleif_census,
+        fitrs_set=fitrs_set, firds_set=firds_set, gleif_set=gleif_set)
+
     rows_bytes = canonical_rows_bytes(rows)
+    links_bytes = canonical_links_bytes(links)
     disposition_digest = hashlib.sha256(rows_bytes).hexdigest()
+    links_digest = hashlib.sha256(links_bytes).hexdigest()
+    basis_id = reference_basis_id({
+        "fitrs": fitrs_set["set_digest"],
+        "firds": firds_set["set_digest"],
+        "gleif": gleif_set["set_digest"]})
 
     acquisition_counts = {o: sum(1 for v in gleif_census.values() if v == o)
                           for o in OUTCOMES}
@@ -379,6 +580,9 @@ def build_report(
         "input_authority": {
             "artifact": "evidence/g1-a1/G1-A1_observed_instrument_set.yaml",
             "semantic_digest": expected_g1a_digest,
+            "digest_verification":
+                "embedded digest recomputed over instrument entries; "
+                "recomputed == embedded == expected is required",
             "observed_identifier_count": len(isins),
         },
         "generator": {
@@ -387,15 +591,22 @@ def build_report(
             "deterministic": True,
         },
         "reference_basis": "BUILD_SNAPSHOT",
+        "reference_basis_id": basis_id,
         "reference_sets": {
             "fitrs": fitrs_set,
             "firds": firds_set,
             "gleif": gleif_set,
         },
         "reference_binding": (
-            "every row in the disposition rows file resolved against the "
-            "three pinned family sets above; later capsules cite the row "
-            "plus these set_digests"),
+            "every row resolves against reference_basis_id (the canonical "
+            "digest over the three family set_digests); per-ISIN concrete "
+            "observation handles live in the reference_links artifact "
+            "keyed by isin — the row's deterministic identity"),
+        "reference_links": {
+            "file": LINKS_NAME,
+            "sha256": links_digest,
+            "handle_grammar": LINK_SCHEMA,
+        },
         "reference_acquisition": {
             "gleif": {
                 "interface": "GLEIF API v1 /lei-records/{lei} "
@@ -426,7 +637,7 @@ def build_report(
             "raw_directory_tracked": False,
         },
     }
-    return report, rows
+    return report, rows, links
 
 
 def generate_report(
@@ -439,17 +650,19 @@ def generate_report(
     date: str,
     generated_utc: str,
 ) -> Path:
-    report, rows = build_report(
+    report, rows, links = build_report(
         observed_path, fitrs_paths, firds_paths, gleif_dir,
         date=date, generated_utc=generated_utc)
     ev = evidence_dir / "g1-b1"
     ev.mkdir(parents=True, exist_ok=True)
     rows_path = ev / ROWS_NAME
     rows_path.write_bytes(canonical_rows_bytes(rows))
+    links_path = ev / LINKS_NAME
+    links_path.write_bytes(canonical_links_bytes(links))
     path = ev / REPORT_NAME
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         yaml.safe_dump(report, fh, sort_keys=False)
-    for artifact in (path, rows_path):
+    for artifact in (path, rows_path, links_path):
         sha = hashlib.sha256(artifact.read_bytes()).hexdigest()
         sidecar = artifact.parent / f"{artifact.stem}.sha256.txt"
         sidecar.write_text(f"{sha} *{artifact.name}\n", encoding="utf-8")

@@ -6,6 +6,7 @@ and injected getters; the acquisition completeness contract is tested for
 all four outcomes.
 """
 
+import hashlib
 import json
 import urllib.error
 import zipfile
@@ -13,11 +14,12 @@ import zipfile
 import pytest
 import yaml
 
-from metrics.g1a import _digest_entries
+from metrics.g1a import digest_entries
 from metrics.g1b import (
     G1BError,
     build_dispositions,
     build_report,
+    canonical_links_bytes,
     canonical_rows_bytes,
     load_observed_isins,
     scan_firds,
@@ -94,7 +96,7 @@ def _write_observed_artifact(path, isins) -> str:
         "last_observed_at": "2026-09-17T00:00:00.000000Z",
         "eligible_capture_identities": 1,
     } for i in sorted(isins)]
-    digest = _digest_entries(entries)
+    digest = digest_entries(entries)
     doc = {"observed_instrument_set": {
         "instrument_count": len(entries),
         "instruments": entries,
@@ -126,7 +128,7 @@ def _build(tmp_path, isin, fitrs_recs, firds_recs, gleif_payloads=None,
                        notfound=gleif_notfound)
     return build_report(observed, [fitrs_zip], [firds_zip], gleif,
                         expected_g1a_digest=digest,
-                        date="d", generated_utc="t")
+                        date="d", generated_utc="t")[:2]
 
 
 def _row_of(report_rows, isin):
@@ -198,14 +200,37 @@ def test_quarantine_invalid_lei(tmp_path):
     assert (r["branch"], r["reason"]) == ("QUARANTINE", "INVALID_ISSUER_LEI")
 
 
-def test_conflict_firds_leis(tmp_path):
-    _, rows = _build(tmp_path, "XS0000000008",
-                     [("XS0000000008", "BOND", "BOND5", "Corporate bond")],
-                     [("XS0000000008", LEI_ES),
-                      ("XS0000000008", LEI_FR)])
+def test_conflict_firds_leis_frozen_precedence(tmp_path):
+    """Contradictory FIRDS LEIs: the frozen precedence is preserved — no
+    representative LEI is injected, so the resolver hits
+    MISSING_ISSUER_LEI (step 5) before the conflict branch (step 7).
+    This is the pre-PR G0/F-009 behavior, kept verbatim."""
+    _report, rows = _build(tmp_path, "XS0000000008",
+                           [("XS0000000008", "BOND", "BOND5",
+                             "Corporate bond")],
+                           [("XS0000000008", LEI_ES),
+                            ("XS0000000008", LEI_FR)])
     r = _row_of(rows, "XS0000000008")
-    assert (r["branch"], r["reason"]) == ("CONFLICT", "IDENTITY_CONFLICT")
-    assert r["firds"]["conflict"] is True
+    assert (r["branch"], r["reason"]) == ("QUARANTINE", "MISSING_ISSUER_LEI")
+    assert r["firds"]["conflict"] is True and r["firds"]["lei"] is None
+    assert "IDENTITY_CONFLICT" in r["notes"][0]
+    # Pre-PR equivalence: the record handed to the resolver is exactly
+    # issuer_lei=None + identity_conflict=True.
+    from universe.assemble import assemble_security_record
+    from universe.firds import FirdsInstrument
+    from universe.fitrs import FitrsRecord
+    from universe.resolver import resolve_disposition
+    a = assemble_security_record(
+        "XS0000000008",
+        [FitrsRecord("XS0000000008", "BOND", "CRPB", "Corporate bond",
+                     "BOND5")],
+        [FirdsInstrument("XS0000000008", LEI_ES),
+         FirdsInstrument("XS0000000008", LEI_FR)], {})
+    assert a.record.issuer_lei is None
+    assert a.record.identity_conflict is True
+    d = resolve_disposition(a.record)
+    assert (d.branch.value, d.reason.value) == \
+        ("QUARANTINE", "MISSING_ISSUER_LEI")
 
 
 def test_quarantine_gleif_not_found(tmp_path):
@@ -254,9 +279,9 @@ def test_every_isin_exactly_one_row(tmp_path):
     firds_zip = _zip(tmp_path / "r.zip", {"r.xml": _firds_xml(
         [(i, LEI_ES) for i in isins])})
     gleif = _gleif_dir(tmp_path, {LEI_ES: _gleif_payload(LEI_ES, "ES")})
-    _, rows = build_report(observed, [fitrs_zip], [firds_zip], gleif,
-                           expected_g1a_digest=digest,
-                           date="d", generated_utc="t")
+    _, rows, _links = build_report(
+        observed, [fitrs_zip], [firds_zip], gleif,
+        expected_g1a_digest=digest, date="d", generated_utc="t")
     assert len(rows) == 5
     assert sorted(r["isin"] for r in rows) == sorted(isins)
 
@@ -269,7 +294,7 @@ def test_duplicate_input_isin_rejected(tmp_path):
 def test_input_authority_digest_enforced(tmp_path):
     observed = tmp_path / "g1a.yaml"
     _write_observed_artifact(observed, ["XS0000000001"])
-    with pytest.raises(G1BError, match="semantic digest mismatch"):
+    with pytest.raises(G1BError, match="expected authority"):
         load_observed_isins(observed,
                             expected_digest="0" * 64)
 
@@ -281,10 +306,40 @@ def test_artifact_count_mismatch_fails_closed(tmp_path):
                 "eligible_capture_identities": 1}]
     observed.write_text(yaml.safe_dump({"observed_instrument_set": {
         "instrument_count": 99, "instruments": entries,
-        "semantic_digest": _digest_entries(entries)}}))
-    digest = _digest_entries(entries)
+        "semantic_digest": digest_entries(entries)}}))
+    digest = digest_entries(entries)
     with pytest.raises(G1BError, match="instrument_count"):
         load_observed_isins(observed, expected_digest=digest)
+
+
+def test_mutated_isin_with_stale_embedded_digest_fails(tmp_path):
+    """Blocker-3 regression: mutate one ISIN but keep the embedded
+    semantic_digest — the recomputation must catch it."""
+    observed = tmp_path / "g1a.yaml"
+    digest = _write_observed_artifact(
+        observed, ["XS0000000001", "XS0000000002"])
+    doc = yaml.safe_load(observed.read_text())
+    doc["observed_instrument_set"]["instruments"][0]["isin"] = "XX9999999999"
+    observed.write_text(yaml.safe_dump(doc))
+    with pytest.raises(G1BError, match="recomputed"):
+        load_observed_isins(observed, expected_digest=digest)
+
+
+def test_changed_embedded_digest_same_rows_fails(tmp_path):
+    observed = tmp_path / "g1a.yaml"
+    digest = _write_observed_artifact(observed, ["XS0000000001"])
+    doc = yaml.safe_load(observed.read_text())
+    doc["observed_instrument_set"]["semantic_digest"] = "f" * 64
+    observed.write_text(yaml.safe_dump(doc))
+    with pytest.raises(G1BError, match="recomputed"):
+        load_observed_isins(observed, expected_digest=digest)
+
+
+def test_valid_embedded_and_recomputed_pass(tmp_path):
+    observed = tmp_path / "g1a.yaml"
+    digest = _write_observed_artifact(observed, ["XS0000000001"])
+    assert load_observed_isins(observed, expected_digest=digest) == \
+        ["XS0000000001"]
 
 
 # ---------- reference-set canonicalization ----------
@@ -377,6 +432,17 @@ def test_corrupt_pinned_payload_is_acquisition_failure(tmp_path):
         load_acquired_entities(gleif, {LEI_ES})
 
 
+def test_corrupt_notfound_marker_is_acquisition_failure(tmp_path):
+    """Optional hardening: a NOT_FOUND marker whose contents do not attest
+    the expected LEI/result is an acquisition defect, not a domain result."""
+    gleif = _gleif_dir(tmp_path, {})
+    (gleif / f"{LEI_ES}.notfound.json").write_bytes(
+        json.dumps({"lei": LEI_FR, "result": "NOT_FOUND"}).encode())
+    with pytest.raises(AcquisitionIncomplete) as exc:
+        load_acquired_entities(gleif, {LEI_ES})
+    assert exc.value.census[LEI_ES] == "ACQUISITION_FAILED"
+
+
 def test_gleif_set_digest_stable(tmp_path):
     gleif = _gleif_dir(tmp_path, {LEI_ES: _gleif_payload(LEI_ES, "ES")},
                        notfound=[LEI_FR])
@@ -401,12 +467,13 @@ def test_deterministic_rows_and_digest(tmp_path):
     gleif = _gleif_dir(tmp_path, {
         LEI_ES: _gleif_payload(LEI_ES, "ES"),
         LEI_FR: _gleif_payload(LEI_FR, "FR")})
-    r1, rows1 = build_report(observed, [fitrs_zip], [firds_zip], gleif,
-                             expected_g1a_digest=digest,
-                             date="d", generated_utc="t")
-    r2, rows2 = build_report(observed, [fitrs_zip], [firds_zip], gleif,
-                             expected_g1a_digest=digest,
-                             date="d", generated_utc="t")
+    r1, rows1, l1 = build_report(observed, [fitrs_zip], [firds_zip], gleif,
+                                 expected_g1a_digest=digest,
+                                 date="d", generated_utc="t")
+    r2, rows2, l2 = build_report(observed, [fitrs_zip], [firds_zip], gleif,
+                                 expected_g1a_digest=digest,
+                                 date="d", generated_utc="t")
+    assert canonical_links_bytes(l1) == canonical_links_bytes(l2)
     assert canonical_rows_bytes(rows1) == canonical_rows_bytes(rows2)
     assert r1["dispositions"]["disposition_semantic_digest"] == \
         r2["dispositions"]["disposition_semantic_digest"]
@@ -438,4 +505,192 @@ def test_scan_helpers_filter_to_observed(tmp_path):
     fmap = scan_fitrs([fitrs_zip], {"XS1"})
     rmap = scan_firds([firds_zip], {"XS1"})
     assert list(fmap) == ["XS1"] and list(rmap) == ["XS1"]
-    assert fmap["XS1"][0].instrument_mifir_id == "BOND"
+    assert fmap["XS1"][0].record.instrument_mifir_id == "BOND"
+
+
+# ---------- Blocker 2: resolver-probe required-LEI derivation ----------
+
+def _fitrs_map(recs):
+    from universe.fitrs import parse_fitrs
+    out = {}
+    for spec in recs:
+        for rec in parse_fitrs(_fitrs_xml([spec])):
+            out.setdefault(rec.instrument_isin, []).append(rec)
+    return out
+
+
+def _firds_map(recs):
+    from universe.firds import parse_firds
+    out = {}
+    for spec in recs:
+        for rec in parse_firds(_firds_xml([spec])):
+            out.setdefault(rec.instrument_isin, []).append(rec)
+    return out
+
+
+def _required(isin, fitrs, firds):
+    from universe.assemble import required_gleif_leis
+    return required_gleif_leis([isin], _fitrs_map(fitrs),
+                             _firds_map(firds))
+
+
+def test_required_lei_not_bond_not_required():
+    """A: non-BOND terminates before the jurisdiction step."""
+    assert _required("XS1", [("XS1", "DERV", "IRD05", "Swaptions")],
+                     [("XS1", LEI_ES)]) == set()
+
+
+def test_required_lei_not_crpb_not_required():
+    """B: non-CRPB terminates before the jurisdiction step."""
+    assert _required("XS1", [("XS1", "BOND", "BOND1", "Sovereign bond")],
+                     [("XS1", LEI_ES)]) == set()
+
+
+def test_required_lei_missing_mifir_not_required():
+    """C: no FITRS record -> MISSING_MIFIR_ID, no GLEIF needed."""
+    assert _required("XS1", [], [("XS1", LEI_ES)]) == set()
+
+
+def test_required_lei_missing_bond_type_not_required():
+    """D: BOND without SACL -> MISSING_BOND_TYPE, no GLEIF needed."""
+    assert _required("XS1", [("XS1", "BOND", None, None)],
+                     [("XS1", LEI_ES)]) == set()
+
+
+def test_required_lei_crpb_valid_lei_required():
+    """E: BOND+CRPB + single valid LEI + no GLEIF observation -> required."""
+    assert _required("XS1", [("XS1", "BOND", "BOND5", "Corporate bond")],
+                     [("XS1", LEI_ES)]) == {LEI_ES}
+
+
+def test_required_lei_ambiguous_not_required():
+    """F: contradictory FIRDS LEIs -> decided before jurisdiction."""
+    assert _required("XS1", [("XS1", "BOND", "BOND5", "Corporate bond")],
+                     [("XS1", LEI_ES), ("XS1", LEI_FR)]) == set()
+
+
+def test_required_lei_invalid_not_required():
+    """G: non-ISO-17442 LEI -> INVALID_ISSUER_LEI, no lookup."""
+    assert _required("XS1", [("XS1", "BOND", "BOND5", "Corporate bond")],
+                     [("XS1", LEI_BAD)]) == set()
+
+
+# ---------- Blocker 2b: GLEIF set covers exactly the required universe ---
+
+def test_gleif_set_ignores_unrelated_cache_residue(tmp_path):
+    """An extra <LEI>.json in the directory must not alter the set, the
+    rows, the links, or the report bytes."""
+    isin = "XS0000000001"
+    observed = tmp_path / "g1a.yaml"
+    digest = _write_observed_artifact(observed, [isin])
+    fitrs_zip = _zip(tmp_path / "f.zip", {"f.xml": _fitrs_xml(
+        [(isin, "BOND", "BOND5", "Corporate bond")])})
+    firds_zip = _zip(tmp_path / "r.zip", {"r.xml": _firds_xml(
+        [(isin, LEI_ES)])})
+
+    clean = _gleif_dir(tmp_path / "a", {LEI_ES: _gleif_payload(LEI_ES, "ES")})
+    dirty = _gleif_dir(tmp_path / "b", {
+        LEI_ES: _gleif_payload(LEI_ES, "ES"),
+        LEI_FR: _gleif_payload(LEI_FR, "FR"),   # residue: not required
+    })
+    rep_a, rows_a, links_a = build_report(
+        observed, [fitrs_zip], [firds_zip], clean,
+        expected_g1a_digest=digest, date="d", generated_utc="t")
+    rep_b, rows_b, links_b = build_report(
+        observed, [fitrs_zip], [firds_zip], dirty,
+        expected_g1a_digest=digest, date="d", generated_utc="t")
+    assert rep_a["reference_sets"]["gleif"] == \
+        rep_b["reference_sets"]["gleif"]
+    assert [e["name"] for e in
+            rep_a["reference_sets"]["gleif"]["entries"]] == \
+        [f"{LEI_ES}.json"]
+    assert rep_a["reference_basis_id"] == rep_b["reference_basis_id"]
+    assert canonical_rows_bytes(rows_a) == canonical_rows_bytes(rows_b)
+    assert canonical_links_bytes(links_a) == canonical_links_bytes(links_b)
+    assert yaml.safe_dump(rep_a) == yaml.safe_dump(rep_b)
+
+
+# ---------- Blocker 4: concrete reference-observation handles ----------
+
+def test_reference_links_multi_record_handles(tmp_path):
+    """Multiple FITRS/FIRDS records for one ISIN produce deterministic,
+    ordered handles — and every handle is emitted."""
+    isin = "XS0000000001"
+    observed = tmp_path / "g1a.yaml"
+    digest = _write_observed_artifact(observed, [isin])
+    # Two FITRS members across two zips; two FIRDS records in one member.
+    f1 = _zip(tmp_path / "a.zip", {"a.xml": _fitrs_xml([
+        (isin, "BOND", "BOND5", "Corporate bond")])})
+    f2 = _zip(tmp_path / "b.zip", {"b1.xml": _fitrs_xml([
+        (isin, "BOND", "BOND5", "Corporate bond"),
+        ("OTHER", "DERV", "IRD05", "Swaptions")])})
+    r1 = _zip(tmp_path / "r.zip", {"r.xml": _firds_xml(
+        [(isin, LEI_ES), ("OTHER", LEI_FR), (isin, LEI_ES)])})
+    gleif = _gleif_dir(tmp_path, {LEI_ES: _gleif_payload(LEI_ES, "ES")})
+    report, _rows, links = build_report(
+        observed, [f1, f2], [r1], gleif,
+        expected_g1a_digest=digest, date="d", generated_utc="t")
+    link = links[0]
+    assert link["i"] == isin
+    # fitrs entries: file index by canonical sorted entries (a.zip=0,
+    # b.zip=1), member index, record ordinal.
+    assert [h["h"] for h in link["fitrs"]] == ["0:0:0", "1:0:0"]
+    # firds: same file/member, ordinals 0 and 2 (OTHER in between).
+    assert [h["h"] for h in link["firds"]] == ["0:0:0", "0:0:2"]
+    assert link["gleif"] == f"{LEI_ES}.json"
+    assert report["reference_links"]["sha256"] == \
+        hashlib.sha256(canonical_links_bytes(links)).hexdigest()
+    # deterministic across runs
+    _, _, links2 = build_report(
+        observed, [f1, f2], [r1], gleif,
+        expected_g1a_digest=digest, date="d", generated_utc="t")
+    assert canonical_links_bytes(links) == canonical_links_bytes(links2)
+
+
+def test_reference_links_cross_root_determinism(tmp_path):
+    """Identical inputs under different roots -> identical link bytes and
+    report (no filesystem paths anywhere)."""
+    isin = "XS0000000001"
+    outs = []
+    for loc in ("loc_a", "loc_b"):
+        root = tmp_path / loc
+        root.mkdir()
+        observed = root / "g1a.yaml"
+        digest = _write_observed_artifact(observed, [isin])
+        fz = _zip(root / "f.zip", {"f.xml": _fitrs_xml(
+            [(isin, "BOND", "BOND5", "Corporate bond")])})
+        rz = _zip(root / "r.zip", {"r.xml": _firds_xml([(isin, LEI_ES)])})
+        gleif = _gleif_dir(root, {LEI_ES: _gleif_payload(LEI_ES, "ES")})
+        rep, rows, links = build_report(
+            observed, [fz], [rz], gleif, expected_g1a_digest=digest,
+            date="d", generated_utc="t")
+        outs.append((rep, rows, links))
+    assert yaml.safe_dump(outs[0][0]) == yaml.safe_dump(outs[1][0])
+    assert canonical_rows_bytes(outs[0][1]) == \
+        canonical_rows_bytes(outs[1][1])
+    assert canonical_links_bytes(outs[0][2]) == \
+        canonical_links_bytes(outs[1][2])
+    text = yaml.safe_dump(outs[0][0]) \
+        + canonical_rows_bytes(outs[0][1]).decode() \
+        + canonical_links_bytes(outs[0][2]).decode()
+    assert str(tmp_path) not in text and "loc_a" not in text \
+        and "loc_b" not in text
+
+
+def test_reference_links_no_report_id_fallback(tmp_path):
+    """Absent source_report_id -> handle still emitted, rid omitted."""
+    isin = "XS0000000001"
+    observed = tmp_path / "g1a.yaml"
+    digest = _write_observed_artifact(observed, [isin])
+    # FIRDS record without FinInstrmRptgRprtSts/RptgRef -> rid absent.
+    fz = _zip(tmp_path / "f.zip", {"f.xml": _fitrs_xml(
+        [(isin, "BOND", "BOND5", "Corporate bond")])})
+    rz = _zip(tmp_path / "r.zip", {"r.xml": _firds_xml([(isin, LEI_ES)])})
+    gleif = _gleif_dir(tmp_path, {LEI_ES: _gleif_payload(LEI_ES, "ES")})
+    _, _, links = build_report(observed, [fz], [rz], gleif,
+                               expected_g1a_digest=digest,
+                               date="d", generated_utc="t")
+    for ref in links[0]["fitrs"] + links[0]["firds"]:
+        assert "h" in ref  # deterministic handle always present
+        # rid present only when the source published one
+    assert links[0]["firds"][0].get("rid") is None
