@@ -502,7 +502,9 @@ def test_full_materialization_report_and_digests(tmp_path):
     assert chains["semantic_digest"] == hashlib.sha256(chain_b).hexdigest()
     ds = report["dataset_semantic_digest"]
     assert len(ds) == 64
-    assert report["tape_schema_version"] == 1
+    assert report["tape_schema_version"] == 2
+    # schema v2 keeps every §4.1 column and appends the replay substrate
+    assert pubs["columns"][-1] == "normalized_evidence_json"
     assert report["lifecycle_reconciliation"]["supersession_links"] == 1
     assert report["lifecycle_reconciliation"]["head_state_counts"] == \
         {"AMENDED": 1}

@@ -57,7 +57,12 @@ from .g1a import digest_entries
 from .g1b import EXPECTED_G1A_SEMANTIC_DIGEST
 from .selection import CaptureVersionRef, select_eligible
 
-TAPE_SCHEMA_VERSION = 1
+# Schema v2 (G1-C2): adds ``normalized_evidence_json`` — the canonical
+# JSON of ``NormalizedRecord.to_evidence()`` per publication occurrence —
+# so the persisted tape alone is sufficient for exact G0-D replay
+# (as_of(T)) without provider raw bytes. All v1 columns and semantics are
+# preserved; C1 v1 digests remain the historical authority.
+TAPE_SCHEMA_VERSION = 2
 
 # Verified upstream authority (issues #20/#22) — recomputed, never
 # trusted by declaration.
@@ -81,6 +86,7 @@ PUB_COLUMNS = [
     "lifecycle_state", "ledger_entry_id", "supersedes_entry_id",
     "ledger_markers",
     "universe_disposition", "universe_disposition_reason", "issuer_lei",
+    "normalized_evidence_json",
 ]
 
 CHAIN_COLUMNS = [
@@ -307,6 +313,11 @@ def _pub_row(
         "universe_disposition": disp["branch"],
         "universe_disposition_reason": disp["reason"],
         "issuer_lei": disp["lei"],
+        # Replay substrate (schema v2): canonical metadata-only
+        # to_evidence() — exactly what G0-D consumes; no raw fields.
+        "normalized_evidence_json": json.dumps(
+            rec.to_evidence(), sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False),
     }
 
 
@@ -454,9 +465,10 @@ def write_parquet(rows: list[dict[str, Any]], columns: list[str],
         con.execute(f"CREATE TABLE t ({colspec})")
         placeholders = ", ".join("?" for _ in columns)
         ordered = sorted(rows, key=sort_key)
-        con.executemany(
-            f"INSERT INTO t VALUES ({placeholders})",  # noqa: S608 - parameterized
-            [[r[c] for c in columns] for r in ordered])
+        if ordered:
+            con.executemany(
+                f"INSERT INTO t VALUES ({placeholders})",  # noqa: S608 - parameterized
+                [[r[c] for c in columns] for r in ordered])
         con.execute(
             f"COPY t TO '{str(path).replace(chr(92), '/')}' "
             "(FORMAT PARQUET)")
