@@ -1,0 +1,269 @@
+# Self-hosted CI fallback — manual contingency for GitHub-hosted quota.
+#
+# Deliberately workflow_dispatch-only: repo-scoped self-hosted runners must
+# never pick up arbitrary push/pull_request code automatically. Each job
+# checks out EXACTLY the requested target_sha and asserts HEAD equality —
+# the run may be launched from any branch, but the executed code is the
+# stated commit.
+#
+# The hosted .github/workflows/ci.yml remains the primary CI and is
+# intentionally untouched. Same matrix, same pins, same semantics.
+
+name: ci-self-hosted
+
+run-name: "self-hosted · ${{ inputs.target_sha }} · ${{ inputs.reason }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: "Full 40-hex commit SHA to validate"
+        required: true
+        type: string
+      reason:
+        description: "Human traceability label"
+        required: false
+        type: string
+        default: "billing-fallback"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-self-hosted-${{ inputs.target_sha }}
+  cancel-in-progress: false
+
+env:
+  TARGET_SHA: ${{ inputs.target_sha }}
+
+jobs:
+  test-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    runs-on: [self-hosted, omt-ci, omt-linux-x64]
+    timeout-minutes: 45
+    steps:
+      - name: Validate target_sha format
+        shell: bash
+        run: |
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "invalid target_sha: $TARGET_SHA"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Assert exact SHA checkout
+        shell: bash
+        run: |
+          head=$(git rev-parse HEAD)
+          [ "$head" = "$TARGET_SHA" ] || {
+            echo "HEAD $head != requested $TARGET_SHA"; exit 1; }
+          echo "checked out exact commit $head"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Lint
+        shell: bash
+        run: ruff check .
+      - name: Repository hygiene (no provider payloads, no secrets)
+        shell: bash
+        run: python tools/check_hygiene.py
+      - name: Test (offline)
+        shell: bash
+        run: python -m pytest
+      - name: Workspace cleanup
+        if: always()
+        shell: bash
+        run: |
+          [ "$(pwd -P)" = "$(realpath "$GITHUB_WORKSPACE")" ] || {
+            echo "cleanup refused: not inside workspace"; exit 1; }
+          rm -rf dist build .pytest_cache .ruff_cache openmifir_tape.egg-info
+          git clean -fdx -e .env || true
+
+  test-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    runs-on: [self-hosted, omt-ci, omt-windows-x64]
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Validate target_sha format
+        run: |
+          if ($env:TARGET_SHA -notmatch '^[0-9a-f]{40}$') {
+            throw "invalid target_sha: $env:TARGET_SHA" }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Assert exact SHA checkout
+        run: |
+          $head = (git rev-parse HEAD).Trim()
+          if ($head -ne $env:TARGET_SHA) {
+            throw "HEAD $head != requested $env:TARGET_SHA" }
+          Write-Output "checked out exact commit $head"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check .
+      - name: Repository hygiene (no provider payloads, no secrets)
+        run: python tools/check_hygiene.py
+      - name: Test (offline)
+        run: python -m pytest
+      - name: Workspace cleanup
+        if: always()
+        run: |
+          if ((Get-Location).Path -ne $env:GITHUB_WORKSPACE) {
+            throw "cleanup refused: not inside workspace" }
+          git clean -fdx -e .env
+
+  wheel-smoke-linux:
+    runs-on: [self-hosted, omt-ci, omt-linux-x64]
+    timeout-minutes: 45
+    steps:
+      - name: Validate target_sha format
+        shell: bash
+        run: |
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "invalid target_sha: $TARGET_SHA"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Assert exact SHA checkout
+        shell: bash
+        run: |
+          head=$(git rev-parse HEAD)
+          [ "$head" = "$TARGET_SHA" ] || {
+            echo "HEAD $head != requested $TARGET_SHA"; exit 1; }
+          echo "checked out exact commit $head"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Build wheel
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip setuptools
+          pip wheel . --no-deps --no-build-isolation -w dist
+      - name: Wheel contents — descriptors in, dev/evidence dirs out
+        shell: bash
+        run: |
+          python -c "import glob, zipfile; \
+            n = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); \
+            assert 'config/sources/bme_apa.yaml' in n, n; \
+            assert 'config/sources/bloomberg_apae.yaml' in n, n; \
+            assert not any(x.startswith(('fixtures/', 'evidence/', 'tools/', 'data/')) for x in n), n; \
+            print('wheel contents ok')"
+      - name: Install wheel (non-editable)
+        shell: bash
+        run: pip install dist/openmifir_tape-*.whl
+      - name: Smoke — packaged descriptors load from an empty cwd
+        shell: bash
+        run: |
+          cd "$(mktemp -d)"
+          omt-g0a1 --list-sources | tee sources.txt
+          grep -qx bme_apa sources.txt
+          grep -qx blb_apae sources.txt
+      - name: Smoke — explicit --config-dir override wins
+        shell: bash
+        run: |
+          d="$(mktemp -d)"
+          printf 'source_id: smoke\nallowed_hosts: [smoke.test]\n' > "$d/smoke.yaml"
+          cd "$(mktemp -d)"
+          omt-g0a1 --config-dir "$d" --list-sources | grep -qx smoke
+      - name: Workspace cleanup
+        if: always()
+        shell: bash
+        run: |
+          [ "$(pwd -P)" = "$(realpath "$GITHUB_WORKSPACE")" ] || {
+            echo "cleanup refused: not inside workspace"; exit 1; }
+          rm -rf dist build .pytest_cache .ruff_cache openmifir_tape.egg-info
+          git clean -fdx -e .env || true
+
+  wheel-smoke-windows:
+    runs-on: [self-hosted, omt-ci, omt-windows-x64]
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Validate target_sha format
+        run: |
+          if ($env:TARGET_SHA -notmatch '^[0-9a-f]{40}$') {
+            throw "invalid target_sha: $env:TARGET_SHA" }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Assert exact SHA checkout
+        run: |
+          $head = (git rev-parse HEAD).Trim()
+          if ($head -ne $env:TARGET_SHA) {
+            throw "HEAD $head != requested $env:TARGET_SHA" }
+          Write-Output "checked out exact commit $head"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip setuptools
+          pip wheel . --no-deps --no-build-isolation -w dist
+      - name: Wheel contents — descriptors in, dev/evidence dirs out
+        run: |
+          python -c 'import glob, zipfile; n = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist(); assert "config/sources/bme_apa.yaml" in n, n; assert "config/sources/bloomberg_apae.yaml" in n, n; assert not any(x.startswith(("fixtures/", "evidence/", "tools/", "data/")) for x in n), n; print("wheel contents ok")'
+      - name: Install wheel (non-editable)
+        run: |
+          $whl = Get-ChildItem -Path dist -Filter *.whl | Select-Object -First 1
+          if (-not $whl) { throw "no wheel built in dist/" }
+          python -m pip install $whl.FullName
+      - name: Smoke — packaged descriptors load from an empty cwd
+        run: |
+          $tmp = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ("omt-smoke-" + [guid]::NewGuid().ToString("N")))
+          Push-Location $tmp.FullName
+          try {
+            $out = @(omt-g0a1 --list-sources)
+            $out | Tee-Object sources.txt
+            if (-not ($out -contains "bme_apa")) { throw "bme_apa missing: $out" }
+            if (-not ($out -contains "blb_apae")) { throw "blb_apae missing: $out" }
+            Write-Output "packaged descriptors ok"
+          } finally { Pop-Location }
+      - name: Smoke — explicit --config-dir override wins
+        run: |
+          $cfg = New-Item -ItemType Directory -Force -Path (Join-Path $env:TEMP ("omt-cfg-" + [guid]::NewGuid().ToString("N")))
+          Set-Content -Path (Join-Path $cfg.FullName "smoke.yaml") -Encoding ascii -Value "source_id: smoke`nallowed_hosts: [smoke.test]`n"
+          $tmp2 = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ("omt-cwd-" + [guid]::NewGuid().ToString("N")))
+          Push-Location $tmp2.FullName
+          try {
+            $out2 = @(omt-g0a1 --config-dir $cfg.FullName --list-sources)
+            if (-not ($out2 -contains "smoke")) { throw "config-dir override failed: $out2" }
+            Write-Output "config-dir override ok"
+          } finally { Pop-Location }
+      - name: Workspace cleanup
+        if: always()
+        run: |
+          if ((Get-Location).Path -ne $env:GITHUB_WORKSPACE) {
+            throw "cleanup refused: not inside workspace" }
+          git clean -fdx -e .env
