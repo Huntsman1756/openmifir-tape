@@ -9,7 +9,7 @@ frozen_authority:
   freeze_commit: 2a5e4684b9a3f6066e6d2a53cbc37b920e2c9ffa
 generator:
   module: metrics.g1c1
-  code_commit: 79835a076679f691b6a69a0c08b79118cb9c5b92
+  code_commit: d297ef73ee9235139ad94b9a9fb4037418d44147
   deterministic: true
 tape_schema_version: 1
 input_authority:
@@ -27,7 +27,13 @@ input_authority:
   g1b:
     rows: evidence/g1-b1/G1-B1_disposition_rows.jsonl
     rows_sha256: 1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8
+    report: evidence/g1-b1/G1-B1_observed_universe_disposition.yaml
+    report_sha256: 3d75da51a3b30b4f0e1139afc8891c3983bc28bdbb134cd49d8690c348633c8f
     reference_basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
+    verification: report bytes sha256-verified; report.dispositions.rows_sha256 bound
+      to the independently hashed rows file; reference_basis_id recomputed from the
+      three family set_digests (metrics.g1b.reference_basis_id) and required to equal
+      embedded == expected
 tables:
   publications:
     file: data/g1/tape/publications.parquet
