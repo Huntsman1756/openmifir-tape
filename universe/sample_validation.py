@@ -34,10 +34,11 @@ from pathlib import Path
 import yaml
 
 from ._paths import repo_file
+from .assemble import assemble_security_record
 from .firds import FirdsInstrument, iter_firds
 from .fitrs import FitrsRecord, parse_fitrs
-from .gleif import GleifEntity, parse_gleif, resolve_legal_jurisdiction
-from .model import Branch, SecurityRecord
+from .gleif import GleifEntity, parse_gleif
+from .model import Branch
 from .resolver import resolve_disposition
 from .sample import DEFAULT_SAMPLE_MANIFEST, FrozenSample, load_frozen_sample
 
@@ -135,16 +136,6 @@ class SampleValidation:
     notes: list[str] = field(default_factory=list)
 
 
-def _single(values: Iterable[str | None]) -> tuple[str | None, bool]:
-    """Return (the single distinct non-empty value, ambiguous)."""
-    distinct = {v for v in values if v}
-    if len(distinct) == 1:
-        return next(iter(distinct)), False
-    if len(distinct) > 1:
-        return None, True
-    return None, False
-
-
 def _classify_isin(
     isin: str,
     bucket: str,
@@ -152,60 +143,33 @@ def _classify_isin(
     firds_instruments: dict[str, list[FirdsInstrument]],
     gleif_entities: dict[str, GleifEntity],
 ) -> SampleRow:
-    notes: list[str] = []
-    frecs = fitrs_records.get(isin) or []
-    freps = firds_instruments.get(isin) or []
-
-    mifir_id, mifir_ambiguous = _single(r.instrument_mifir_id for r in frecs)
-    bond_type, type_ambiguous = _single(r.bond_type for r in frecs)
-    sacl, _ = _single(r.sub_asset_class for r in frecs)
-    desc, _ = _single(r.bond_type_label for r in frecs)
-    if mifir_ambiguous:
-        notes.append("FITRS records disagree on MiFIR ID -> undetermined (fail closed)")
-    if type_ambiguous:
-        notes.append("FITRS records disagree on bond type -> undetermined (fail closed)")
-
-    lei, lei_ambiguous = _single(f.issuer_lei for f in freps)
-    identity_conflict = lei_ambiguous
-    if lei_ambiguous:
-        notes.append("FIRDS records disagree on issuer LEI -> IDENTITY_CONFLICT")
-
-    gleif = resolve_legal_jurisdiction(lei or "", gleif_entities) if lei else None
-
-    record = SecurityRecord(
-        instrument_mifir_id=mifir_id,
-        instrument_bond_type=bond_type,
-        issuer_lei=lei,
-        gleif_legal_jurisdiction_country=gleif.legal_jurisdiction_country if gleif else None,
-        gleif_resolved=gleif.resolved if gleif else False,
-        identity_conflict=identity_conflict,
-        instrument_isin=isin,
-        source_report_id=(frecs[0].source_report_id if frecs else None),
+    # Record assembly is shared with the G1-B batch resolver
+    # (universe/assemble.py); the branch decision remains the frozen
+    # resolver's alone.
+    a = assemble_security_record(
+        isin,
+        fitrs_records.get(isin) or [],
+        firds_instruments.get(isin) or [],
+        gleif_entities,
     )
-    disp = resolve_disposition(record)
-
-    if not frecs:
-        notes.append("ISIN absent from FITRS full file (cannot demonstrate BOND+CRPB)")
-    if not freps:
-        notes.append("ISIN absent from FIRDS full file (issuer LEI unresolved)")
-
+    disp = resolve_disposition(a.record)
     return SampleRow(
         isin=isin,
         bucket=bucket,
-        fitrs_observed=bool(frecs),
-        fitrs_mifir_id=mifir_id,
-        fitrs_bond_type=bond_type,
-        fitrs_sacl=sacl,
-        fitrs_desc=desc,
-        fitrs_record_count=len(frecs),
-        firds_observed=bool(freps),
-        issuer_lei=lei,
-        firds_record_count=len(freps),
-        gleif_resolved=gleif.resolved if gleif else False,
-        gleif_country=gleif.legal_jurisdiction_country if gleif else None,
+        fitrs_observed=bool(a.fitrs_count),
+        fitrs_mifir_id=a.mifir_id,
+        fitrs_bond_type=a.bond_type,
+        fitrs_sacl=a.sacl,
+        fitrs_desc=a.desc,
+        fitrs_record_count=a.fitrs_count,
+        firds_observed=bool(a.firds_count),
+        issuer_lei=a.issuer_lei,
+        firds_record_count=a.firds_count,
+        gleif_resolved=a.gleif.resolved if a.gleif else False,
+        gleif_country=a.gleif.legal_jurisdiction_country if a.gleif else None,
         branch=disp.branch.value,
         reason=disp.reason.value,
-        notes=tuple(notes),
+        notes=a.notes,
     )
 
 
