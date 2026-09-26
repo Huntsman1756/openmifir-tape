@@ -233,7 +233,8 @@ jobs:
           pip wheel . --no-deps --no-build-isolation -w dist
       - name: Wheel contents — descriptors in, dev/evidence dirs out
         run: |
-          python -c 'import glob, zipfile; n = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist(); assert "config/sources/bme_apa.yaml" in n, n; assert "config/sources/bloomberg_apae.yaml" in n, n; assert not any(x.startswith(("fixtures/", "evidence/", "tools/", "data/")) for x in n), n; print("wheel contents ok")'
+          # PS 5.1 native-arg quoting: double-quoted outer, single inside.
+          python -c "import glob, zipfile; n = zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); assert 'config/sources/bme_apa.yaml' in n, n; assert 'config/sources/bloomberg_apae.yaml' in n, n; assert not any(x.startswith(('fixtures/', 'evidence/', 'tools/', 'data/')) for x in n), n; print('wheel contents ok')"
       - name: Install wheel (non-editable)
         run: |
           $whl = Get-ChildItem -Path dist -Filter *.whl | Select-Object -First 1
