@@ -75,6 +75,33 @@ def _g1b_rows(path, isins, **by_isin):
     return hashlib.sha256(data).hexdigest()
 
 
+SD_FITRS = "aa" * 32
+SD_FIRDS = "bb" * 32
+SD_GLEIF = "cc" * 32
+
+
+def _g1b_report(path, rows_digest,
+                fitrs_sd=SD_FITRS, firds_sd=SD_FIRDS, gleif_sd=SD_GLEIF,
+                embedded_basis=None):
+    """Write a minimal internally-valid G1-B report; returns
+    (report_sha256, basis_id)."""
+    from metrics.g1b import reference_basis_id
+    basis = reference_basis_id({"fitrs": fitrs_sd, "firds": firds_sd,
+                                "gleif": gleif_sd})
+    doc = {
+        "dispositions": {"rows_sha256": rows_digest},
+        "reference_sets": {
+            "fitrs": {"set_digest": fitrs_sd},
+            "firds": {"set_digest": firds_sd},
+            "gleif": {"set_digest": gleif_sd},
+        },
+        "reference_basis_id": embedded_basis if embedded_basis is not None
+        else basis,
+    }
+    path.write_bytes(yaml.safe_dump(doc).encode("utf-8"))
+    return hashlib.sha256(path.read_bytes()).hexdigest(), basis
+
+
 def _materialize(tmp_path):
     """(raw, runs) fixture root -> build_publications + helpers."""
     raw, runs = _fixture(tmp_path)
@@ -291,6 +318,96 @@ def test_g1b_rows_digest_tamper_fails(tmp_path):
         load_g1b_dispositions(p, expected_digest="0" * 64)
 
 
+# ---------- Blocker: mandatory + independently-verified G1-B authority --
+
+def _g1b_pair(tmp_path, isins=("ISIN-A",)):
+    """Valid synthetic (rows, report) pair; returns
+    (rows_path, report_path, expecteds dict)."""
+    rows = tmp_path / "rows.jsonl"
+    rows_sha = _g1b_rows(rows, list(isins))
+    rep = tmp_path / "g1b.yaml"
+    rep_sha, basis = _g1b_report(rep, rows_sha)
+    return rows, rep, {
+        "expected_rows_digest": rows_sha,
+        "expected_report_sha256": rep_sha,
+        "expected_basis_id": basis,
+    }
+
+
+def test_g1b_authority_valid_pair_passes(tmp_path):
+    from metrics.g1c1 import verify_g1b_authority
+    rows, rep, exp = _g1b_pair(tmp_path)
+    out = verify_g1b_authority(rows, rep, **exp)
+    assert out["reference_basis_id"] == exp["expected_basis_id"]
+    assert out["report_sha256"] == exp["expected_report_sha256"]
+    assert len(out["dispositions"]) == 1
+
+
+def test_g1b_missing_report_fails(tmp_path):
+    from metrics.g1c1 import verify_g1b_authority
+    rows = tmp_path / "rows.jsonl"
+    rows_sha = _g1b_rows(rows, ["ISIN-A"])
+    with pytest.raises(G1C1Error, match="report not found"):
+        verify_g1b_authority(
+            rows, tmp_path / "absent.yaml",
+            expected_rows_digest=rows_sha,
+            expected_report_sha256="0" * 64,
+            expected_basis_id="0" * 64)
+
+
+def test_g1b_mutated_report_bytes_fail(tmp_path):
+    from metrics.g1c1 import verify_g1b_authority
+    rows, rep, exp = _g1b_pair(tmp_path)
+    rep.write_bytes(rep.read_bytes() + b"\n# tampered\n")
+    with pytest.raises(G1C1Error, match="report sha256"):
+        verify_g1b_authority(rows, rep, **exp)
+
+
+def test_g1b_embedded_basis_altered_fails(tmp_path):
+    from metrics.g1c1 import verify_g1b_authority
+    rows = tmp_path / "rows.jsonl"
+    rows_sha = _g1b_rows(rows, ["ISIN-A"])
+    rep = tmp_path / "g1b.yaml"
+    rep_sha, basis = _g1b_report(rep, rows_sha,
+                                 embedded_basis="ff" * 32)
+    # computed basis != embedded -> fail even though bytes-hash is right
+    with pytest.raises(G1C1Error, match="reference_basis_id"):
+        verify_g1b_authority(rows, rep,
+                             expected_rows_digest=rows_sha,
+                             expected_report_sha256=rep_sha,
+                             expected_basis_id=basis)
+
+
+def test_g1b_family_set_digest_altered_fails_recompute(tmp_path):
+    from metrics.g1c1 import verify_g1b_authority
+    rows = tmp_path / "rows.jsonl"
+    rows_sha = _g1b_rows(rows, ["ISIN-A"])
+    rep = tmp_path / "g1b.yaml"
+    # embedded basis kept at the OLD value while gleif set_digest changes
+    rep_sha, basis = _g1b_report(
+        rep, rows_sha, gleif_sd="dd" * 32,
+        embedded_basis="aa" * 32)
+    with pytest.raises(G1C1Error, match="reference_basis_id"):
+        verify_g1b_authority(rows, rep,
+                             expected_rows_digest=rows_sha,
+                             expected_report_sha256=rep_sha,
+                             expected_basis_id=basis)
+
+
+def test_g1b_rows_sha_mismatch_with_report_fails(tmp_path):
+    """Report binds different rows than supplied -> fail."""
+    from metrics.g1c1 import verify_g1b_authority
+    rows = tmp_path / "rows.jsonl"
+    rows_sha = _g1b_rows(rows, ["ISIN-A"])
+    rep = tmp_path / "g1b.yaml"
+    rep_sha, basis = _g1b_report(rep, "0" * 64)  # declared != actual
+    with pytest.raises(G1C1Error, match="does not bind"):
+        verify_g1b_authority(rows, rep,
+                             expected_rows_digest=rows_sha,
+                             expected_report_sha256=rep_sha,
+                             expected_basis_id=basis)
+
+
 def test_g1a_digest_tamper_fails(tmp_path):
     art = tmp_path / "g1a.yaml"
     _g1a_artifact(art, ["ISIN-A"])
@@ -363,12 +480,16 @@ def _full_materialization(tmp_path):
     g1a_digest = _g1a_artifact(g1a, ["ISIN-A"])
     g1b = tmp_path / "rows.jsonl"
     g1b_digest = _g1b_rows(g1b, ["ISIN-A"])
+    g1b_rep = tmp_path / "g1b.yaml"
+    g1b_rep_sha, basis = _g1b_report(g1b_rep, g1b_digest)
     tape = tmp_path / "tape"
     report, pub_b, chain_b = build_report(
-        raw, runs, g1a, g1b, None, window=WINDOW,
+        raw, runs, g1a, g1b, g1b_rep, window=WINDOW,
         tape_dir=tape, date="d", generated_utc="t",
         expected_g1a_digest=g1a_digest,
-        expected_g1b_digest=g1b_digest)
+        expected_g1b_digest=g1b_digest,
+        expected_g1b_report_sha256=g1b_rep_sha,
+        expected_g1b_basis_id=basis)
     return report, pub_b, chain_b, tape
 
 
@@ -436,11 +557,15 @@ def test_evidence_emission_and_no_paths(tmp_path):
     g1a_d = _g1a_artifact(g1a, ["ISIN-A"])
     g1b = tmp_path / "rows.jsonl"
     g1b_d = _g1b_rows(g1b, ["ISIN-A"])
+    g1b_rep = tmp_path / "g1b.yaml"
+    rep_sha, basis = _g1b_report(g1b_rep, g1b_d)
     path = generate_report(
-        raw, runs, g1a, g1b, None, window=WINDOW,
+        raw, runs, g1a, g1b, g1b_rep, window=WINDOW,
         tape_dir=tmp_path / "tape", evidence_dir=tmp_path / "ev",
         date="d", generated_utc="t",
-        expected_g1a_digest=g1a_d, expected_g1b_digest=g1b_d)
+        expected_g1a_digest=g1a_d, expected_g1b_digest=g1b_d,
+        expected_g1b_report_sha256=rep_sha,
+        expected_g1b_basis_id=basis)
     text = path.read_text(encoding="utf-8")
     assert str(tmp_path) not in text
     assert "publications.parquet" in text

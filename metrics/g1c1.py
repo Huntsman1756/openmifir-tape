@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -62,8 +63,12 @@ TAPE_SCHEMA_VERSION = 1
 # trusted by declaration.
 EXPECTED_G1B_ROWS_DIGEST = \
     "1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8"
+EXPECTED_G1B_REPORT_SHA256 = \
+    "3d75da51a3b30b4f0e1139afc8891c3983bc28bdbb134cd49d8690c348633c8f"
 EXPECTED_G1B_BASIS_ID = \
     "9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8"
+
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 
 PUB_COLUMNS = [
     "source", "source_object_id", "capture_version", "raw_sha256",
@@ -148,6 +153,78 @@ def load_g1b_dispositions(
         by_isin[isin] = {"branch": branch, "reason": reason,
                          "lei": firds.get("lei")}
     return by_isin
+
+
+def verify_g1b_authority(
+    rows_path: Path,
+    report_path: Path,
+    *,
+    expected_rows_digest: str = EXPECTED_G1B_ROWS_DIGEST,
+    expected_report_sha256: str = EXPECTED_G1B_REPORT_SHA256,
+    expected_basis_id: str = EXPECTED_G1B_BASIS_ID,
+) -> dict[str, Any]:
+    """Fully verify G1-B authority: disposition rows AND reference basis.
+
+    - report file MUST exist and its bytes MUST hash to the verified
+      ``expected_report_sha256`` — metadata from an unauthenticated
+      report is never trusted;
+    - the authenticated report's ``dispositions.rows_sha256`` MUST equal
+      the independently computed sha256 of the supplied rows file AND
+      ``expected_rows_digest``;
+    - ``reference_basis_id`` is RECOMPUTED from the three family
+      ``set_digest`` values via ``metrics.g1b.reference_basis_id`` and
+      must equal the embedded value AND ``expected_basis_id``.
+
+    Returns ``{"rows_digest", "report_sha256", "reference_basis_id"}``.
+    Any deviation raises ``G1C1Error`` — no fallbacks.
+    """
+    from .g1b import reference_basis_id as _g1b_basis_id
+
+    dispositions = load_g1b_dispositions(
+        rows_path, expected_digest=expected_rows_digest)
+
+    if not report_path.is_file():
+        raise G1C1Error(
+            f"G1-B report not found: {report_path} — reference authority "
+            "is mandatory, no fallback")
+    report_bytes = report_path.read_bytes()
+    report_sha = hashlib.sha256(report_bytes).hexdigest()
+    if report_sha != expected_report_sha256:
+        raise G1C1Error(
+            f"G1-B report sha256 {report_sha!r} != expected "
+            f"{expected_report_sha256!r} — refusing unverified report")
+    doc = yaml.safe_load(report_bytes.decode("utf-8")) or {}
+
+    declared_rows_sha = ((doc.get("dispositions") or {})
+                         .get("rows_sha256"))
+    actual_rows_sha = hashlib.sha256(rows_path.read_bytes()).hexdigest()
+    if declared_rows_sha != actual_rows_sha \
+            or actual_rows_sha != expected_rows_digest:
+        raise G1C1Error(
+            "G1-B report does not bind the supplied disposition rows: "
+            f"declared={declared_rows_sha!r} actual={actual_rows_sha!r} "
+            f"expected={expected_rows_digest!r}")
+
+    families = doc.get("reference_sets") or {}
+    set_digests: dict[str, str] = {}
+    for fam in ("fitrs", "firds", "gleif"):
+        sd = (families.get(fam) or {}).get("set_digest")
+        if not isinstance(sd, str) or not _HEX64_RE.match(sd):
+            raise G1C1Error(
+                f"G1-B report has malformed/missing {fam} set_digest: "
+                f"{sd!r}")
+        set_digests[fam] = sd
+    computed = _g1b_basis_id(set_digests)
+    embedded = doc.get("reference_basis_id")
+    if computed != embedded or computed != expected_basis_id:
+        raise G1C1Error(
+            "G1-B reference_basis_id verification failed: "
+            f"computed={computed!r} embedded={embedded!r} "
+            f"expected={expected_basis_id!r}")
+    return {"dispositions": dispositions,
+            "rows_digest": actual_rows_sha,
+            "report_sha256": report_sha,
+            "reference_basis_id": computed}
 
 
 def verify_g1a_authority(
@@ -423,7 +500,7 @@ def build_report(
     runs_dir: Path,
     g1a_artifact: Path,
     g1b_rows: Path,
-    g1b_report: Path | None,
+    g1b_report: Path,
     *,
     window: dict[str, str],
     tape_dir: Path,
@@ -431,6 +508,8 @@ def build_report(
     generated_utc: str,
     expected_g1a_digest: str = EXPECTED_G1A_SEMANTIC_DIGEST,
     expected_g1b_digest: str = EXPECTED_G1B_ROWS_DIGEST,
+    expected_g1b_report_sha256: str = EXPECTED_G1B_REPORT_SHA256,
+    expected_g1b_basis_id: str = EXPECTED_G1B_BASIS_ID,
 ) -> tuple[dict[str, Any], bytes, bytes]:
     """Materialize the tape and build the C1 metadata report.
 
@@ -440,17 +519,12 @@ def build_report(
     """
     start = _parse_ts(window["operational_start"])
     tail = _parse_ts(window["evidence_tail_end"])
-    dispositions = load_g1b_dispositions(
-        g1b_rows, expected_digest=expected_g1b_digest)
-    g1b_basis = None
-    if g1b_report is not None and g1b_report.is_file():
-        gdoc = yaml.safe_load(
-            g1b_report.read_bytes().decode("utf-8"))
-        g1b_basis = (gdoc or {}).get("reference_basis_id")
-        if g1b_basis != EXPECTED_G1B_BASIS_ID:
-            raise G1C1Error(
-                f"G1-B reference_basis_id {g1b_basis!r} != expected "
-                f"{EXPECTED_G1B_BASIS_ID!r}")
+    g1b = verify_g1b_authority(
+        g1b_rows, g1b_report,
+        expected_rows_digest=expected_g1b_digest,
+        expected_report_sha256=expected_g1b_report_sha256,
+        expected_basis_id=expected_g1b_basis_id)
+    dispositions = g1b["dispositions"]
 
     selection = select_eligible(runs_dir, raw_root, start=start,
                                 tail_end=tail)
@@ -517,8 +591,17 @@ def build_report(
             },
             "g1b": {
                 "rows": "evidence/g1-b1/G1-B1_disposition_rows.jsonl",
-                "rows_sha256": expected_g1b_digest,
-                "reference_basis_id": g1b_basis,
+                "rows_sha256": g1b["rows_digest"],
+                "report":
+                    "evidence/g1-b1/G1-B1_observed_universe_disposition.yaml",
+                "report_sha256": g1b["report_sha256"],
+                "reference_basis_id": g1b["reference_basis_id"],
+                "verification":
+                    "report bytes sha256-verified; report.dispositions."
+                    "rows_sha256 bound to the independently hashed rows "
+                    "file; reference_basis_id recomputed from the three "
+                    "family set_digests (metrics.g1b.reference_basis_id) "
+                    "and required to equal embedded == expected",
             },
         },
         "tables": {
@@ -574,7 +657,7 @@ def generate_report(
     runs_dir: Path,
     g1a_artifact: Path,
     g1b_rows: Path,
-    g1b_report: Path | None,
+    g1b_report: Path,
     *,
     window: dict[str, str],
     tape_dir: Path,
@@ -583,13 +666,17 @@ def generate_report(
     generated_utc: str,
     expected_g1a_digest: str = EXPECTED_G1A_SEMANTIC_DIGEST,
     expected_g1b_digest: str = EXPECTED_G1B_ROWS_DIGEST,
+    expected_g1b_report_sha256: str = EXPECTED_G1B_REPORT_SHA256,
+    expected_g1b_basis_id: str = EXPECTED_G1B_BASIS_ID,
 ) -> Path:
     report, _pub, _chain = build_report(
         raw_root, runs_dir, g1a_artifact, g1b_rows, g1b_report,
         window=window, tape_dir=tape_dir,
         date=date, generated_utc=generated_utc,
         expected_g1a_digest=expected_g1a_digest,
-        expected_g1b_digest=expected_g1b_digest)
+        expected_g1b_digest=expected_g1b_digest,
+        expected_g1b_report_sha256=expected_g1b_report_sha256,
+        expected_g1b_basis_id=expected_g1b_basis_id)
     ev = evidence_dir / "g1-c1"
     ev.mkdir(parents=True, exist_ok=True)
     path = ev / REPORT_NAME
@@ -607,7 +694,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--runs-dir", type=Path, required=True)
     ap.add_argument("--g1a-artifact", type=Path, required=True)
     ap.add_argument("--g1b-rows", type=Path, required=True)
-    ap.add_argument("--g1b-report", type=Path, default=None)
+    ap.add_argument("--g1b-report", type=Path, required=True,
+                    help="verified G1-B disposition report — mandatory, "
+                         "bytes sha256-verified and basis recomputed")
     ap.add_argument("--tape-dir", type=Path,
                     default=Path("data/g1/tape"))
     ap.add_argument("--out", type=Path, default=Path("evidence"))
