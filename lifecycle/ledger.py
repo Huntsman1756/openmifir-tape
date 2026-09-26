@@ -90,18 +90,19 @@ def _rec_sort_key(rec: Any) -> str:
     return json.dumps(rec.to_evidence(), sort_keys=True, default=str)
 
 
-def build_ledger(normalized: list[Any]) -> list[LedgerEntry]:
-    """Build a deterministic append-only ledger from normalized records.
+def build_ledger_indexed(
+    normalized: list[Any],
+) -> list[tuple[int, LedgerEntry]]:
+    """Build the deterministic append-only ledger WITH input positions.
 
-    ``normalized`` items expose the attributes produced by G0-C1 (source,
-    transaction_identification_code, instrument_identification_code, quantity,
-    notional_amount, price, price_notation, publication_datetime,
-    trading_datetime, flags) plus the lifecycle signals (cancellation,
-    amendment, deferral, partial_publication, source_report_id).
+    Returns ``[(input_index, LedgerEntry), ...]`` in the same emission order
+    as :func:`build_ledger` — the exact normalized-input occurrence ->
+    LedgerEntry mapping. Identical observations collide on identical entry
+    identity material and are disambiguated by the deterministic occurrence
+    index; callers MUST map via these positions, never by economic fields.
 
-    Entries are grouped by (source, transaction id), ordered by publication
-    time, and linked by supersession. Records without a transaction id are
-    UNCHAINABLE singletons: never grouped with each other, never superseded.
+    ``build_ledger`` remains the compatibility wrapper and its output is
+    unchanged (same entries, same order, same digest).
     """
     # Per-record resolution + deterministic identity material.
     items: list[tuple[Any, str, str, list[str], str]] = []
@@ -142,7 +143,7 @@ def build_ledger(normalized: list[Any]) -> list[LedgerEntry]:
         else:
             groups[(rec.source, None, i)] = [i]
 
-    entries: list[LedgerEntry] = []
+    entries: list[tuple[int, LedgerEntry]] = []
     for key in groups.values():
         key.sort(key=lambda i: (
             items[i][0].publication_datetime.canonical_utc or "",
@@ -159,7 +160,7 @@ def build_ledger(normalized: list[Any]) -> list[LedgerEntry]:
                 markers.append(MARKER_ENTRY_ID_COLLISION)
             entry_id = id_by_pos[i]
             entries.append(
-                LedgerEntry(
+                (i, LedgerEntry(
                     entry_id=entry_id,
                     source=rec.source,
                     source_report_id=rec.source_report_id,
@@ -177,10 +178,29 @@ def build_ledger(normalized: list[Any]) -> list[LedgerEntry]:
                     flags=list(rec.flags),
                     markers=markers,
                     normalized={"raw_field_count": len(rec.raw_fields)},
-                )
+                ))
             )
             prev_id = entry_id
     return entries
+
+
+def build_ledger(normalized: list[Any]) -> list[LedgerEntry]:
+    """Build a deterministic append-only ledger from normalized records.
+
+    ``normalized`` items expose the attributes produced by G0-C1 (source,
+    transaction_identification_code, instrument_identification_code, quantity,
+    notional_amount, price, price_notation, publication_datetime,
+    trading_datetime, flags) plus the lifecycle signals (cancellation,
+    amendment, deferral, partial_publication, source_report_id).
+
+    Entries are grouped by (source, transaction id), ordered by publication
+    time, and linked by supersession. Records without a transaction id are
+    UNCHAINABLE singletons: never grouped with each other, never superseded.
+
+    Compatibility wrapper over :func:`build_ledger_indexed` — identical
+    entries in identical order.
+    """
+    return [e for _, e in build_ledger_indexed(normalized)]
 
 
 def ledger_digest(entries: list[LedgerEntry]) -> str:
