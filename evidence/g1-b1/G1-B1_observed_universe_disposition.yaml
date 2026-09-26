@@ -15,7 +15,7 @@ input_authority:
   observed_identifier_count: 8077
 generator:
   module: metrics.g1b
-  code_commit: a685efb5c6577946e36a453263bfe6bdd6a8d196
+  code_commit: 281a89828af244cbeb86124697573cc62c5ab1f2
   deterministic: true
 reference_basis: BUILD_SNAPSHOT
 reference_basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
@@ -5479,7 +5479,7 @@ reference_binding: "every row resolves against reference_basis_id (the canonical
   \ in the reference_links artifact keyed by isin \u2014 the row's deterministic identity"
 reference_links:
   file: G1-B1_reference_links.jsonl
-  sha256: 8a4c7deab59737b396f3537a170f41261eb17180f49514f849d82fe3f000e9f5
+  sha256: 6fc07be6952ac48f7820af1286ead636222113c048ac8b0e624ee5167ecc51c1
   handle_grammar:
     i: observed instrument identifier (row key)
     fitrs:
@@ -5532,14 +5532,14 @@ semantics: Batch es_legal_issuer_v1 resolution over the verified G1-A OBSERVED_I
 dispositions:
   identifier_count: 8077
   rows_file: G1-B1_disposition_rows.jsonl
-  rows_sha256: a23532c76c5c084321bcafeda1ffa598bb84c2322bb23397d4bd11e430b0c16b
-  disposition_semantic_digest: a23532c76c5c084321bcafeda1ffa598bb84c2322bb23397d4bd11e430b0c16b
+  rows_sha256: 1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8
+  disposition_semantic_digest: 1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8
   fitrs_mifir_id_ambiguous_isins: 0
   fitrs_bond_type_ambiguous_isins: 71
   firds_issuer_lei_conflict_isins: 0
   isins_absent_from_fitrs: 685
   isins_absent_from_firds: 351
-  gleif_resolved_isins: 5821
+  gleif_resolved_isins: 4553
   gleif_not_found_isins: 0
   branch_counts:
     INCLUDE: 135
