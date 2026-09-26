@@ -130,14 +130,16 @@ ROW_SCHEMA = {
 
 LINK_SCHEMA = {
     "i": "observed instrument identifier (row key)",
-    "fitrs": [{
-        "h": "handle '<file>:<member>:<ordinal>' — index of the reference "
-             "file basename in the family's canonical sorted entries, index "
-             "of the XML member in that archive's sorted member list, and "
-             "the record's ordinal in that member's parse stream",
-        "rid": "source-published report id when present",
-    }],
-    "firds": "same handle grammar",
+    "fitrs": {
+        "<file_idx>:<member_idx>": {
+            "o": "record ordinals within that member's parse stream "
+                 "(ascending; full handle = '<file_idx>:<member_idx>:<o>')",
+            "r": "parallel array of source-published report ids — emitted "
+                 "only when every record in the group carries one",
+        },
+    },
+    "firds": "same grouped grammar — '<file_idx>:<member_idx>' -> "
+             "{o: [ordinals], r: [report_ids]?}",
     "gleif": "exact GLEIF family entry name consulted "
              "(<LEI>.json / <LEI>.notfound.json; null when no lookup)",
 }
@@ -344,13 +346,31 @@ def reference_basis_id(set_digests: dict[str, str]) -> str:
         sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-def _handle(obs: RefObs, file_index: dict[str, int]) -> dict[str, Any]:
-    """Deterministic metadata-only observation handle."""
-    h: dict[str, Any] = {
-        "h": f"{file_index[obs.file]}:{obs.member}:{obs.ordinal}"}
-    if obs.report_id:
-        h["rid"] = obs.report_id
-    return h
+def _group_handles(
+    obs: Iterable[RefObs],
+    file_index: dict[str, int],
+) -> dict[str, Any]:
+    """Group observation handles by '<file_idx>:<member_idx>'.
+
+    ``o`` carries the ascending record ordinals; ``r`` is a parallel array
+    of source-published report ids, emitted only when every record in the
+    group carries one (a missing id never fabricates a citation — the
+    ordinal handle always suffices).
+    """
+    groups: dict[str, dict[str, Any]] = {}
+    for o in sorted(obs, key=lambda o: (o.file, o.member, o.ordinal)):
+        key = f"{file_index[o.file]}:{o.member}"
+        g = groups.setdefault(key, {"o": [], "r": []})
+        g["o"].append(o.ordinal)
+        g["r"].append(o.report_id)
+    out: dict[str, Any] = {}
+    for key in sorted(groups):
+        g = groups[key]
+        entry: dict[str, Any] = {"o": g["o"]}
+        if all(r is not None for r in g["r"]):
+            entry["r"] = g["r"]
+        out[key] = entry
+    return out
 
 
 def build_reference_links(
@@ -365,7 +385,7 @@ def build_reference_links(
 ) -> list[dict[str, Any]]:
     """ISIN-keyed concrete reference-observation bindings (LINK_SCHEMA).
 
-    Every handle resolves against the family's canonical ``entries`` order;
+    Handles resolve against the family's canonical ``entries`` order;
     the GLEIF link names the exact pinned artifact entry for the required
     LEI, or null when the jurisdiction step was never reached.
     """
@@ -378,14 +398,8 @@ def build_reference_links(
     gleif_names = {e["name"] for e in gleif_set["entries"]}
     links: list[dict[str, Any]] = []
     for isin in sorted(isins):
-        freps = [_handle(o, file_index["fitrs"])
-                 for o in sorted(fitrs_obs.get(isin, []),
-                                 key=lambda o: (o.file, o.member,
-                                                o.ordinal))]
-        rreps = [_handle(o, file_index["firds"])
-                 for o in sorted(firds_obs.get(isin, []),
-                                 key=lambda o: (o.file, o.member,
-                                                o.ordinal))]
+        freps = _group_handles(fitrs_obs.get(isin, []), file_index["fitrs"])
+        rreps = _group_handles(firds_obs.get(isin, []), file_index["firds"])
         link: dict[str, Any] = {"i": isin}
         if freps:
             link["fitrs"] = freps

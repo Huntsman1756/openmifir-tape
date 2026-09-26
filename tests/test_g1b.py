@@ -632,11 +632,15 @@ def test_reference_links_multi_record_handles(tmp_path):
         expected_g1a_digest=digest, date="d", generated_utc="t")
     link = links[0]
     assert link["i"] == isin
-    # fitrs entries: file index by canonical sorted entries (a.zip=0,
-    # b.zip=1), member index, record ordinal.
-    assert [h["h"] for h in link["fitrs"]] == ["0:0:0", "1:0:0"]
-    # firds: same file/member, ordinals 0 and 2 (OTHER in between).
-    assert [h["h"] for h in link["firds"]] == ["0:0:0", "0:0:2"]
+    # fitrs: file index by canonical sorted entries (a.zip=0, b.zip=1),
+    # member index, record ordinals grouped under '<file>:<member>'.
+    assert link["fitrs"] == {
+        "0:0": {"o": [0], "r": ["0"]},
+        "1:0": {"o": [0], "r": ["0"]},
+    }
+    # firds: same file/member, ordinals 0 and 2 (OTHER in between); no
+    # source-published report id -> no 'r' array.
+    assert link["firds"] == {"0:0": {"o": [0, 2]}}
     assert link["gleif"] == f"{LEI_ES}.json"
     assert report["reference_links"]["sha256"] == \
         hashlib.sha256(canonical_links_bytes(links)).hexdigest()
@@ -690,7 +694,8 @@ def test_reference_links_no_report_id_fallback(tmp_path):
     _, _, links = build_report(observed, [fz], [rz], gleif,
                                expected_g1a_digest=digest,
                                date="d", generated_utc="t")
-    for ref in links[0]["fitrs"] + links[0]["firds"]:
-        assert "h" in ref  # deterministic handle always present
-        # rid present only when the source published one
-    assert links[0]["firds"][0].get("rid") is None
+    # deterministic ordinal handle always present; 'r' only when every
+    # record in the group carries a source-published report id
+    assert links[0]["fitrs"]["0:0"]["o"] == [0]
+    assert links[0]["firds"]["0:0"]["o"] == [0]
+    assert "r" not in links[0]["firds"]["0:0"]
