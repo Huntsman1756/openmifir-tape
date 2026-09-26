@@ -2,3 +2,11 @@
 # bytes (LF). Without this, Windows checkouts (autocrlf) rewrite them to CRLF
 # and the verifier's fingerprint check fails closed.
 tests/fixtures/efd2268_descriptors/*.yaml text eol=lf
+
+# Evidence artifacts are SHA-256-addressed byte-identical payloads: canonical
+# JSONL/YAML bytes are the semantic identity. Force LF checkouts everywhere so
+# autocrlf can never rewrite committed evidence bytes.
+# (Scoped to g1-* + *.jsonl: older G0 evidence was committed with CRLF blobs;
+# renormalizing those would churn their recorded sidecar hashes — out of scope.)
+evidence/**/*.jsonl text eol=lf
+evidence/g1-*/** text eol=lf
