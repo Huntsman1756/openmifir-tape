@@ -62,7 +62,7 @@ def test_repeated_capture_observations_do_not_duplicate(tmp_path):
     res = build_observed_instrument_set(raw, runs, window=WINDOW)
     assert res["instrument_count"] == 1
     e = res["instruments"][0]
-    assert e["eligible_capture_versions"] == 1
+    assert e["eligible_capture_identities"] == 1
     assert e["first_observed_at"].startswith("2026-09-17T10:00:00")
     assert e["last_observed_at"].startswith("2026-09-17T12:00:00")
 
@@ -76,7 +76,7 @@ def test_first_last_observation_across_versions(tmp_path):
     _manifest(runs, "20260921T150000Z", BME, "2026-09-21T15:00:00Z", [o2])
     res = build_observed_instrument_set(raw, runs, window=WINDOW)
     e = res["instruments"][0]
-    assert e["eligible_capture_versions"] == 2
+    assert e["eligible_capture_identities"] == 2
     assert e["first_observed_at"].startswith("2026-09-17")
     assert e["last_observed_at"].startswith("2026-09-21")
 
@@ -151,3 +151,104 @@ def test_report_provenance_and_metadata(tmp_path):
     assert rep["frozen_authority"]["freeze_tag"] == "g1-freeze-v0"
     assert rep["observed_instrument_set"]["instrument_count"] == 1
     assert rep["hygiene"]["provider_payloads_in_repo"] is False
+
+
+# ---- PR #21 findings: capture-identity counting + path-independent artifact
+
+def test_capture_identity_counts_once_per_isin(tmp_path):
+    """Finding 1-A: one capture version with two rows for the same ISIN
+    counts as ONE eligible capture identity."""
+    raw, runs = _fixture(tmp_path)
+    o = _store(raw, BME, "2026-09-17", "d.json",
+               [_bme(), _bme(transaction_identification_code="TX-9",
+                            publication_date_and_time="2026-09-17T10:01:00.000Z")])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [o])
+    res = build_observed_instrument_set(raw, runs, window=WINDOW)
+    assert res["instrument_count"] == 1
+    assert res["instruments"][0]["eligible_capture_identities"] == 1
+    assert res["records_total_in_scope_files"] == 2
+
+
+def test_capture_identity_two_distinct_versions(tmp_path):
+    """Finding 1-B: same ISIN across two distinct capture identities → 2."""
+    raw, runs = _fixture(tmp_path)
+    o1 = _store(raw, BME, "2026-09-17", "d.json", [_bme()])
+    o2 = _store(raw, BME, "2026-09-18", "d.json",
+                [_bme(price="98.60", notional_amount="98600")])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [o1])
+    _manifest(runs, "20260918T100000Z", BME, "2026-09-18T10:00:00Z", [o2])
+    res = build_observed_instrument_set(raw, runs, window=WINDOW)
+    assert res["instruments"][0]["eligible_capture_identities"] == 2
+
+
+def test_capture_identity_multi_row_capture(tmp_path):
+    """Finding 1-C: one capture with N rows for ISIN-A + 1 row for ISIN-B —
+    both instruments exist, each with exactly one capture identity."""
+    raw, runs = _fixture(tmp_path)
+    o = _store(raw, BME, "2026-09-17", "d.json",
+               [_bme(),
+                _bme(transaction_identification_code="TX-9",
+                     publication_date_and_time="2026-09-17T10:01:00.000Z"),
+                _bme(instrument_identification_code="ISIN-B",
+                     transaction_identification_code="TX-B")])
+    _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z", [o])
+    res = build_observed_instrument_set(raw, runs, window=WINDOW)
+    assert res["instrument_count"] == 2
+    for e in res["instruments"]:
+        assert e["eligible_capture_identities"] == 1
+
+
+def test_repeated_attestations_do_not_inflate_identity_count(tmp_path):
+    """Finding 1-D: N manifests attesting the SAME tuple → one identity;
+    first/last observation still span the attestations."""
+    raw, runs = _fixture(tmp_path)
+    o = _store(raw, BME, "2026-09-17", "d.json", [_bme()])
+    for hh in ("10", "11", "12"):
+        _manifest(runs, f"20260917T{hh}0000Z", BME,
+                  f"2026-09-17T{hh}:00:00Z", [o])
+    res = build_observed_instrument_set(raw, runs, window=WINDOW)
+    e = res["instruments"][0]
+    assert e["eligible_capture_identities"] == 1
+    assert e["first_observed_at"].startswith("2026-09-17T10")
+    assert e["last_observed_at"].startswith("2026-09-17T12")
+
+
+def _bundle_files(root):
+    """Minimal bundle provenance files under a root dir."""
+    bundle = root / "bundle"
+    (bundle / "runs").mkdir(parents=True)
+    (bundle / "raw").mkdir()
+    (bundle / "collection-meta.yaml").write_text(
+        "bundle_id: test-bundle\ndeployed_head: abc123\n"
+        "collection_window_utc: {start: '2026-09-24T00:00:00Z'}\n",
+        encoding="utf-8")
+    (bundle / "SHA256SUMS.txt").write_text("deadbeef *collection-meta.yaml\n",
+                                           encoding="utf-8")
+    return bundle
+
+
+def test_cross_path_reproducibility(tmp_path):
+    """Finding 2: identical inputs under different root paths produce an
+    identical report — no machine-specific paths in the artifact."""
+    import yaml as _yaml
+
+    roots = [tmp_path / "loc_a", tmp_path / "loc_b"]
+    reports = []
+    for root in roots:
+        raw = root / "raw"
+        runs = root / "runs"
+        runs.mkdir(parents=True)
+        o = _store(raw, BME, "2026-09-17", "d.json", [_bme()])
+        _manifest(runs, "20260917T100000Z", BME, "2026-09-17T10:00:00Z",
+                  [o])
+        bundle = _bundle_files(root)
+        rep = build_report(raw, runs, window=WINDOW, bundle_dir=bundle,
+                           date="d", generated_utc="t")
+        reports.append(rep)
+    assert _yaml.safe_dump(reports[0]) == _yaml.safe_dump(reports[1])
+    text = _yaml.safe_dump(reports[0])
+    assert str(tmp_path) not in text
+    assert "loc_a" not in text and "loc_b" not in text
+    basis = reports[0]["evidence_basis"]["bundle"]
+    assert basis["bundle_id"] == "test-bundle"
+    assert "bundle_dir" not in basis

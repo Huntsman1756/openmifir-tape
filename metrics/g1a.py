@@ -41,6 +41,13 @@ from .evidence import (
 from .selection import select_eligible
 
 
+def _filtered_bundle_basis(bundle_dir: Path | None) -> dict[str, Any]:
+    """Bundle provenance minus operator-specific absolute paths."""
+    basis = _bundle_basis(bundle_dir)
+    basis.pop("bundle_dir", None)
+    return basis
+
+
 def _canon_ts(dt: datetime) -> str:
     """Canonical UTC timestamp: microseconds + 'Z'."""
     return (dt.astimezone(UTC)
@@ -87,12 +94,17 @@ def build_observed_instrument_set(
                 "reason": err,
             })
             continue
+        # One capture identity counts once per instrument, regardless of
+        # how many rows for that instrument the capture contains.
+        capture_isins: set[str] = set()
         for r in recs:
             records_total += 1
             isin = (r.instrument_identification_code or "").strip()
             if not isin:
                 records_no_isin += 1
                 continue
+            capture_isins.add(isin)
+        for isin in capture_isins:
             slot = per_isin.setdefault(isin, {
                 "sources": set(), "first": v.first_observed_at,
                 "last": v.last_observed_at, "cvs": 0})
@@ -112,7 +124,9 @@ def build_observed_instrument_set(
         "sources": sorted(d["sources"]),
         "first_observed_at": _canon_ts(d["first"]) if d["first"] else None,
         "last_observed_at": _canon_ts(d["last"]) if d["last"] else None,
-        "eligible_capture_versions": d["cvs"],
+        # distinct (source_id, source_object_id, capture_version) tuples
+        # containing >=1 record for this instrument
+        "eligible_capture_identities": d["cvs"],
     } for isin, d in sorted(per_isin.items())]
 
     srcs = sorted({s for d in per_isin.values() for s in d["sources"]})
@@ -164,8 +178,10 @@ def build_report(
             "deterministic": True,
         },
         "evidence_basis": {
-            "runs_dir": str(runs_dir),
-            "bundle": _bundle_basis(bundle_dir),
+            # Logical layout only — committed evidence must be portable
+            # across filesystem locations; no machine-specific paths.
+            "input_layout": "sealed_bundle/{runs,raw}",
+            "bundle": _filtered_bundle_basis(bundle_dir),
             "capture_window_utc": window,
             "a3_adjudication": a3_adjudication or {},
         },
