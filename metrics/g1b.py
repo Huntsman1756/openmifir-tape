@@ -62,7 +62,10 @@ from typing import Any
 import yaml
 
 from universe._paths import repo_file
-from universe.assemble import assemble_security_record, required_gleif_leis
+from universe.assemble import (
+    assemble_security_record,
+    required_gleif_leis_by_isin,
+)
 from universe.firds import iter_firds
 from universe.fitrs import parse_fitrs
 from universe.gleif import GleifEntity
@@ -76,7 +79,7 @@ from universe.gleif_acquire import (
     notfound_path,
     payload_path,
 )
-from universe.model import Branch
+from universe.model import Branch, Reason
 from universe.reference import (
     canonical_reference_set,
     reference_entry,
@@ -142,6 +145,22 @@ LINK_SCHEMA = {
              "{o: [ordinals], r: [report_ids]?}",
     "gleif": "exact GLEIF family entry name consulted "
              "(<LEI>.json / <LEI>.notfound.json; null when no lookup)",
+}
+
+# Frozen-stage -> reference families whose observations supported the
+# disposition. Derived from the resolver's own precedence; the links
+# artifact only cites observations the decision actually consumed.
+REASON_REFERENCE_STAGE: dict[Reason, tuple[str, ...]] = {
+    Reason.MISSING_MIFIR_ID: ("fitrs",),
+    Reason.NOT_BOND: ("fitrs",),
+    Reason.MISSING_BOND_TYPE: ("fitrs",),
+    Reason.NOT_CRPB: ("fitrs",),
+    Reason.MISSING_ISSUER_LEI: ("fitrs", "firds"),
+    Reason.INVALID_ISSUER_LEI: ("fitrs", "firds"),
+    Reason.IDENTITY_CONFLICT: ("fitrs", "firds"),
+    Reason.UNRESOLVABLE_LEGAL_JURISDICTION: ("fitrs", "firds", "gleif"),
+    Reason.NON_ES_LEGAL_JURISDICTION: ("fitrs", "firds", "gleif"),
+    Reason.IN_ES_CRPB_UNIVERSE: ("fitrs", "firds", "gleif"),
 }
 
 
@@ -377,7 +396,9 @@ def build_reference_links(
     isins: list[str],
     fitrs_obs: dict[str, list[RefObs]],
     firds_obs: dict[str, list[RefObs]],
+    required_by_isin: dict[str, str],
     gleif_census: dict[str, str],
+    reason_by_isin: dict[str, str],
     *,
     fitrs_set: dict,
     firds_set: dict,
@@ -385,9 +406,12 @@ def build_reference_links(
 ) -> list[dict[str, Any]]:
     """ISIN-keyed concrete reference-observation bindings (LINK_SCHEMA).
 
-    Handles resolve against the family's canonical ``entries`` order;
-    the GLEIF link names the exact pinned artifact entry for the required
-    LEI, or null when the jurisdiction step was never reached.
+    Stage-aware: only the families whose observations the disposition
+    actually consumed are cited (REASON_REFERENCE_STAGE). The GLEIF link
+    names the exact pinned artifact entry for THIS ISIN's required LEI —
+    never an LEI merely present in the shared set. A gleif link for an
+    ISIN that did not reach the jurisdiction step (or vice versa) is an
+    internal inconsistency and fails closed.
     """
     file_index = {
         "fitrs": {e["name"]: i
@@ -398,25 +422,34 @@ def build_reference_links(
     gleif_names = {e["name"] for e in gleif_set["entries"]}
     links: list[dict[str, Any]] = []
     for isin in sorted(isins):
-        freps = _group_handles(fitrs_obs.get(isin, []), file_index["fitrs"])
-        rreps = _group_handles(firds_obs.get(isin, []), file_index["firds"])
+        try:
+            stage = REASON_REFERENCE_STAGE[Reason(reason_by_isin[isin])]
+        except KeyError as exc:
+            raise G1BError(
+                f"no reference stage for {isin} reason "
+                f"{reason_by_isin.get(isin)!r}") from exc
         link: dict[str, Any] = {"i": isin}
-        if freps:
-            link["fitrs"] = freps
-        if rreps:
-            link["firds"] = rreps
-        # The GLEIF handle exists only when the resolver reached the
-        # jurisdiction step for this ISIN's LEI (i.e. the LEI was required).
+        if "fitrs" in stage:
+            freps = _group_handles(fitrs_obs.get(isin, []),
+                                   file_index["fitrs"])
+            if freps:
+                link["fitrs"] = freps
+        if "firds" in stage:
+            rreps = _group_handles(firds_obs.get(isin, []),
+                                   file_index["firds"])
+            if rreps:
+                link["firds"] = rreps
         gleif_ref = None
-        leis = {o.record.issuer_lei.strip().upper()
-                for o in firds_obs.get(isin, [])
-                if o.record.issuer_lei and o.record.issuer_lei.strip()}
-        single = next(iter(leis)) if len(leis) == 1 else None
-        if single and single in gleif_census:
+        lei = required_by_isin.get(isin)
+        if lei is not None:
+            if "gleif" not in stage:
+                raise G1BError(
+                    f"{isin}: resolver reached jurisdiction but stage "
+                    f"for reason {reason_by_isin[isin]!r} excludes gleif")
             suffix = (NOTFOUND_SUFFIX
-                      if gleif_census[single] == OUTCOME_NOT_FOUND
+                      if gleif_census[lei] == OUTCOME_NOT_FOUND
                       else ".json")
-            name = f"{single}{suffix}"
+            name = f"{lei}{suffix}"
             if name not in gleif_names:
                 raise G1BError(
                     f"GLEIF link target {name!r} absent from the GLEIF "
@@ -433,6 +466,7 @@ def build_dispositions(
     firds_obs: dict[str, list[RefObs]],
     gleif_entities: dict[str, GleifEntity],
     gleif_census: dict[str, str],
+    required_by_isin: dict[str, str],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Resolve every observed ISIN; return (rows, diagnostics).
 
@@ -460,10 +494,12 @@ def build_dispositions(
             gleif_entities,
         )
         disp = resolve_disposition(assembled.record)
-        lei = assembled.issuer_lei
-        gleif_acq = None
-        if lei:
-            gleif_acq = gleif_census.get(lei.strip().upper())
+        # GLEIF provenance only when THIS ISIN reached the jurisdiction
+        # step (per-ISIN reachability from the resolver probe) — never
+        # because its LEI happens to be required by another instrument.
+        required_lei = required_by_isin.get(isin)
+        gleif_acq = gleif_census.get(required_lei) \
+            if required_lei is not None else None
         rows.append(_row(isin, assembled, disp, gleif_acq))
         if assembled.mifir_ambiguous:
             diagnostics["fitrs_mifir_id_ambiguous_isins"] += 1
@@ -547,19 +583,24 @@ def build_report(
 
     # Required-LEI derivation by probing the frozen resolver — FIRDS alone
     # cannot decide reachability (an early NOT_BOND/NOT_CRPB/… exit means
-    # the jurisdiction step is never needed).
-    required = required_gleif_leis(
+    # the jurisdiction step is never needed). The map is per-ISIN so a row
+    # can only cite GLEIF when its own chain reached that step.
+    required_by_isin = required_gleif_leis_by_isin(
         isins,
         {k: _records(v) for k, v in fitrs_obs.items()},
         {k: _records(v) for k, v in firds_obs.items()})
+    required = set(required_by_isin.values())
     gleif_entities, gleif_census = load_acquired_entities(gleif_dir,
                                                         required)
     gleif_set = _gleif_set_for_required(gleif_dir, required)
 
     rows, diagnostics = build_dispositions(
-        isins, fitrs_obs, firds_obs, gleif_entities, gleif_census)
+        isins, fitrs_obs, firds_obs, gleif_entities, gleif_census,
+        required_by_isin)
+    reason_by_isin = {r["isin"]: r["reason"] for r in rows}
     links = build_reference_links(
-        isins, fitrs_obs, firds_obs, gleif_census,
+        isins, fitrs_obs, firds_obs, required_by_isin, gleif_census,
+        reason_by_isin,
         fitrs_set=fitrs_set, firds_set=firds_set, gleif_set=gleif_set)
 
     rows_bytes = canonical_rows_bytes(rows)

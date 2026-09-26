@@ -288,7 +288,7 @@ def test_every_isin_exactly_one_row(tmp_path):
 
 def test_duplicate_input_isin_rejected(tmp_path):
     with pytest.raises(G1BError, match="duplicate input ISINs"):
-        build_dispositions(["XS1", "XS1"], {}, {}, {}, {})
+        build_dispositions(["XS1", "XS1"], {}, {}, {}, {}, {})
 
 
 def test_input_authority_digest_enforced(tmp_path):
@@ -699,3 +699,77 @@ def test_reference_links_no_report_id_fallback(tmp_path):
     assert links[0]["fitrs"]["0:0"]["o"] == [0]
     assert links[0]["firds"]["0:0"]["o"] == [0]
     assert "r" not in links[0]["firds"]["0:0"]
+
+
+# ---------- Review fix: per-ISIN GLEIF reachability + stage-aware links --
+
+def test_gleif_never_cited_for_early_exit_sharing_lei(tmp_path):
+    """Two ISINs share one issuer LEI. A reaches the jurisdiction step
+    (BOND+CRPB); B exits at NOT_CRPB. B must carry NO gleif fields and no
+    gleif reference link — the shared LEI must not leak provenance."""
+    isin_a, isin_b = "XS00000000AA", "XS00000000BB"
+    observed = tmp_path / "g1a.yaml"
+    digest = _write_observed_artifact(observed, [isin_a, isin_b])
+    fz = _zip(tmp_path / "f.zip", {"f.xml": _fitrs_xml([
+        (isin_a, "BOND", "BOND5", "Corporate bond"),
+        (isin_b, "BOND", "BOND1", "Sovereign bond")])})
+    rz = _zip(tmp_path / "r.zip", {"r.xml": _firds_xml(
+        [(isin_a, LEI_ES), (isin_b, LEI_ES)])})
+    gleif = _gleif_dir(tmp_path, {LEI_ES: _gleif_payload(LEI_ES, "ES")})
+    report, rows, links = build_report(
+        observed, [fz], [rz], gleif, expected_g1a_digest=digest,
+        date="d", generated_utc="t")
+    ra = _row_of(rows, isin_a)
+    rb = _row_of(rows, isin_b)
+    assert ra["branch"] == "INCLUDE"
+    assert ra["gleif"] == {"acq": "RESOLVED", "ok": True, "cc": "ES"}
+    assert rb["branch"] == "EXCLUDE" and rb["reason"] == "NOT_CRPB"
+    assert rb["gleif"] == {"acq": None, "ok": None, "cc": None}
+    la = next(ln for ln in links if ln["i"] == isin_a)
+    lb = next(ln for ln in links if ln["i"] == isin_b)
+    assert la["gleif"] == f"{LEI_ES}.json"
+    assert lb["gleif"] is None
+    # stage-aware: the early exit cites only the FITRS observations it used
+    assert "firds" not in lb and "fitrs" in lb
+    assert "firds" in la and "gleif" in la
+    # gleif_resolved_isins counts only ISINs that actually consulted GLEIF
+    assert report["dispositions"]["gleif_resolved_isins"] == 1
+    # the shared LEI is still required exactly once
+    assert report["reference_acquisition"]["gleif"]["required_leis"] == 1
+
+
+def test_stage_aware_links_missing_lei_includes_firds(tmp_path):
+    """MISSING_ISSUER_LEI consumed FIRDS evidence (empty/absent Issr) ->
+    links cite fitrs + firds, gleif null."""
+    isin = "XS00000000CC"
+    observed = tmp_path / "g1a.yaml"
+    digest = _write_observed_artifact(observed, [isin])
+    fz = _zip(tmp_path / "f.zip", {"f.xml": _fitrs_xml(
+        [(isin, "BOND", "BOND5", "Corporate bond")])})
+    rz = _zip(tmp_path / "r.zip", {"r.xml": _firds_xml([(isin, None)])})
+    gleif = _gleif_dir(tmp_path, {})
+    _, rows, links = build_report(observed, [fz], [rz], gleif,
+                                  expected_g1a_digest=digest,
+                                  date="d", generated_utc="t")
+    assert _row_of(rows, isin)["reason"] == "MISSING_ISSUER_LEI"
+    link = links[0]
+    assert "fitrs" in link and "firds" in link
+    assert link["gleif"] is None
+
+
+def test_stage_aware_links_missing_mifir_fitrs_only(tmp_path):
+    """MISSING_MIFIR_ID (ISIN absent from FITRS): the decision consumed the
+    FITRS search only — no FIRDS rows are cited even though they exist."""
+    isin = "XS00000000DD"
+    observed = tmp_path / "g1a.yaml"
+    digest = _write_observed_artifact(observed, [isin])
+    fz = _zip(tmp_path / "f.zip", {"f.xml": _fitrs_xml(
+        [("OTHER", "BOND", "BOND5", "Corporate bond")])})
+    rz = _zip(tmp_path / "r.zip", {"r.xml": _firds_xml([(isin, LEI_ES)])})
+    gleif = _gleif_dir(tmp_path, {})
+    _, rows, links = build_report(observed, [fz], [rz], gleif,
+                                  expected_g1a_digest=digest,
+                                  date="d", generated_utc="t")
+    assert _row_of(rows, isin)["reason"] == "MISSING_MIFIR_ID"
+    link = links[0]
+    assert "firds" not in link and link["gleif"] is None

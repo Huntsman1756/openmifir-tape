@@ -10,8 +10,10 @@ Assembly semantics (fail closed, no fuzzy matching):
 - multiple FITRS records for one ISIN must agree on MiFIR ID / bond type;
   disagreement leaves the field ``None`` (undetermined) and records an
   ambiguity flag — the resolver then QUARANTINES via MISSING_*;
-- multiple FIRDS records must agree on issuer LEI; disagreement is an
-  explicit ``identity_conflict`` (resolver -> CONFLICT);
+- multiple FIRDS records must agree on issuer LEI; disagreement yields
+  ``issuer_lei=None`` + ``identity_conflict=True`` — the frozen resolver
+  precedence then applies verbatim (a missing LEI is QUARANTINE /
+  MISSING_ISSUER_LEI, checked before the conflict branch);
 - SACL code and Desc label are retained as diagnostics; the parser-level
   SACL/Desc contradiction handling in ``universe.fitrs`` already yields
   ``bond_type=None``;
@@ -148,24 +150,28 @@ def assemble_security_record(
     )
 
 
-def required_gleif_leis(
+def required_gleif_leis_by_isin(
     isins: Iterable[str],
     fitrs_by_isin: dict[str, list[FitrsRecord]],
     firds_by_isin: dict[str, list[FirdsInstrument]],
-) -> set[str]:
-    """LEIs that actually require a GLEIF jurisdiction outcome.
+) -> dict[str, str]:
+    """ISIN -> LEI map of the GLEIF lookups the frozen resolver reaches.
 
     Computed by PROBING the frozen resolver, not by re-implementing its
     precedence: each ISIN is assembled against an EMPTY GLEIF index, which
     leaves every earlier frozen decision intact while making the
-    jurisdiction step unresolvable. An ISIN's LEI is required iff the probe
+    jurisdiction step unresolvable. An ISIN maps to its LEI iff the probe
     returns QUARANTINE / UNRESOLVABLE_LEGAL_JURISDICTION — i.e. the frozen
-    chain demonstrably reaches that step. ISINs decided earlier
-    (NOT_BOND/NOT_CRPB/MISSING_*/INVALID_ISSUER_LEI/IDENTITY_CONFLICT)
-    never require a lookup, so a failed acquisition for their LEI can never
-    manufacture a false HOLD.
+    chain demonstrably reaches that step FOR THAT INSTRUMENT. ISINs decided
+    earlier (NOT_BOND/NOT_CRPB/MISSING_*/INVALID_ISSUER_LEI/
+    IDENTITY_CONFLICT) never require a lookup — even when they share an
+    issuer LEI with an instrument that does.
+
+    The required LEI universe is ``set(result.values())``; the per-ISIN
+    mapping is authoritative for row-level provenance: a row may only cite
+    a GLEIF observation if its own ISIN reached the jurisdiction step.
     """
-    required: set[str] = set()
+    required: dict[str, str] = {}
     for isin in isins:
         assembled = assemble_security_record(
             isin,
@@ -176,5 +182,16 @@ def required_gleif_leis(
         probe = resolve_disposition(assembled.record)
         if (probe.branch is Branch.QUARANTINE
                 and probe.reason is Reason.UNRESOLVABLE_LEGAL_JURISDICTION):
-            required.add(assembled.issuer_lei.strip().upper())
+            required[isin] = assembled.issuer_lei.strip().upper()
     return required
+
+
+def required_gleif_leis(
+    isins: Iterable[str],
+    fitrs_by_isin: dict[str, list[FitrsRecord]],
+    firds_by_isin: dict[str, list[FirdsInstrument]],
+) -> set[str]:
+    """Unique LEIs requiring a GLEIF jurisdiction outcome — the value set
+    of :func:`required_gleif_leis_by_isin`."""
+    return set(required_gleif_leis_by_isin(
+        isins, fitrs_by_isin, firds_by_isin).values())
