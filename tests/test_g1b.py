@@ -82,9 +82,13 @@ def _firds_xml(recs) -> bytes:
 
 
 def _zip(path, members: dict[str, bytes]):
+    """Deterministic synthetic zip — pinned DOS timestamp so identical
+    logical members always produce identical bytes (cross-root digests
+    must not depend on the wall clock)."""
     with zipfile.ZipFile(path, "w") as z:
         for name, data in members.items():
-            z.writestr(name, data)
+            info = zipfile.ZipInfo(name, date_time=(2026, 9, 1, 0, 0, 0))
+            z.writestr(info, data)
     return path
 
 
