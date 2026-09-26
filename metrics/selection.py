@@ -57,11 +57,21 @@ class SelectionError(Exception):
 
 @dataclass(frozen=True)
 class CaptureVersionRef:
-    """One unique eligible capture version to feed E1."""
+    """One unique eligible capture version to feed G1.
+
+    ``first_observed_at`` is the earliest eligible manifest
+    ``results.observed_at`` attesting this exact capture tuple — the
+    canonical ``known_at`` per frozen G1 §4.2. ``last_observed_at`` /
+    ``observation_count`` are diagnostics; repeated observations never
+    advance ``known_at``.
+    """
     source_id: str
     source_object_id: str
     capture_version: str
     path: Path          # resolved raw bytes (any coldate copy — cv-bound)
+    first_observed_at: datetime | None = None
+    last_observed_at: datetime | None = None
+    observation_count: int = 0
 
 
 def _iso(text: Any) -> datetime | None:
@@ -198,7 +208,8 @@ def select_eligible(
     excluded_post: list[str] = []
     excluded_malformed: list[dict[str, str]] = []
     object_observations = 0
-    unique: dict[tuple[str, str, str], None] = {}
+    # tuple -> [first_observed_at, last_observed_at, observation_count]
+    unique: dict[tuple[str, str, str], list[Any]] = {}
 
     for p in sorted(runs_dir.glob(MANIFEST_GLOB)):
         manifests_total += 1
@@ -256,14 +267,24 @@ def select_eligible(
                     f"eligible manifest {p.name}: object entry missing "
                     f"source_object_id/capture_version or source mismatch")
             object_observations += 1
-            unique[(sid, key, cv)] = None   # capture-identity dedup
+            obs = unique.get((sid, key, cv))
+            if obs is None:                 # capture-identity dedup
+                unique[(sid, key, cv)] = [scope_t, scope_t, 1]
+            else:
+                obs[0] = min(obs[0], scope_t)
+                obs[1] = max(obs[1], scope_t)
+                obs[2] += 1
 
     raw_index, cv_index = _index_raw(raw_root)
     versions: list[CaptureVersionRef] = []
-    for sid, key, cv in sorted(unique):
+    for (sid, key, cv), (first_obs, last_obs, obs_n) in sorted(
+            unique.items()):
         versions.append(CaptureVersionRef(
-            sid, key, cv, _resolve_version(raw_index, cv_index,
-                                           sid, key, cv)))
+            sid, key, cv,
+            _resolve_version(raw_index, cv_index, sid, key, cv),
+            first_observed_at=first_obs,
+            last_observed_at=last_obs,
+            observation_count=obs_n))
 
     return {
         "versions": versions,

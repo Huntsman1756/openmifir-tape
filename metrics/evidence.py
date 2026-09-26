@@ -64,6 +64,29 @@ def _parse_ts(text: str) -> datetime:
     return dt.astimezone(UTC)
 
 
+def _load_version(
+    v,
+) -> tuple[list[NormalizedRecord] | None, str | None]:
+    """Parse+normalize one capture version; keep record->version linkage.
+
+    Content integrity is verified: bytes whose sha256 diverges from the
+    manifest-recorded capture_version abort the run (fail closed). A
+    version whose bytes cannot be decoded returns ``(None, reason)``.
+    """
+    data = v.path.read_bytes()
+    if _sha256_bytes(data) != v.capture_version:
+        raise SelectionError(
+            f"capture_version/content divergence: {v.source_id}/"
+            f"{v.source_object_id}/{v.capture_version} at {v.path}")
+    loader = _load_bme_json if v.source_id == "bme_apa" \
+        else _load_bloomberg_csv
+    try:
+        rows = loader(v.path)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        return None, type(exc).__name__
+    return [normalize_record(v.source_id, r) for r in rows], None
+
+
 def _load_eligible_records(
     selection: dict[str, Any],
 ) -> tuple[list[NormalizedRecord], list[dict[str, str]]]:
@@ -78,24 +101,16 @@ def _load_eligible_records(
     records: list[NormalizedRecord] = []
     unparseable: list[dict[str, str]] = []
     for v in selection["versions"]:
-        data = v.path.read_bytes()
-        if _sha256_bytes(data) != v.capture_version:
-            raise SelectionError(
-                f"capture_version/content divergence: {v.source_id}/"
-                f"{v.source_object_id}/{v.capture_version} at {v.path}")
-        loader = _load_bme_json if v.source_id == "bme_apa" \
-            else _load_bloomberg_csv
-        try:
-            rows = loader(v.path)
-        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        recs, err = _load_version(v)
+        if err is not None:
             unparseable.append({
                 "source_id": v.source_id,
                 "source_object_id": v.source_object_id,
                 "capture_version": v.capture_version,
-                "reason": type(exc).__name__,
+                "reason": err,
             })
             continue
-        records.extend(normalize_record(v.source_id, r) for r in rows)
+        records.extend(recs)
     return records, unparseable
 
 
