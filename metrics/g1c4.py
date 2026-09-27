@@ -883,8 +883,8 @@ def replay_materialization(
     dataset = report["dataset_semantic_digest"]
     c2 = c2_authority or {}
     explain_kw = {
-        "c2_report_path": c2.get("report_path") or repo_file(
-            "evidence/g1-c2/G1-C2_as_of_reconstruction.yaml"),
+        "c2_report_path": c2.get("report_path")
+        or repo_file(C2_REPORT_LOGICAL_ID),
         "g1b_rows_path": rebuilt["g1b_rows_path"],
         "g1b_report_path": rebuilt["g1b_report_path"],
         "g1b_links_path": rebuilt["g1b_links_path"],
