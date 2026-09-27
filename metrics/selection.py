@@ -204,6 +204,7 @@ def select_eligible(
 
     manifests_total = 0
     eligible_manifests = 0
+    eligible_names: list[str] = []
     excluded_pre: list[str] = []
     excluded_post: list[str] = []
     excluded_malformed: list[dict[str, str]] = []
@@ -257,6 +258,7 @@ def select_eligible(
                 p.name)
             continue
         eligible_manifests += 1
+        eligible_names.append(p.name)
         for o in m["results"].get("objects") or []:
             key = o.get("source_object_id")
             cv = o.get("capture_version")
@@ -288,6 +290,9 @@ def select_eligible(
 
     return {
         "versions": versions,
+        # sorted eligible manifest basenames — the canonical input-declaration
+        # set consumed by G1-C4's eligible_manifest_digest (additive key).
+        "eligible_manifests": sorted(eligible_names),
         "census": {
             "manifests_total": manifests_total,
             "manifests_eligible": eligible_manifests,
