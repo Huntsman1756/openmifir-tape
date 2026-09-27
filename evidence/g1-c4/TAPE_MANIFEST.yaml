@@ -5462,9 +5462,10 @@ references:
       sha256: d759c23accd81edab1ba48fef6848706113e4b1c8a53c05d5afeeedbe6c2a257
       bytes: 3052
     set_digest: 9fa654e6fdf6646f10ffe7e7121d35d38266ff176ff255f2f46b8341137d6772
+  basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
 generator:
   module: 'metrics.g1c4 (materialization: metrics.g1c1)'
-  code_commit: b3cd98f07f52e105b5adf610736eb68b0cbbb79e
+  code_commit: c8c4a42d386c1872d2ac3d03700a1b23a388890e
   tape_schema_version: 2
 outputs:
   publications_rows: 52008
@@ -5484,14 +5485,14 @@ capsule_fixtures:
 - subject:
     type: publication
     publication_id: 3b7e5feb3f4a7b2a9e06cfee8d08f24ee16b67138959a29d4ba4502a4ae85c01
-  capsule_sha256: 7dc82c15e016087ec94bc00aa5775b3e57c7eaffa67038f5ae54f096e41bca9d
+  capsule_sha256: 580226633e2e6d638fb7d079b900a623642920527a571c50f7d3f65293afce20
 - subject:
     type: chain
     chain_id: blb_apae|128b6c15-4bde-4a13-ae7b-5cd32ae3b15b
     at: null
-  capsule_sha256: 4ed766527f33dca6d3ee40d5f7f85bb40b5eefd6aacafbae98830e8bda70908f
+  capsule_sha256: dbba338173f1ba5d2e150eb637d99986af7d1729da2119889ed2c66b941e03cd
 - subject:
     type: chain
     chain_id: blb_apae|0fce0c7d-3f6f-4259-b62a-369498f19fd3
     at: '2026-09-23T00:00:00Z'
-  capsule_sha256: a53d23d522ebfe53af4ca884c458569ec7ede4eb1ece8a8aa429c500fc79f6ce
+  capsule_sha256: d2538f053231c44e56840dcbded164dc65a964ac1c390e0249f8a1bdce82b1c5

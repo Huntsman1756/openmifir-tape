@@ -2,20 +2,20 @@ gate: G1
 issue_id: G1-C4
 report: TAPE_MANIFEST_VERIFY
 date: '2026-09-27'
-generated_utc: '2026-09-27T17:29:27.380234Z'
+generated_utc: '2026-09-27T20:17:17.763932Z'
 frozen_authority:
   spec: docs/gates/G1.md §4.4/§4.5
   freeze_tag: g1-freeze-v0
   freeze_commit: 2a5e4684b9a3f6066e6d2a53cbc37b920e2c9ffa
 generator:
   module: metrics.g1c4
-  code_commit: b3cd98f07f52e105b5adf610736eb68b0cbbb79e
+  code_commit: 0f9ff2978aa61d84e948e445405125b87a9472c0
   deterministic: true
 baseline:
   note: verified G1-C3 merge on main
 tape_manifest:
   file: TAPE_MANIFEST.yaml
-  sha256: ec0aa1a478bbeb7b61a736bc2c919c48a488c3ff64c96a5fa10b2910d4c1493d
+  sha256: e2a317645de9f42eda43391e536a5dc7cc0e9df9f3ec46982c631b781040d35f
   schema_version: 1
 input:
   a3_bundle_sha256: d9efcfd9f62758ca8d967f4a3e799542b5e64306e98a3575813a8382a37fb611
@@ -48,26 +48,33 @@ capsule_fixtures:
 - subject:
     type: publication
     publication_id: 3b7e5feb3f4a7b2a9e06cfee8d08f24ee16b67138959a29d4ba4502a4ae85c01
-  capsule_sha256: 7dc82c15e016087ec94bc00aa5775b3e57c7eaffa67038f5ae54f096e41bca9d
+  capsule_sha256: 580226633e2e6d638fb7d079b900a623642920527a571c50f7d3f65293afce20
 - subject:
     type: chain
     chain_id: blb_apae|128b6c15-4bde-4a13-ae7b-5cd32ae3b15b
     at: null
-  capsule_sha256: 4ed766527f33dca6d3ee40d5f7f85bb40b5eefd6aacafbae98830e8bda70908f
+  capsule_sha256: dbba338173f1ba5d2e150eb637d99986af7d1729da2119889ed2c66b941e03cd
 - subject:
     type: chain
     chain_id: blb_apae|0fce0c7d-3f6f-4259-b62a-369498f19fd3
     at: '2026-09-23T00:00:00Z'
-  capsule_sha256: a53d23d522ebfe53af4ca884c458569ec7ede4eb1ece8a8aa429c500fc79f6ce
+  capsule_sha256: d2538f053231c44e56840dcbded164dc65a964ac1c390e0249f8a1bdce82b1c5
 self_verification:
   tape: data\g1\tape
-  tape_manifest_sha256: ec0aa1a478bbeb7b61a736bc2c919c48a488c3ff64c96a5fa10b2910d4c1493d
+  tape_manifest_sha256: e2a317645de9f42eda43391e536a5dc7cc0e9df9f3ec46982c631b781040d35f
   self_verification: PASS
   full_provenance: NOT_RUN — supply --bundle and reference snapshot dirs to authenticate
     input bytes
   checks:
   - check: generator_authority
     result: PASS
+    declared_commit: c8c4a42d386c1872d2ac3d03700a1b23a388890e
+    running_commit: 0f9ff2978aa61d84e948e445405125b87a9472c0
+    code_commit_match: false
+  - check: table_physical_schema
+    result: PASS
+  - check: references_internal_consistency
+    result: PASS
   - check: table_row_counts
     result: PASS
   - check: publications_semantic_digest
@@ -80,14 +87,24 @@ self_verification:
     result: PASS
   - check: capsule_fixtures
     result: PASS
+    mode: determinism_plus_internal_consistency (declared digests attest the declared
+      generator commit)
+    fixtures: 3
 full_provenance:
   tape: data\g1\tape
-  tape_manifest_sha256: ec0aa1a478bbeb7b61a736bc2c919c48a488c3ff64c96a5fa10b2910d4c1493d
+  tape_manifest_sha256: e2a317645de9f42eda43391e536a5dc7cc0e9df9f3ec46982c631b781040d35f
   self_verification: PASS
   full_provenance: PASS
   checks:
   - check: generator_authority
     result: PASS
+    declared_commit: c8c4a42d386c1872d2ac3d03700a1b23a388890e
+    running_commit: 0f9ff2978aa61d84e948e445405125b87a9472c0
+    code_commit_match: false
+  - check: table_physical_schema
+    result: PASS
+  - check: references_internal_consistency
+    result: PASS
   - check: table_row_counts
     result: PASS
   - check: publications_semantic_digest
@@ -100,6 +117,9 @@ full_provenance:
     result: PASS
   - check: capsule_fixtures
     result: PASS
+    mode: determinism_plus_internal_consistency (declared digests attest the declared
+      generator commit)
+    fixtures: 3
   - check: a3_bundle_bytes
     result: PASS
     files_verified: 24500
@@ -122,22 +142,39 @@ full_provenance:
     entries_verified: 1806
 reproducibility:
   materializations:
-  - tape_dir: data\g1\tape-c4-ev-a
+  - tape_dir: data\g1\replay-ev-a\tape
+    g1a_semantic_digest: f87b1b2fe5c35a506885036ad153494d93a67cedc7fe74062e893223c5139f71
+    g1b_rows_digest: 1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8
+    g1b_links_sha256: 6fc07be6952ac48f7820af1286ead636222113c048ac8b0e624ee5167ecc51c1
+    g1b_basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
     publications_rows: 52008
     trade_chains_rows: 30419
     publications_semantic_digest: c8d225ac1a97f4d0cff11a3f0b6f6dfc91b9fef1c1f229f9ef0dc0c7050a5088
     chains_semantic_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
     dataset_semantic_digest: ecb1cd7bca5a645783ae6053e57c8a0af0b98421c810111e61117678abbbcee8
-  - tape_dir: data\g1\tape-c4-ev-b
+    tape_manifest_sha256: ed8d4cea42f15573647e0e760c300da688114d04c30ab9dca79283f0fc3f9086
+  - tape_dir: data\g1\replay-ev-b\tape
+    g1a_semantic_digest: f87b1b2fe5c35a506885036ad153494d93a67cedc7fe74062e893223c5139f71
+    g1b_rows_digest: 1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8
+    g1b_links_sha256: 6fc07be6952ac48f7820af1286ead636222113c048ac8b0e624ee5167ecc51c1
+    g1b_basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
     publications_rows: 52008
     trade_chains_rows: 30419
     publications_semantic_digest: c8d225ac1a97f4d0cff11a3f0b6f6dfc91b9fef1c1f229f9ef0dc0c7050a5088
     chains_semantic_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
     dataset_semantic_digest: ecb1cd7bca5a645783ae6053e57c8a0af0b98421c810111e61117678abbbcee8
+    tape_manifest_sha256: ed8d4cea42f15573647e0e760c300da688114d04c30ab9dca79283f0fc3f9086
+  g1a_semantic_digest_equal: true
+  g1b_rows_digest_equal: true
+  g1b_links_equal: true
+  g1b_basis_id_equal: true
   publications_semantic_digest_equal: true
   chains_semantic_digest_equal: true
   dataset_semantic_digest_equal: true
+  tape_manifests_identical: true
   capsule_bytes_byte_identical: true
+  capsule_identity_note: byte-identity across roots proven via identical capsule_fixtures
+    in each emitted TAPE_MANIFEST
   parquet_byte_equality_required: false
   tape_reproducible: true
 semantics:
