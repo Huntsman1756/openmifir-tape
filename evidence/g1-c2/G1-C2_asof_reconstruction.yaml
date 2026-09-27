@@ -1,0 +1,190 @@
+gate: G1
+issue_id: G1-C2
+report: G1-C2_ASOF_RECONSTRUCTION
+date: '2026-09-27'
+generated_utc: '2026-09-27T06:24:42Z'
+frozen_authority:
+  spec: "docs/gates/G1.md \xA74.2"
+  freeze_tag: g1-freeze-v0
+  freeze_commit: 2a5e4684b9a3f6066e6d2a53cbc37b920e2c9ffa
+generator:
+  module: metrics.g1c2
+  code_commit: 3cf3fc54e516a6d906b877576399db73c9e4eaae
+  deterministic: true
+tape_schema_version: 2
+asof_rule: as_of(T) = publications WHERE known_at <= T -> build_ledger -> reconstruct_chains
+  -> chain[-1]; G0-D ordering and entry_id tie-break; materialized trade_chains and
+  full-tape lifecycle fields are never consulted.
+replay_substrate:
+  field: normalized_evidence_json
+  contract: "canonical JSON (sorted keys, compact separators) of NormalizedRecord.to_evidence()\
+    \ per publication occurrence; metadata only \u2014 no raw provider fields"
+  adapter: normalization.replay.record_from_evidence
+  input_order: "source, source_object_id, capture_version, capture_record_ordinal\
+    \ \u2014 identical to the materialization input order, so occurrence ids are rebuilt\
+    \ deterministically from the T-limited subset"
+parent_authority:
+  c1_report: evidence/g1-c1/G1-C1_tape_materialization.yaml
+  c1_report_sha256: 35b4dbea5b829d9e91882e9e03f9d7cc8beb24467ed385d5e6b3c93f7d2d99c8
+  v1:
+    tape_schema_version: 1
+    publications:
+      row_count: 52008
+      semantic_digest: ab14b5fd190ca8dd68f7827f748602e36f5f89e4d65960c06f5ee5a701900d8b
+    trade_chains:
+      row_count: 30419
+      semantic_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+    dataset_semantic_digest: 2fa0427733d2adfc1debb18e4917308dfd4fb3567268198afd4f3200a029ab4a
+tape_materialization_v2:
+  publications:
+    file: data/g1/tape/publications.parquet
+    columns:
+    - source
+    - source_object_id
+    - capture_version
+    - raw_sha256
+    - capture_record_ordinal
+    - known_at
+    - last_observed_at
+    - observation_count
+    - publication_utc
+    - trading_utc
+    - isin
+    - transaction_id
+    - price
+    - quantity
+    - notional
+    - currency
+    - price_currency
+    - price_notation
+    - flags
+    - source_report_id
+    - lifecycle_state
+    - ledger_entry_id
+    - supersedes_entry_id
+    - ledger_markers
+    - universe_disposition
+    - universe_disposition_reason
+    - issuer_lei
+    - normalized_evidence_json
+    row_count: 52008
+    semantic_digest: c8d225ac1a97f4d0cff11a3f0b6f6dfc91b9fef1c1f229f9ef0dc0c7050a5088
+  trade_chains:
+    file: data/g1/tape/trade_chains.parquet
+    columns:
+    - source
+    - chain_id
+    - isin
+    - transaction_id
+    - head_entry_id
+    - head_state
+    - event_count
+    - first_publication_utc
+    - latest_publication_utc
+    - first_known_at
+    - head_known_at
+    row_count: 30419
+    semantic_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+  dataset_semantic_digest: ecb1cd7bca5a645783ae6053e57c8a0af0b98421c810111e61117678abbbcee8
+  lifecycle_reconciliation:
+    ledger_entries: 52008
+    chains: 30419
+    supersession_links: 21589
+    unchainable_singletons: 0
+    entry_id_collisions: 21201
+    head_state_counts:
+      AMENDED: 755
+      CANCELLED: 400
+      DEFERRED: 36
+      FULLY_PUBLISHED: 22403
+      PARTIALLY_PUBLISHED: 6825
+    publication_state_counts:
+      AMENDED: 1011
+      CANCELLED: 1496
+      DEFERRED: 324
+      FULLY_PUBLISHED: 42317
+      PARTIALLY_PUBLISHED: 6860
+  diagnostics:
+    input_census:
+      manifests_total: 825
+      manifests_eligible: 776
+      object_observations_eligible: 12029
+      unique_capture_versions_eligible: 8268
+      pre_window_manifests_excluded: 3
+      post_tail_manifests_excluded: 46
+      malformed_out_of_window_manifests: 0
+    unparseable_capture_versions:
+    - source_id: bme_apa
+      source_object_id: 2026-09-21-bmea-posttrade.json
+      capture_version: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      reason: JSONDecodeError
+    publications_parseable_without_isin: 0
+    duckdb_smoke:
+      publications_rows: 52008
+      trade_chains_rows: 30419
+      pubs_on_head_join_rows: 30419
+v1_v2_reconciliation:
+  publications:
+    v1_rows: 52008
+    v2_rows: 52008
+    v1_digest: ab14b5fd190ca8dd68f7827f748602e36f5f89e4d65960c06f5ee5a701900d8b
+    v2_digest: c8d225ac1a97f4d0cff11a3f0b6f6dfc91b9fef1c1f229f9ef0dc0c7050a5088
+  trade_chains:
+    v1_rows: 30419
+    v2_rows: 30419
+    v1_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+    v2_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+  dataset_semantic_digest:
+    v1: 2fa0427733d2adfc1debb18e4917308dfd4fb3567268198afd4f3200a029ab4a
+    v2: ecb1cd7bca5a645783ae6053e57c8a0af0b98421c810111e61117678abbbcee8
+  explanation: 'Row counts are unchanged: no market-data change. The publications
+    digest changes only because schema v2 adds the normalized_evidence_json replay-substrate
+    column; trade_chains is semantically identical (same columns, same G0-D result),
+    so its digest is unchanged. The dataset digest changes because it binds tape_schema_version
+    2 plus the new publications digest.'
+replay_fidelity:
+  as_of_utc: '2026-09-24T06:37:03.606686Z'
+  chain_projection_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+  materialized_chains_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+  equals_materialized_chains: true
+  equals_v1_chains: true
+asof_runs:
+- as_of_utc: '2026-09-16T09:42:46.000000Z'
+  row_count: 0
+  semantic_digest: a8c494b4f297008f576082a424a7d90a732231f707b14aed9e87a23277d16a51
+  max_known_at_used: null
+  no_future_evidence: true
+- as_of_utc: '2026-09-19T00:00:00.000000Z'
+  row_count: 15537
+  semantic_digest: 31da41c8be32534f42df28d7bb8ff0a7507c59953ec306d05108fea281db78a1
+  max_known_at_used: '2026-09-18T21:37:03.653061Z'
+  no_future_evidence: true
+- as_of_utc: '2026-09-21T00:00:00.000000Z'
+  row_count: 18699
+  semantic_digest: ec4134fa0e704fcc78bcab2cc279fe6c80eaeab4e5b0e6f959c8f6206795110f
+  max_known_at_used: '2026-09-20T12:37:03.654266Z'
+  no_future_evidence: true
+- as_of_utc: '2026-09-23T00:00:00.000000Z'
+  row_count: 22903
+  semantic_digest: ea813a4f45394ccd34260dedc75ab749109e5eda91840c46909af6e61c3f865a
+  max_known_at_used: '2026-09-22T23:37:01.551018Z'
+  no_future_evidence: true
+- as_of_utc: '2026-09-24T06:37:03.606686Z'
+  row_count: 30419
+  semantic_digest: ef516826ccf4ab47df49c52968f561e3951fd0cb525144584caa6a49402442bf
+  max_known_at_used: '2026-09-24T06:37:03.606686Z'
+  no_future_evidence: true
+- as_of_utc: '2026-09-24T07:00:00.000000Z'
+  row_count: 30419
+  semantic_digest: 5accf81edb578b3a8b519654c5540306dc460d4dc5795328a40d636ea81aa146
+  max_known_at_used: '2026-09-24T06:37:03.606686Z'
+  no_future_evidence: true
+reference_semantics:
+  reference_basis: BUILD_SNAPSHOT
+  note: universe_disposition / reason / issuer_lei are the frozen G1-B build-snapshot
+    classification (verified G1-B authority), explicitly NOT a claim that the reference
+    data was known at T; no bitemporal reference history.
+hygiene:
+  provider_payloads_in_repo: false
+  parquet_files_committed: false
+  provider_raw_reread_for_asof: false
