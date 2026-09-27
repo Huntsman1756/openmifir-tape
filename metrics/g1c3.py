@@ -42,8 +42,8 @@ G1-D divergence. The 2026 MiFIR transition (FITRS quantitative reporting
 decommissioned; Art. 26-derived upstream calculations) is documented in
 ``docs/legal/mifir_2026_transition.md`` — capsules separate the three
 axes explicitly: observed publication source (owned evidence), pinned
-reference authority, and upstream regulatory calculation basis
-(not owned).
+reference authority, and upstream regulatory calculation basis —
+``NOT_ATTESTED_BY_CAPSULE``: OpenMifir owns no bytes of it.
 """
 
 from __future__ import annotations
@@ -101,6 +101,25 @@ G1B_LINKS_LOGICAL_ID = "evidence/g1-b1/G1-B1_reference_links.jsonl"
 
 CAPSULE_SCHEMA_VERSION = 1
 REPORT_NAME = "G1-C3_evidence_capsule.yaml"
+
+# Families that must contribute a CONCRETE observation for each frozen
+# disposition reason — derived from the resolver's precedence
+# (universe/resolver.py), not invented here: reaching step N means every
+# earlier stage resolved positively. Absence is itself the evidence in the
+# "missing" branches, so the family whose absence IS the reason is not
+# required (MISSING_MIFIR_ID -> none; MISSING_ISSUER_LEI -> FIRDS optional).
+REASON_REQUIRED_OBSERVATIONS: dict[Reason, tuple[str, ...]] = {
+    Reason.MISSING_MIFIR_ID: (),
+    Reason.NOT_BOND: ("fitrs",),
+    Reason.MISSING_BOND_TYPE: ("fitrs",),
+    Reason.NOT_CRPB: ("fitrs",),
+    Reason.MISSING_ISSUER_LEI: ("fitrs",),
+    Reason.INVALID_ISSUER_LEI: ("fitrs", "firds"),
+    Reason.IDENTITY_CONFLICT: ("fitrs", "firds"),
+    Reason.UNRESOLVABLE_LEGAL_JURISDICTION: ("fitrs", "firds", "gleif"),
+    Reason.NON_ES_LEGAL_JURISDICTION: ("fitrs", "firds", "gleif"),
+    Reason.IN_ES_CRPB_UNIVERSE: ("fitrs", "firds", "gleif"),
+}
 
 
 class G1C3Error(Exception):
@@ -427,6 +446,16 @@ def _reference_authority(isin: str, reason: str,
             f"{isin}: reference_links cite {sorted(outside)} but the "
             f"disposition reason {reason!r} only consumed "
             f"{sorted(stage)} — stage-aware citation violated")
+    # Fail closed on a missing concrete handle for families whose positive
+    # observation the disposition REQUIRES (REASON_REQUIRED_OBSERVATIONS).
+    # Absence-as-evidence branches legitimately carry none.
+    required = set(REASON_REQUIRED_OBSERVATIONS[Reason(reason)])
+    missing = required - cited
+    if missing:
+        raise G1C3Error(
+            f"{isin}: disposition reason {reason!r} requires concrete "
+            f"{sorted(missing)} observation(s) but reference_links cite "
+            "none — refusing to claim authority it cannot show")
 
     set_digests = {f: g1b["set_digests"][f] for f in sorted(stage)}
     observations: dict[str, Any] = {}
@@ -455,15 +484,16 @@ def _reference_authority(isin: str, reason: str,
         "set_digests": set_digests,
         "observations": observations,
         "reference_links_sha256": g1b["links_sha256"],
-        "regulatory": {
+        "regulatory_context": {
             "observed_publication_source":
                 "provider APA publication (captured evidence owned by "
                 "OpenMifir)",
             "reference_authority_kind": "pinned_reference_set",
-            "regulatory_calculation_basis":
-                "MiFIR RTS 2 transparency regime; post-2026 calculations "
-                "derive from Art. 26 transaction reporting upstream — "
-                "those payloads are not OpenMifir evidence",
+            # The upstream regulatory calculation basis (e.g. post-2026
+            # Art. 26-derived computations) is NOT evidenced by this
+            # capsule — OpenMifir does not own those bytes. Detailed
+            # transition analysis: docs/legal/mifir_2026_transition.md.
+            "upstream_calculation_basis": "NOT_ATTESTED_BY_CAPSULE",
             "upstream_reference_payloads_owned": False,
         },
     }
@@ -938,6 +968,7 @@ def build_report(
     representatives: dict[str, Any],
     date: str,
     generated_utc: str,
+    cross_root_tape_dirs: list[Path] | None = None,
     expected_c2_report_sha256: str = EXPECTED_C2_REPORT_SHA256,
     expected_dataset_digest: str = EXPECTED_DATASET_SEMANTIC_DIGEST,
     expected_g1b_digest: str = EXPECTED_G1B_ROWS_DIGEST,
@@ -950,7 +981,9 @@ def build_report(
     ``representatives`` = {"publication_ids": [...], "chain_ids": [...],
     "asof_chain_ids": [...]} chosen deterministically by the caller. The
     report records capsule ids + sha256 only (metadata), plus a re-run
-    byte-equality proof.
+    byte-equality proof and — when ``cross_root_tape_dirs`` names
+    independent materializations of the same authenticated tape — a
+    byte-identical cross-root proof executed at generation time.
     """
     kw = {
         "expected_c2_report_sha256": expected_c2_report_sha256,
@@ -979,7 +1012,7 @@ def build_report(
             capsules.append(
                 explain_chain(tape_dir, cid, at=t, **paths, **kw))
 
-    # Determinism proof: identical requests emit identical bytes.
+    # Determinism proofs: identical requests emit identical bytes.
     proof = explain_publication(
         tape_dir, representatives["publication_ids"][0], **paths, **kw)
     determinism = {
@@ -990,6 +1023,46 @@ def build_report(
             "no filesystem paths, no generation timestamp, no "
             "randomness in capsule identity",
     }
+
+    # Cross-root proof: the same representative requests executed against
+    # each independent tape materialization MUST emit byte-identical
+    # capsules (root/path never enters capsule bytes). Requests checked:
+    # first publication id, first chain id, last as_of timestamp on the
+    # first as_of chain — three coverage-representative calls per root.
+    cross_root: dict[str, Any] = {"tape_roots": 1, "byte_identical": None}
+    if cross_root_tape_dirs:
+        primary: list[bytes] = [capsule_bytes(capsules[0])]
+        if representatives.get("chain_ids"):
+            primary.append(capsule_bytes(
+                capsules[len(representatives["publication_ids"])]))
+        asof_cids = representatives.get("asof_chain_ids") \
+            or representatives.get("chain_ids") or []
+        if asof_timestamps and asof_cids:
+            primary.append(capsule_bytes(capsules[-1]))
+        identical = True
+        for alt in cross_root_tape_dirs:
+            alt = Path(alt)
+            checks = [capsule_bytes(explain_publication(
+                alt, representatives["publication_ids"][0],
+                **paths, **kw))]
+            if representatives.get("chain_ids"):
+                checks.append(capsule_bytes(explain_chain(
+                    alt, representatives["chain_ids"][0],
+                    **paths, **kw)))
+            if asof_timestamps and asof_cids:
+                checks.append(capsule_bytes(explain_chain(
+                    alt, asof_cids[0], at=asof_timestamps[-1],
+                    **paths, **kw)))
+            identical = identical and checks == primary
+        cross_root = {
+            "tape_roots": 1 + len(cross_root_tape_dirs),
+            "byte_identical": identical,
+            "requests_per_root": len(primary),
+        }
+        if not identical:
+            raise G1C3Error(
+                "cross-root capsule bytes diverged — evidence cannot "
+                "claim cross-root determinism")
 
     report = {
         "gate": "G1",
@@ -1028,6 +1101,18 @@ def build_report(
         "representative_capsules":
             [_capsule_digest_entry(c) for c in capsules],
         "determinism": determinism,
+        "cross_root": cross_root,
+        "cross_platform": {
+            "mechanism":
+                "pinned fixture capsule digest "
+                "(tests.test_g1c3.PINNED_FIXTURE_CAPSULE_SHA256) asserted "
+                "on every self-hosted CI leg — identical digest on "
+                "Windows and Linux proves byte determinism",
+            "self_hosted_matrix":
+                "test-linux + test-windows x Python 3.11/3.12/3.13 + "
+                "wheel-smoke x2; latest verified run recorded on "
+                "PR/issue",
+        },
         "no_future_evidence": True,
         "no_provider_payload": True,
         "hygiene": {
@@ -1052,6 +1137,7 @@ def generate_report(
     evidence_dir: Path,
     date: str,
     generated_utc: str,
+    cross_root_tape_dirs: list[Path] | None = None,
     **expected: Any,
 ) -> Path:
     report, capsules = build_report(
@@ -1060,7 +1146,8 @@ def generate_report(
         g1b_links_path=g1b_links_path,
         asof_timestamps=asof_timestamps,
         representatives=representatives, date=date,
-        generated_utc=generated_utc, **expected)
+        generated_utc=generated_utc,
+        cross_root_tape_dirs=cross_root_tape_dirs, **expected)
     ev = evidence_dir / "g1-c3"
     ev.mkdir(parents=True, exist_ok=True)
     cap_dir = ev / "capsules"
@@ -1112,6 +1199,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--representatives", default=None,
                     help="JSON {publication_ids, chain_ids, "
                          "asof_chain_ids?}")
+    ap.add_argument("--cross-root-dir", type=Path, action="append",
+                    default=None,
+                    help="extra independent tape materialization for "
+                         "the cross-root byte-identity proof (repeatable)")
     args = ap.parse_args(argv)
 
     kw = {"c2_report_path": args.c2_report,
@@ -1128,7 +1219,8 @@ def main(argv: list[str] | None = None) -> int:
             args.tape_dir, asof_timestamps=json.loads(args.asof_timestamps),
             representatives=json.loads(args.representatives),
             evidence_dir=args.out, date=args.date,
-            generated_utc=args.generated_utc, **kw)
+            generated_utc=args.generated_utc,
+            cross_root_tape_dirs=args.cross_root_dir, **kw)
         print(path)
         return 0
 

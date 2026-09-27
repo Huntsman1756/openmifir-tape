@@ -75,9 +75,16 @@ GLEIF_SD = "cc" * 32
 
 # reason -> reference families actually consumed (metrics.g1b stage map)
 _STAGE = {
-    "IN_ES_CRPB_UNIVERSE": ("fitrs", "firds", "gleif"),
+    "MISSING_MIFIR_ID": ("fitrs",),
+    "NOT_BOND": ("fitrs",),
+    "MISSING_BOND_TYPE": ("fitrs",),
     "NOT_CRPB": ("fitrs",),
     "MISSING_ISSUER_LEI": ("fitrs", "firds"),
+    "INVALID_ISSUER_LEI": ("fitrs", "firds"),
+    "IDENTITY_CONFLICT": ("fitrs", "firds"),
+    "UNRESOLVABLE_LEGAL_JURISDICTION": ("fitrs", "firds", "gleif"),
+    "NON_ES_LEGAL_JURISDICTION": ("fitrs", "firds", "gleif"),
+    "IN_ES_CRPB_UNIVERSE": ("fitrs", "firds", "gleif"),
 }
 
 
@@ -451,27 +458,91 @@ def test_missing_c2_report_fails_closed(tmp_path):
         explain_publication(tape, row_publication_id(pubs[0]), **kw)
 
 
+def _single_pub_env(tmp_path, spec, links_mutate=None):
+    def populate(raw, runs):
+        o = _store(raw, BME, "2026-09-17", "d.json", [_bme()])
+        _manifest(runs, "20260917T100000Z", BME, T1, [o])
+    return _env(tmp_path, populate, spec, links_mutate=links_mutate)
+
+
 def test_link_handle_outside_pinned_family_set_fails(tmp_path):
     def bad(link):
         link["fitrs"] = {"5:0": {"o": [1]}}   # only 1 fitrs entry (idx 0)
         return link
-    tape, pubs, _c, kw = _env(
-        tmp_path,
-        lambda raw, runs: (_manifest(
-            runs, "20260917T100000Z", BME, T1,
-            [_store(raw, BME, "2026-09-17", "d.json", [_bme()])])),
-        {"ISIN-A": {}}, links_mutate={"ISIN-A": bad})
-    # mutate links AFTER rows/report were authenticated — links sha must
-    # be re-pinned to the mutated bytes to reach the resolver
-    links_b = kw["g1b_links_path"].read_bytes()
-    doc = yaml.safe_load(kw["g1b_report_path"].read_bytes())
-    doc["reference_links"]["sha256"] = hashlib.sha256(links_b).hexdigest()
-    kw["g1b_report_path"].write_bytes(yaml.safe_dump(doc).encode())
-    kw["expected_g1b_report_sha256"] = hashlib.sha256(
-        kw["g1b_report_path"].read_bytes()).hexdigest()
-    kw["expected_g1b_links_sha256"] = hashlib.sha256(links_b).hexdigest()
+    tape, pubs, _c, kw = _single_pub_env(
+        tmp_path, {"ISIN-A": {}}, links_mutate={"ISIN-A": bad})
     with pytest.raises(G1C3Error, match="outside the pinned family"):
         explain_publication(tape, row_publication_id(pubs[0]), **kw)
+
+
+# --- required concrete handles (issue #30: "missing concrete reference
+# --- handle expected by the disposition" must fail closed) -------------
+
+def _drop_family(fam):
+    def m(link):
+        if fam == "gleif":
+            link["gleif"] = None
+        else:
+            link.pop(fam, None)
+        return link
+    return m
+
+
+@pytest.mark.parametrize("fam", ["fitrs", "firds", "gleif"])
+def test_include_missing_required_handle_fails_closed(tmp_path, fam):
+    """IN_ES_CRPB_UNIVERSE requires concrete FITRS+FIRDS+GLEIF
+    observations — dropping any one of them must fail, not emit a
+    capsule that claims authority it cannot show."""
+    tape, pubs, _c, kw = _single_pub_env(
+        tmp_path, {"ISIN-A": {}},
+        links_mutate={"ISIN-A": _drop_family(fam)})
+    with pytest.raises(G1C3Error, match="requires concrete"):
+        explain_publication(tape, row_publication_id(pubs[0]), **kw)
+
+
+def test_not_crpb_missing_fitrs_handle_fails_closed(tmp_path):
+    """NOT_CRPB requires the FITRS observation that established the
+    non-CRPB bond type — an empty fitrs link group cannot support it."""
+    spec = {"ISIN-A": {"branch": "EXCLUDE", "reason": "NOT_CRPB",
+                       "lei": None}}
+    tape, pubs, _c, kw = _single_pub_env(
+        tmp_path, spec, links_mutate={"ISIN-A": _drop_family("fitrs")})
+    with pytest.raises(G1C3Error, match="requires concrete"):
+        explain_publication(tape, row_publication_id(pubs[0]), **kw)
+
+
+def test_missing_issuer_lei_requires_fitrs_not_firds(tmp_path):
+    """MISSING_ISSUER_LEI: FITRS positive evidence is required (the CRPB
+    stage was reached); FIRDS absence IS the reason — never fabricated."""
+    spec = {"ISIN-A": {"branch": "QUARANTINE",
+                       "reason": "MISSING_ISSUER_LEI", "lei": None}}
+    tape, pubs, _c, kw = _single_pub_env(
+        tmp_path, spec, links_mutate={"ISIN-A": _drop_family("firds")})
+    cap = explain_publication(tape, row_publication_id(pubs[0]), **kw)
+    assert cap["reference_authority"]["families_cited"] \
+        == ["firds", "fitrs"]
+    assert "firds" not in cap["reference_authority"]["observations"]
+
+    tape2, pubs2, _c2, kw2 = _single_pub_env(
+        tmp_path / "dropped", spec,
+        links_mutate={"ISIN-A": _drop_family("fitrs")})
+    with pytest.raises(G1C3Error, match="requires concrete"):
+        explain_publication(tape2, row_publication_id(pubs2[0]), **kw2)
+
+
+def test_missing_mifir_id_legitimately_cites_no_handles(tmp_path):
+    """MISSING_MIFIR_ID is absence-as-evidence: no concrete FITRS
+    observation is required and none may be fabricated."""
+    spec = {"ISIN-A": {"branch": "QUARANTINE",
+                       "reason": "MISSING_MIFIR_ID", "lei": None}}
+    tape, pubs, _c, kw = _single_pub_env(
+        tmp_path, spec,
+        links_mutate={"ISIN-A": lambda link: {"i": link["i"],
+                                              "gleif": None}})
+    cap = explain_publication(tape, row_publication_id(pubs[0]), **kw)
+    ra = cap["reference_authority"]
+    assert ra["families_cited"] == ["fitrs"]
+    assert ra["observations"] == {}
 
 
 # ---------------- 9. provenance only from stored rts2_mapping ----------
@@ -724,8 +795,9 @@ def test_regime_transition_identity_and_provenance(tmp_path):
     assert cap_orig["economic_provenance"]["field_source_map"]["price"] \
         == "price"
     # the capsule asserts no ownership of upstream regulatory payloads
-    reg = cap["reference_authority"]["regulatory"]
+    reg = cap["reference_authority"]["regulatory_context"]
     assert reg["upstream_reference_payloads_owned"] is False
+    assert reg["upstream_calculation_basis"] == "NOT_ATTESTED_BY_CAPSULE"
     assert b"ARTICLE_26" not in capsule_bytes(cap).upper()
     # reference authority is the pinned set, independent of the
     # publication's schema generation
@@ -836,7 +908,7 @@ def test_no_future_evidence_anywhere_in_asof_capsule(tmp_path):
 # pinned to "0"*40 via monkeypatch). The same assertion runs on every
 # self-hosted CI leg — a Windows/Linux divergence fails the suite.
 PINNED_FIXTURE_CAPSULE_SHA256 = \
-    "0a257ce52b665c11c1c5fdf01815aaede3cfbe72967a1f10661e947bd770489a"
+    "e4b99af0df7d83134b9ea92e8ddd3a25ee354f5da9fd710c0c173b4a13c0d92f"
 PINNED_FIXTURE_PUBLICATION_ID = \
     "d7ea5e039a3602b270379b68a2ae7fe8e02c28320384039a7de8d9f654d24456"
 
@@ -865,11 +937,16 @@ def test_report_generation_metadata_only(tmp_path):
         "chain_ids": [cid],
         "asof_chain_ids": [cid],
     }
+    alt = tmp_path / "alt_tape"
+    shutil.copytree(tape, alt)
     report, capsules = build_report(
         tape, asof_timestamps=[T1, T2, T3], representatives=rep,
-        date="d", generated_utc="t", **kw)
+        date="d", generated_utc="t",
+        cross_root_tape_dirs=[alt], **kw)
     assert report["issue_id"] == "G1-C3"
     assert report["determinism"]["repeated_request_byte_identical"]
+    assert report["cross_root"]["tape_roots"] == 2
+    assert report["cross_root"]["byte_identical"] is True
     assert len(report["representative_capsules"]) == len(capsules)
 
     path = generate_report(

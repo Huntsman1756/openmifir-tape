@@ -18,20 +18,28 @@ classification, and (c) the upstream regulatory calculation basis.
   Delegated Regulation (EU) 2017/577): deletes the obligation for trading
   venues, APAs and CTPs to report the SI-quantitative data; ESMA assessed
   that **transaction data reported under Article 26 of MiFIR** can be used
-  for the transparency / volume-cap calculations — the dedicated
-  quantitative channel is replaced by Article 26-derived calculations
-  upstream of ESMA.
+  for specific upstream calculations named in that act (e.g. total volume
+  of trading in an instrument and the reference-price-waiver percentage
+  under Article 5). It does NOT follow that every post-2026 transparency
+  parameter derives from Article 26 — this note makes no such claim.
+- ESMA further notes that the quarterly **bond liquidity assessment**
+  ended with the publication of 31 October 2025, because the amended
+  RTS 2 (bonds, structured finance products, emission allowances) began
+  to apply on **2 March 2026** — the former FITRS calculation scheme
+  stops applying to bonds/SFP/EUA from that date, while FITRS
+  publications themselves continue under the revised framework.
 - Regulation (EU) **2024/791** + Directive (EU) 2024/790 (MiFIR review,
   in force 28 March 2024): the quantitative SI test under Art. 4(1)(20)
   MiFID II is removed (qualitative, equity-only assessment remains); the
   DPE regime for OTC post-trade publication applies from 3 February 2025
   and ESMA discontinued the quarterly SI publication.
 
-Consequence for this project: **FITRS outputs keep existing** (transparency
-results / reference data publications continue), but the *upstream
-production mechanism* of quantitative FITRS content changes: inbound
-DATEQU/DATNQU reporting is replaced by Article 26-derived calculations that
-ESMA performs on transaction reports OpenMiFIR does not possess.
+Consequence for this project: **FITRS outputs keep existing**
+(transparency results / reference data publications continue), but the
+*upstream production mechanism* behind parts of that content changed:
+the dedicated quantitative reporting channel was decommissioned, and
+certain upstream calculations are now derived by ESMA from Article 26
+transaction reports that OpenMiFIR does not possess.
 
 ## The three axes, kept separate in the capsule
 
@@ -41,12 +49,13 @@ Every capsule carries:
 |---|---|---|
 | Observed publication source | `publication.source`, `source_object_id`, `capture_version`, `capture_record_ordinal`, `raw_sha256` | YES — captured bytes pinned by hash |
 | Reference authority | `reference_authority.basis` (`BUILD_SNAPSHOT`), `reference_basis_id`, `set_digests`, `observations` (resolved handles) | YES — pinned family sets + byte-authenticated links |
-| Regulatory calculation basis | `reference_authority.regulatory.regulatory_calculation_basis` | NO — `upstream_reference_payloads_owned: false` is asserted literally |
+| Regulatory calculation basis | `reference_authority.regulatory_context.upstream_calculation_basis` | NO — literally `NOT_ATTESTED_BY_CAPSULE`, with `upstream_reference_payloads_owned: false` |
 
 The capsule never claims provenance over Art. 26 payloads, ESMA-internal
-calculations, or any byte OpenMiFIR did not capture. `explain` resolves
-reference observations only as metadata handles inside the pinned family
-sets — never payload content.
+calculations, or any byte OpenMiFIR did not capture. It does not assert
+*which* upstream basis produced reference content — only that the capsule
+does not attest it. `explain` resolves reference observations only as
+metadata handles inside the pinned family sets — never payload content.
 
 ## Why the schema survives the transition
 
@@ -81,9 +90,11 @@ sets — never payload content.
   needs to express "quantitative observation derived from Art. 26
   reporting", that belongs to the reference-authority description of that
   gate — bumping `capsule_schema_version` if structure changes.
-- `regulatory_calculation_basis` is a descriptive string, not an
-  enumerated regime id; the classification rule itself
-  (`es_legal_issuer_v1`) is frozen G0/G1-B authority and unchanged here.
+- `upstream_calculation_basis` is deliberately `NOT_ATTESTED_BY_CAPSULE`:
+  the capsule records what it can prove (observed evidence + pinned
+  reference authority) and explicitly declines upstream claims. The
+  classification rule itself (`es_legal_issuer_v1`) is frozen G0/G1-B
+  authority and unchanged here.
 - No Article 26 ingestion, no post-transition FITRS capture: out of scope
   for G1-C3 (see issue #30 scope).
 
