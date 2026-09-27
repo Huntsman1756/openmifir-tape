@@ -1,0 +1,120 @@
+gate: G1
+issue_id: G1-C3
+report: G1-C3_EVIDENCE_CAPSULE
+date: '2026-09-27'
+generated_utc: '2026-09-27T11:23:42.748203Z'
+frozen_authority:
+  spec: "docs/gates/G1.md \xA74.3"
+  freeze_tag: g1-freeze-v0
+  freeze_commit: 2a5e4684b9a3f6066e6d2a53cbc37b920e2c9ffa
+generator:
+  module: metrics.g1c3
+  code_commit: ff1699f9b43aa090910860a6493a06874ee47eff
+  deterministic: true
+capsule_schema_version: 1
+publication_identity: "sha256(canonical_json({source, source_object_id, capture_version,\
+  \ capture_record_ordinal})) \u2014 immutable occurrence identity only"
+authority:
+  c2_report: evidence/g1-c2/G1-C2_asof_reconstruction.yaml
+  c2_report_sha256: 4bf02dec7c84a9e17d45fcacac3f77c6305fbd8adaf5263bd91086da5467c621
+  tape_dataset_semantic_digest: ecb1cd7bca5a645783ae6053e57c8a0af0b98421c810111e61117678abbbcee8
+  tape_schema_version: 2
+  g1b_report: evidence/g1-b1/G1-B1_observed_universe_disposition.yaml
+  g1b_report_sha256: 3d75da51a3b30b4f0e1139afc8891c3983bc28bdbb134cd49d8690c348633c8f
+  g1b_rows: evidence/g1-b1/G1-B1_disposition_rows.jsonl
+  g1b_rows_sha256: 1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8
+  g1b_reference_links: evidence/g1-b1/G1-B1_reference_links.jsonl
+  g1b_reference_links_sha256: 6fc07be6952ac48f7820af1286ead636222113c048ac8b0e624ee5167ecc51c1
+  reference_basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
+representative_capsules:
+- capsule_sha256: 3005a895d5276250ba149c6251ad2c00115edd0ddf480d71c20e4801e41d56e8
+  bytes_sha256: f30b96a2f30cb9ca0834428a4717669e5c76024bbb2f4758a87fd4e52be33003
+  subject:
+    type: publication
+    publication_id: 3b7e5feb3f4a7b2a9e06cfee8d08f24ee16b67138959a29d4ba4502a4ae85c01
+  temporal:
+    mode: current
+    as_of_utc: null
+- capsule_sha256: b114b64d083af89e7bb05084baa88f75a11f93cb6f37c7d93fd4c2d3d3a8a23e
+  bytes_sha256: d702c2da903b94bcff44352ab7742d6f55286864134fcc3cf492a293e541eb88
+  subject:
+    type: publication
+    publication_id: 5b1bb0259d7c5c07fe91fa4c456c1d25084e31ebd81428c81c1e05754ccefde1
+  temporal:
+    mode: current
+    as_of_utc: null
+- capsule_sha256: 91959f43be6e870e168cb1e0bf5d4d54ac166e3308f5587559e1c1b525c3fee7
+  bytes_sha256: 23f5dfa19dcc73cef7c3ceb05195129501beaa6cf78a2dff4ffb4c327294c3b2
+  subject:
+    type: chain
+    chain_id: blb_apae|128b6c15-4bde-4a13-ae7b-5cd32ae3b15b
+  temporal:
+    mode: current
+    as_of_utc: null
+- capsule_sha256: 8a0f79cfbf25c0984188de7cb52937fdf3043def5737d74f6a94bebcad643714
+  bytes_sha256: abbb79e66989236d738c2639a3a6e00f04c97e5e90ed10d9890128310f613f70
+  subject:
+    type: chain
+    chain_id: blb_apae|000628d9-c8cb-4329-bd07-e65144256dc6
+  temporal:
+    mode: current
+    as_of_utc: null
+- capsule_sha256: 319a2ce82a21eef7c981addaef087a3d666494fc0784eb605d98610147fece33
+  bytes_sha256: 2746843d9a2e87a625a5d2ee1cd1e6275f609b7547a14130595c25c2029af034
+  subject:
+    type: chain
+    chain_id: blb_apae|0fce0c7d-3f6f-4259-b62a-369498f19fd3
+  temporal:
+    mode: as_of
+    as_of_utc: '2026-09-19T00:00:00.000000Z'
+- capsule_sha256: be6be4750136f442e5af87f8e5e5fabbe3feace994db087d4ad59f262fd34a7f
+  bytes_sha256: 1f6b396283dc631035c0033aafd67f9dbe9535cad8dbe917b1decb0a77a5781a
+  subject:
+    type: chain
+    chain_id: blb_apae|0fce0c7d-3f6f-4259-b62a-369498f19fd3
+  temporal:
+    mode: as_of
+    as_of_utc: '2026-09-21T00:00:00.000000Z'
+- capsule_sha256: d91b6ac2cae61084b97435f5d24343306fab738adbd59def0b1a4f28012e8308
+  bytes_sha256: 90f2f047d9ee05d8a15eff13507314bc4213b4a8cda348c761465e340a2564cd
+  subject:
+    type: chain
+    chain_id: blb_apae|0fce0c7d-3f6f-4259-b62a-369498f19fd3
+  temporal:
+    mode: as_of
+    as_of_utc: '2026-09-23T00:00:00.000000Z'
+- capsule_sha256: 2a9ef0006c0778758e06209bc6ce4d6088576c9b98eba09e9db3c60a9687fe6a
+  bytes_sha256: 29da1abff384d4376aca2a5f59ddc047db5efb33fc1d6064c079eca58c38c8e5
+  subject:
+    type: chain
+    chain_id: blb_apae|0fce0c7d-3f6f-4259-b62a-369498f19fd3
+  temporal:
+    mode: as_of
+    as_of_utc: '2026-09-24T06:37:03.606686Z'
+determinism:
+  repeated_request_byte_identical: true
+  canonical_form: JSON UTF-8, sort_keys, compact separators, trailing LF; no filesystem
+    paths, no generation timestamp, no randomness in capsule identity
+no_future_evidence: true
+no_provider_payload: true
+hygiene:
+  provider_payloads_in_repo: false
+  capsule_corpus_committed: false
+  note: representative capsule digests only; the ~52k corpus is regenerable deterministically
+representative_capsule_files:
+- file: capsules/capsule_00_f30b96a2f30cb9ca.json
+  sha256: f30b96a2f30cb9ca0834428a4717669e5c76024bbb2f4758a87fd4e52be33003
+- file: capsules/capsule_01_d702c2da903b94bc.json
+  sha256: d702c2da903b94bcff44352ab7742d6f55286864134fcc3cf492a293e541eb88
+- file: capsules/capsule_02_23f5dfa19dcc73ce.json
+  sha256: 23f5dfa19dcc73cef7c3ceb05195129501beaa6cf78a2dff4ffb4c327294c3b2
+- file: capsules/capsule_03_abbb79e66989236d.json
+  sha256: abbb79e66989236d738c2639a3a6e00f04c97e5e90ed10d9890128310f613f70
+- file: capsules/capsule_04_2746843d9a2e87a6.json
+  sha256: 2746843d9a2e87a625a5d2ee1cd1e6275f609b7547a14130595c25c2029af034
+- file: capsules/capsule_05_1f6b396283dc6310.json
+  sha256: 1f6b396283dc631035c0033aafd67f9dbe9535cad8dbe917b1decb0a77a5781a
+- file: capsules/capsule_06_90f2f047d9ee05d8.json
+  sha256: 90f2f047d9ee05d8a15eff13507314bc4213b4a8cda348c761465e340a2564cd
+- file: capsules/capsule_07_29da1abff384d437.json
+  sha256: 29da1abff384d4376aca2a5f59ddc047db5efb33fc1d6064c079eca58c38c8e5
