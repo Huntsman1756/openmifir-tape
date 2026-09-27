@@ -13,12 +13,20 @@ known_at of chain[-1] (not max known_at), the replay substrate works
 from the tape alone, and invalid T fails closed.
 """
 
+import hashlib
 import json
 import shutil
 from datetime import datetime
+from pathlib import Path
 
 import pytest
-from test_g1c1 import _dispositions
+import yaml
+from test_g1c1 import (
+    _dispositions,
+    _g1a_artifact,
+    _g1b_report,
+    _g1b_rows,
+)
 from test_metrics import BME, WINDOW, _bme, _fixture, _manifest, _store
 
 from metrics.g1c1 import (
@@ -34,10 +42,13 @@ from metrics.g1c1 import (
 )
 from metrics.g1c2 import (
     ASOF_COLUMNS,
+    C1_REPORT_LOGICAL_ID,
+    EXPECTED_C1_REPORT_SHA256,
     REFERENCE_BASIS,
     G1C2Error,
     as_of,
     asof_semantic_digest,
+    build_report,
     chains_projection_digest,
 )
 from metrics.selection import select_eligible
@@ -449,3 +460,96 @@ def test_record_from_evidence_preserves_source_typed_values():
     assert rec.quantity_in_measurement_unit == \
         {"Mantissa": 3000000, "Exponent": 0}
     assert rec.to_evidence() == ev
+
+
+# ---------- C1 parent-authority authentication ----------
+
+def _c1_report(path, *, schema_version=1):
+    """Write a minimal synthetic C1-style report; return its sha256."""
+    doc = {
+        "issue_id": "G1-C1",
+        "report": "G1-C1_TAPE_MATERIALIZATION",
+        "tape_schema_version": schema_version,
+        "dataset_semantic_digest": "d" * 64,
+        "tables": {
+            "publications": {"row_count": 2, "semantic_digest": "p" * 64},
+            "trade_chains": {"row_count": 1, "semantic_digest": "c" * 64},
+        },
+    }
+    data = yaml.safe_dump(doc).encode("utf-8")
+    path.write_bytes(data)
+    return hashlib.sha256(data).hexdigest()
+
+
+def _c2_build(tmp_path, c1_path, **over):
+    """Run metrics.g1c2.build_report over a minimal synthetic input set."""
+    raw, runs = _fixture(tmp_path)
+    o = _store(raw, BME, "2026-09-17", "d.json", [_bme()])
+    _manifest(runs, "20260917T100000Z", BME, T1, [o])
+    g1a = tmp_path / "g1a.yaml"
+    g1a_d = _g1a_artifact(g1a, ["ISIN-A"])
+    g1b = tmp_path / "rows.jsonl"
+    g1b_d = _g1b_rows(g1b, ["ISIN-A"])
+    g1b_rep = tmp_path / "g1b.yaml"
+    g1b_sha, basis = _g1b_report(g1b_rep, g1b_d)
+    kw = {
+        "window": WINDOW, "tape_dir": tmp_path / "tape",
+        "c1_report_path": c1_path, "asof_timestamps": [], "date": "d",
+        "generated_utc": "t", "expected_g1a_digest": g1a_d,
+        "expected_g1b_digest": g1b_d,
+        "expected_g1b_report_sha256": g1b_sha,
+        "expected_g1b_basis_id": basis,
+    }
+    kw.update(over)
+    return build_report(raw, runs, g1a, g1b, g1b_rep, **kw)
+
+
+def test_c1_report_missing_fails_closed(tmp_path):
+    with pytest.raises(G1C2Error):
+        _c2_build(tmp_path, tmp_path / "absent.yaml",
+                  expected_c1_report_sha256="0" * 64)
+
+
+def test_c1_report_authenticates_synthetic_parent(tmp_path):
+    c1 = tmp_path / "c1.yaml"
+    sha = _c1_report(c1)
+    report = _c2_build(tmp_path, c1, expected_c1_report_sha256=sha)
+    pa = report["parent_authority"]
+    assert pa["c1_report_sha256"] == sha
+    # provenance is a stable logical id, never the operator path
+    assert pa["c1_report"] == C1_REPORT_LOGICAL_ID
+    assert str(tmp_path) not in pa["c1_report"]
+
+
+def test_c1_report_mutated_bytes_fail_despite_schema_v1(tmp_path):
+    c1 = tmp_path / "c1.yaml"
+    sha = _c1_report(c1)
+    with c1.open("ab") as fh:  # keep schema_version: 1, change the bytes
+        fh.write(b"# tampered\n")
+    with pytest.raises(G1C2Error, match="sha256"):
+        _c2_build(tmp_path, c1, expected_c1_report_sha256=sha)
+
+
+def test_c1_report_wrong_expected_sha_fails(tmp_path):
+    c1 = tmp_path / "c1.yaml"
+    _c1_report(c1)
+    with pytest.raises(G1C2Error, match="sha256"):
+        _c2_build(tmp_path, c1, expected_c1_report_sha256="0" * 64)
+
+
+def test_c1_report_schema_checked_only_after_sha(tmp_path):
+    c1 = tmp_path / "c1.yaml"
+    sha = _c1_report(c1, schema_version=7)
+    with pytest.raises(G1C2Error, match="tape_schema_version"):
+        _c2_build(tmp_path, c1, expected_c1_report_sha256=sha)
+
+
+def test_expected_c1_sha256_is_the_verified_report():
+    """Production constant binds to the committed C1 evidence bytes."""
+    assert EXPECTED_C1_REPORT_SHA256 == (
+        "35b4dbea5b829d9e91882e9e03f9d7cc8beb24467ed385d5e6b3c93f7d2d99c8")
+    p = Path("evidence/g1-c1/G1-C1_tape_materialization.yaml")
+    if not p.is_file():
+        pytest.skip("real C1 report not checked out")
+    assert hashlib.sha256(p.read_bytes()).hexdigest() == \
+        EXPECTED_C1_REPORT_SHA256

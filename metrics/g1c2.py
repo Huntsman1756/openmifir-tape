@@ -72,6 +72,17 @@ from .g1c1 import (
 REFERENCE_BASIS = "BUILD_SNAPSHOT"
 REPORT_NAME = "G1-C2_asof_reconstruction.yaml"
 
+# Verified G1-C1 parent authority (issue #24/#25 — the v1 tape
+# materialization report). The C2 report cites it as parent; the bytes
+# MUST authenticate against this pinned SHA-256 before any of its fields
+# are trusted. Recomputed, never trusted by declaration.
+EXPECTED_C1_REPORT_SHA256 = \
+    "35b4dbea5b829d9e91882e9e03f9d7cc8beb24467ed385d5e6b3c93f7d2d99c8"
+
+# Stable logical identifier emitted as provenance — the operator-supplied
+# filesystem path (worktree-dependent) never enters committed evidence.
+C1_REPORT_LOGICAL_ID = "evidence/g1-c1/G1-C1_tape_materialization.yaml"
+
 ASOF_COLUMNS = [
     "source", "chain_id", "isin", "transaction_id",
     "head_entry_id", "head_state", "event_count",
@@ -281,13 +292,17 @@ def build_report(
     expected_g1b_digest: str = EXPECTED_G1B_ROWS_DIGEST,
     expected_g1b_report_sha256: str = EXPECTED_G1B_REPORT_SHA256,
     expected_g1b_basis_id: str = EXPECTED_G1B_BASIS_ID,
+    expected_c1_report_sha256: str = EXPECTED_C1_REPORT_SHA256,
 ) -> dict[str, Any]:
     """Materialize the schema-v2 tape and run as_of(T) evidence.
 
     Materialization delegates entirely to ``metrics.g1c1.build_report``
     (same verified upstream authority, same §4.1/§4.2 semantics — schema
-    v2 adds only the replay substrate column). The verified C1 v1 report
-    is loaded read-only as the historical parent authority.
+    v2 adds only the replay substrate column). The C1 v1 report is the
+    historical parent authority: its bytes MUST hash to
+    ``expected_c1_report_sha256`` before anything in it is trusted —
+    a modified YAML with ``tape_schema_version: 1`` is not the verified
+    parent and is refused.
     """
     v2, _pub_b, _chain_b = build_tape_v2(
         raw_root, runs_dir, g1a_artifact, g1b_rows, g1b_report,
@@ -302,11 +317,17 @@ def build_report(
         raise G1C2Error(
             f"verified C1 report not found: {c1_report_path} — parent "
             "authority is mandatory for v1/v2 reconciliation")
-    c1 = yaml.safe_load(c1_report_path.read_bytes().decode("utf-8")) or {}
+    c1_bytes = c1_report_path.read_bytes()
+    c1_sha = _sha(c1_bytes)
+    if c1_sha != expected_c1_report_sha256:
+        raise G1C2Error(
+            f"C1 report sha256 {c1_sha!r} != expected "
+            f"{expected_c1_report_sha256!r} — refusing unverified "
+            "parent authority")
+    c1 = yaml.safe_load(c1_bytes.decode("utf-8")) or {}
     v1_tables = c1.get("tables") or {}
     v1_pubs = v1_tables.get("publications") or {}
     v1_chains = v1_tables.get("trade_chains") or {}
-    c1_sha = _sha(c1_report_path.read_bytes())
     if c1.get("tape_schema_version") != 1:
         raise G1C2Error(
             f"C1 report tape_schema_version "
@@ -396,7 +417,7 @@ def build_report(
                 "rebuilt deterministically from the T-limited subset"),
         },
         "parent_authority": {
-            "c1_report": str(c1_report_path.as_posix()),
+            "c1_report": C1_REPORT_LOGICAL_ID,
             "c1_report_sha256": c1_sha,
             "v1": {
                 "tape_schema_version": c1.get("tape_schema_version"),
@@ -485,6 +506,7 @@ def generate_report(
     expected_g1b_digest: str = EXPECTED_G1B_ROWS_DIGEST,
     expected_g1b_report_sha256: str = EXPECTED_G1B_REPORT_SHA256,
     expected_g1b_basis_id: str = EXPECTED_G1B_BASIS_ID,
+    expected_c1_report_sha256: str = EXPECTED_C1_REPORT_SHA256,
 ) -> Path:
     report = build_report(
         raw_root, runs_dir, g1a_artifact, g1b_rows, g1b_report,
@@ -494,7 +516,8 @@ def generate_report(
         expected_g1a_digest=expected_g1a_digest,
         expected_g1b_digest=expected_g1b_digest,
         expected_g1b_report_sha256=expected_g1b_report_sha256,
-        expected_g1b_basis_id=expected_g1b_basis_id)
+        expected_g1b_basis_id=expected_g1b_basis_id,
+        expected_c1_report_sha256=expected_c1_report_sha256)
     ev = evidence_dir / "g1-c2"
     ev.mkdir(parents=True, exist_ok=True)
     path = ev / REPORT_NAME
