@@ -1,15 +1,15 @@
 gate: G1
 issue_id: G1-C2
 report: G1-C2_ASOF_RECONSTRUCTION
-date: '2026-09-26'
-generated_utc: '2026-09-26T16:00:00Z'
+date: '2026-09-27'
+generated_utc: '2026-09-27T06:24:42Z'
 frozen_authority:
   spec: "docs/gates/G1.md \xA74.2"
   freeze_tag: g1-freeze-v0
   freeze_commit: 2a5e4684b9a3f6066e6d2a53cbc37b920e2c9ffa
 generator:
   module: metrics.g1c2
-  code_commit: 82e21b66b6e9d9febad63db9acacf884a77ec9af
+  code_commit: 3cf3fc54e516a6d906b877576399db73c9e4eaae
   deterministic: true
 tape_schema_version: 2
 asof_rule: as_of(T) = publications WHERE known_at <= T -> build_ledger -> reconstruct_chains
