@@ -1,0 +1,152 @@
+gate: G1
+issue_id: G1-C4
+report: TAPE_MANIFEST_VERIFY
+date: '2026-09-27'
+generated_utc: '2026-09-27T17:29:27.380234Z'
+frozen_authority:
+  spec: docs/gates/G1.md §4.4/§4.5
+  freeze_tag: g1-freeze-v0
+  freeze_commit: 2a5e4684b9a3f6066e6d2a53cbc37b920e2c9ffa
+generator:
+  module: metrics.g1c4
+  code_commit: b3cd98f07f52e105b5adf610736eb68b0cbbb79e
+  deterministic: true
+baseline:
+  note: verified G1-C3 merge on main
+tape_manifest:
+  file: TAPE_MANIFEST.yaml
+  sha256: ec0aa1a478bbeb7b61a736bc2c919c48a488c3ff64c96a5fa10b2910d4c1493d
+  schema_version: 1
+input:
+  a3_bundle_sha256: d9efcfd9f62758ca8d967f4a3e799542b5e64306e98a3575813a8382a37fb611
+  a3_bundle_sums_file: SHA256SUMS.txt
+  eligible_manifest_digest: 6012480a7d7d2be932239d34222ba27a7e9aaa9411f0155d72459d3c1a8b4169
+  eligible_manifests: 776
+  capture_window_utc:
+    operational_start: '2026-09-16T09:42:46Z'
+    evidence_tail_end: '2026-09-24T07:00:00Z'
+reference_set_digests:
+  fitrs: 80988c859fcb0334a1bb793b50d12fac396c7e2f15db6d9cec95a09074db6468
+  firds: 80a40e4aafffb96aad112de72ac1773283ebc5f3074927f69ee962fb3becef8b
+  gleif: 9fa654e6fdf6646f10ffe7e7121d35d38266ff176ff255f2f46b8341137d6772
+reference_basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
+outputs:
+  publications_rows: 52008
+  trade_chains_rows: 30419
+  disposition_counts:
+    IN_ES_CRPB_UNIVERSE: 790
+    MISSING_BOND_TYPE: 437
+    MISSING_ISSUER_LEI: 9
+    MISSING_MIFIR_ID: 14487
+    NON_ES_LEGAL_JURISDICTION: 14519
+    NOT_BOND: 171
+    NOT_CRPB: 21595
+  publications_semantic_digest: c8d225ac1a97f4d0cff11a3f0b6f6dfc91b9fef1c1f229f9ef0dc0c7050a5088
+  chains_semantic_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+  dataset_semantic_digest: ecb1cd7bca5a645783ae6053e57c8a0af0b98421c810111e61117678abbbcee8
+capsule_fixtures:
+- subject:
+    type: publication
+    publication_id: 3b7e5feb3f4a7b2a9e06cfee8d08f24ee16b67138959a29d4ba4502a4ae85c01
+  capsule_sha256: 7dc82c15e016087ec94bc00aa5775b3e57c7eaffa67038f5ae54f096e41bca9d
+- subject:
+    type: chain
+    chain_id: blb_apae|128b6c15-4bde-4a13-ae7b-5cd32ae3b15b
+    at: null
+  capsule_sha256: 4ed766527f33dca6d3ee40d5f7f85bb40b5eefd6aacafbae98830e8bda70908f
+- subject:
+    type: chain
+    chain_id: blb_apae|0fce0c7d-3f6f-4259-b62a-369498f19fd3
+    at: '2026-09-23T00:00:00Z'
+  capsule_sha256: a53d23d522ebfe53af4ca884c458569ec7ede4eb1ece8a8aa429c500fc79f6ce
+self_verification:
+  tape: data\g1\tape
+  tape_manifest_sha256: ec0aa1a478bbeb7b61a736bc2c919c48a488c3ff64c96a5fa10b2910d4c1493d
+  self_verification: PASS
+  full_provenance: NOT_RUN — supply --bundle and reference snapshot dirs to authenticate
+    input bytes
+  checks:
+  - check: generator_authority
+    result: PASS
+  - check: table_row_counts
+    result: PASS
+  - check: publications_semantic_digest
+    result: PASS
+  - check: chains_semantic_digest
+    result: PASS
+  - check: dataset_semantic_digest
+    result: PASS
+  - check: disposition_counts
+    result: PASS
+  - check: capsule_fixtures
+    result: PASS
+full_provenance:
+  tape: data\g1\tape
+  tape_manifest_sha256: ec0aa1a478bbeb7b61a736bc2c919c48a488c3ff64c96a5fa10b2910d4c1493d
+  self_verification: PASS
+  full_provenance: PASS
+  checks:
+  - check: generator_authority
+    result: PASS
+  - check: table_row_counts
+    result: PASS
+  - check: publications_semantic_digest
+    result: PASS
+  - check: chains_semantic_digest
+    result: PASS
+  - check: dataset_semantic_digest
+    result: PASS
+  - check: disposition_counts
+    result: PASS
+  - check: capsule_fixtures
+    result: PASS
+  - check: a3_bundle_bytes
+    result: PASS
+    files_verified: 24500
+  - check: eligible_manifest_set
+    result: PASS
+    entries: 776
+  - check: fitrs_reference_set
+    result: PASS
+    set_digest: 80988c859fcb0334a1bb793b50d12fac396c7e2f15db6d9cec95a09074db6468
+    entries_verified: 5
+  - check: firds_reference_set
+    result: PASS
+    set_digest: 80a40e4aafffb96aad112de72ac1773283ebc5f3074927f69ee962fb3becef8b
+    entries_verified: 4
+  - check: gleif_reference_set
+    result: PASS
+    semantics: pinned required-LEI subset (unrelated dir residue can never enter the
+      basis)
+    set_digest: 9fa654e6fdf6646f10ffe7e7121d35d38266ff176ff255f2f46b8341137d6772
+    entries_verified: 1806
+reproducibility:
+  materializations:
+  - tape_dir: data\g1\tape-c4-ev-a
+    publications_rows: 52008
+    trade_chains_rows: 30419
+    publications_semantic_digest: c8d225ac1a97f4d0cff11a3f0b6f6dfc91b9fef1c1f229f9ef0dc0c7050a5088
+    chains_semantic_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+    dataset_semantic_digest: ecb1cd7bca5a645783ae6053e57c8a0af0b98421c810111e61117678abbbcee8
+  - tape_dir: data\g1\tape-c4-ev-b
+    publications_rows: 52008
+    trade_chains_rows: 30419
+    publications_semantic_digest: c8d225ac1a97f4d0cff11a3f0b6f6dfc91b9fef1c1f229f9ef0dc0c7050a5088
+    chains_semantic_digest: 39056111031f3e89ea99ea5bb9c04419db1aa9c34b20dd2d29b2c8f5579d40e6
+    dataset_semantic_digest: ecb1cd7bca5a645783ae6053e57c8a0af0b98421c810111e61117678abbbcee8
+  publications_semantic_digest_equal: true
+  chains_semantic_digest_equal: true
+  dataset_semantic_digest_equal: true
+  capsule_bytes_byte_identical: true
+  parquet_byte_equality_required: false
+  tape_reproducible: true
+semantics:
+  parquet_byte_equality_required: false
+  identity_basis: canonical JSONL semantic digests + canonical capsule bytes; physical
+    Parquet bytes are non-authoritative
+  self_verify_vs_provenance: self-verification proves the tape matches its own manifest;
+    full provenance authenticates the input BYTES (sealed bundle + pinned reference
+    sets)
+hygiene:
+  provider_payloads_in_repo: false
+  provider_payloads_in_capsules_or_manifest: false
