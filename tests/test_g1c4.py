@@ -49,6 +49,7 @@ from metrics.g1c4 import (
     MANIFEST_NAME,
     G1C4Error,
     build_tape_manifest,
+    replay_materialization,
     reproducibility_check,
     verify_full,
     verify_self,
@@ -218,6 +219,8 @@ def _c4_env(tmp_path, populate, isin_specs, *, mutate_manifest=None,
         "pub_id": pub_id, "explain_kw": explain_kw,
         "manifest": manifest, "g1a": g1a,
         "g1b_rows": g1b_rows, "g1b_report": g1b_report,
+        "g1b_links": g1b_links,
+        "basis": basis, "dataset_digest": ds,
         "c1_expected": {
             "expected_g1a_digest": digest_entries(instruments),
             "expected_g1b_digest": hashlib.sha256(rows_b).hexdigest(),
@@ -267,7 +270,7 @@ def _basic_env(tmp_path, **kw):
 
 def test_pristine_self_verify(tmp_path):
     env = _basic_env(tmp_path)
-    res = verify_self(env["tape"], code_commit=PIN,
+    res = verify_self(env["tape"], running_commit=PIN,
                       explain_kw=env["explain_kw"])
     assert res["self_verification"] == "PASS"
     assert res["full_provenance"].startswith("NOT_RUN")
@@ -278,7 +281,7 @@ def test_missing_manifest_fails(tmp_path):
     env = _basic_env(tmp_path)
     (env["tape"] / MANIFEST_NAME).unlink()
     with pytest.raises(G1C4Error, match="missing"):
-        verify_self(env["tape"], code_commit=PIN,
+        verify_self(env["tape"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
@@ -286,7 +289,7 @@ def test_malformed_manifest_fails(tmp_path):
     env = _basic_env(tmp_path)
     (env["tape"] / MANIFEST_NAME).write_bytes(b": not yaml [")
     with pytest.raises(G1C4Error, match=r"malformed|mapping"):
-        verify_self(env["tape"], code_commit=PIN,
+        verify_self(env["tape"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
@@ -294,7 +297,7 @@ def test_wrong_manifest_schema_fails(tmp_path):
     env = _basic_env(tmp_path, mutate_manifest=lambda m: {
         **m, "tape_manifest_schema_version": 99})
     with pytest.raises(G1C4Error, match="schema version"):
-        verify_self(env["tape"], code_commit=PIN,
+        verify_self(env["tape"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
@@ -305,7 +308,7 @@ def test_mutated_publications_table_fails(tmp_path):
     write_parquet(rows, PUB_COLUMNS, PUB_DUCK_TYPES,
                   env["tape"] / "publications.parquet", pub_sort_key)
     with pytest.raises(G1C4Error, match=r"semantic_digest|mismatch"):
-        verify_self(env["tape"], code_commit=PIN,
+        verify_self(env["tape"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
@@ -318,7 +321,7 @@ def test_mutated_chains_table_fails(tmp_path):
                   env["tape"] / "trade_chains.parquet",
                   lambda r: r["chain_id"])
     with pytest.raises(G1C4Error, match="mismatch"):
-        verify_self(env["tape"], code_commit=PIN,
+        verify_self(env["tape"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
@@ -327,7 +330,7 @@ def test_mutated_declared_dataset_digest_fails(tmp_path):
         **m, "outputs": {**m["outputs"],
                          "dataset_semantic_digest": "0" * 64}})
     with pytest.raises(G1C4Error, match="dataset_semantic_digest"):
-        verify_self(env["tape"], code_commit=PIN,
+        verify_self(env["tape"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
@@ -337,23 +340,112 @@ def test_mutated_declared_row_count_fails(tmp_path):
                          "publications_rows":
                              m["outputs"]["publications_rows"] + 1}})
     with pytest.raises(G1C4Error, match="publications_rows"):
-        verify_self(env["tape"], code_commit=PIN,
+        verify_self(env["tape"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
-def test_wrong_generator_authority_fails(tmp_path):
-    env = _basic_env(tmp_path)
+def test_malformed_generator_commit_fails(tmp_path):
+    """generator.code_commit is a provenance record — it must be a
+    well-formed 40-hex commit; malformed authority fails closed."""
+    env = _basic_env(tmp_path, mutate_manifest=lambda m: {
+        **m, "generator": {**m["generator"], "code_commit": "tampered"}})
     with pytest.raises(G1C4Error, match=r"generator.*commit"):
-        verify_self(env["tape"], code_commit="cd" * 20,
+        verify_self(env["tape"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
     env2 = _basic_env(tmp_path / "other",
                       mutate_manifest=lambda m: {
                           **m, "generator": {
                               **m["generator"],
                               "tape_schema_version": 1}})
-    with pytest.raises(G1C4Error, match="schema_version"):
-        verify_self(env2["tape"], code_commit=PIN,
+    with pytest.raises(G1C4Error, match=r"schema_version"):
+        verify_self(env2["tape"], running_commit=PIN,
                     explain_kw=env2["explain_kw"])
+
+
+def test_verify_at_different_commit_uses_determinism_mode(tmp_path):
+    """Design fix: the verifier does NOT require HEAD ==
+    declared code_commit. At a different commit, strict fixture-digest
+    equality is not attestable — fixtures fall back to determinism +
+    internal-consistency checks and the result says so."""
+    env = _basic_env(tmp_path)
+    res = verify_self(env["tape"], running_commit="cd" * 20,
+                      explain_kw=env["explain_kw"])
+    assert res["self_verification"] == "PASS"
+    gen = next(c for c in res["checks"]
+               if c["check"] == "generator_authority")
+    assert gen["code_commit_match"] is False
+    fx = next(c for c in res["checks"]
+              if c["check"] == "capsule_fixtures")
+    assert "determinism" in fx["mode"]
+
+
+def test_references_metadata_tampering_fails(tmp_path):
+    """Adversarial: mutating ONLY references metadata (no table content)
+    MUST fail self-verification — internal consistency of the declared
+    reference authority is part of layer A."""
+    for mutate, pattern in (
+            (lambda m: {**m, "references": {
+                **m["references"],
+                "fitrs": {**m["references"]["fitrs"],
+                          "set_digest": "0" * 64}}},
+             r"fitrs.*set_digest"),
+            (lambda m: {**m, "references": {
+                **m["references"], "basis_id": "0" * 64}},
+             r"basis_id"),
+            (lambda m: {**m, "references": {
+                **m["references"],
+                "gleif": {**m["references"]["gleif"],
+                          "entries":
+                              m["references"]["gleif"]["entries"][1:]}},
+             }, r"gleif.*set_digest"),
+    ):
+        env = _basic_env(tmp_path / str(abs(hash(pattern))),
+                         mutate_manifest=mutate)
+        with pytest.raises(G1C4Error, match=pattern):
+            verify_self(env["tape"], running_commit=PIN,
+                        explain_kw=env["explain_kw"])
+
+
+def _rewrite_parquet_with(tape, table, columns, duck_types, rows,
+                          sort_key):
+    write_parquet(rows, columns, duck_types, tape / table, sort_key)
+
+
+def test_extra_column_fails_physical_schema(tmp_path):
+    """A Parquet carrying an unexpected extra column is a tamper —
+    logical content may be untouched but the declared schema set is
+    exact."""
+    env = _basic_env(tmp_path)
+    cols = [*PUB_COLUMNS, "rogue_col"]
+    rows = [dict(r, rogue_col="x") for r in env["pub_rows"]]
+    _rewrite_parquet_with(env["tape"], "publications.parquet", cols,
+                          {**PUB_DUCK_TYPES}, rows, pub_sort_key)
+    with pytest.raises(G1C4Error, match=r"physical schema.*extra"):
+        verify_self(env["tape"], running_commit=PIN,
+                    explain_kw=env["explain_kw"])
+
+
+def test_missing_column_fails_physical_schema(tmp_path):
+    env = _basic_env(tmp_path)
+    cols = [c for c in PUB_COLUMNS if c != "currency"]
+    rows = [{k: v for k, v in r.items() if k != "currency"}
+            for r in env["pub_rows"]]
+    _rewrite_parquet_with(env["tape"], "publications.parquet", cols,
+                          PUB_DUCK_TYPES, rows, pub_sort_key)
+    with pytest.raises(G1C4Error, match=r"physical schema"):
+        verify_self(env["tape"], running_commit=PIN,
+                    explain_kw=env["explain_kw"])
+
+
+def test_column_type_drift_fails_physical_schema(tmp_path):
+    env = _basic_env(tmp_path)
+    # redeclare observation_count as VARCHAR -> type drift
+    dt = {**PUB_DUCK_TYPES, "observation_count": "VARCHAR"}
+    _rewrite_parquet_with(env["tape"], "publications.parquet",
+                          PUB_COLUMNS, dt, env["pub_rows"], pub_sort_key)
+    with pytest.raises(G1C4Error, match=r"physical schema"):
+        verify_self(env["tape"], running_commit=PIN,
+                    explain_kw=env["explain_kw"])
 
 
 def test_tampered_capsule_fixture_fails(tmp_path):
@@ -363,7 +455,7 @@ def test_tampered_capsule_fixture_fails(tmp_path):
         return {**m, "capsule_fixtures": fx}
     env = _basic_env(tmp_path, mutate_manifest=flip)
     with pytest.raises(G1C4Error, match="capsule fixture"):
-        verify_self(env["tape"], code_commit=PIN,
+        verify_self(env["tape"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
@@ -371,7 +463,7 @@ def test_self_verify_never_claims_provenance(tmp_path):
     """Adversarial #15: a bare self-verify MUST NOT claim the input
     bytes were authenticated."""
     env = _basic_env(tmp_path)
-    res = verify_self(env["tape"], code_commit=PIN,
+    res = verify_self(env["tape"], running_commit=PIN,
                       explain_kw=env["explain_kw"])
     assert res["full_provenance"] != "PASS"
     assert "NOT_RUN" in res["full_provenance"]
@@ -412,7 +504,7 @@ def test_parquet_bytes_may_differ_semantics_same(tmp_path):
     env = _basic_env(tmp_path)
     write_parquet(env["pub_rows"], PUB_COLUMNS, PUB_DUCK_TYPES,
                   env["tape"] / "publications.parquet", pub_sort_key)
-    res = verify_self(env["tape"], code_commit=PIN,
+    res = verify_self(env["tape"], running_commit=PIN,
                       explain_kw=env["explain_kw"])
     assert res["self_verification"] == "PASS"
 
@@ -424,7 +516,7 @@ def _full(env):
         env["tape"], bundle_dir=env["bundle"],
         fitrs_paths=sorted(env["fitrs_dir"].iterdir()),
         firds_paths=sorted(env["firds_dir"].iterdir()),
-        gleif_dir=env["gleif_dir"], code_commit=PIN,
+        gleif_dir=env["gleif_dir"], running_commit=PIN,
         explain_kw=env["explain_kw"])
 
 
@@ -496,7 +588,7 @@ def test_missing_reference_artifact_fails(tmp_path):
         verify_full(env["tape"], bundle_dir=env["bundle"],
                     fitrs_paths=files,
                     firds_paths=sorted(env["firds_dir"].iterdir()),
-                    gleif_dir=env["gleif_dir"], code_commit=PIN,
+                    gleif_dir=env["gleif_dir"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
@@ -525,7 +617,7 @@ def test_wrong_bundle_dir_fails(tmp_path):
         verify_full(env["tape"], bundle_dir=other,
                     fitrs_paths=sorted(env["fitrs_dir"].iterdir()),
                     firds_paths=sorted(env["firds_dir"].iterdir()),
-                    gleif_dir=env["gleif_dir"], code_commit=PIN,
+                    gleif_dir=env["gleif_dir"], running_commit=PIN,
                     explain_kw=env["explain_kw"])
 
 
@@ -535,14 +627,12 @@ def test_partial_provenance_cli_fails(tmp_path):
         c4_main([str(env["tape"]), "--bundle", str(env["bundle"])])
 
 
-def test_cli_self_verify(tmp_path, capsys):
-    env = _basic_env(tmp_path)
-    # CLI runs at real HEAD -> manifest must be regenerated at that
-    # commit or verification must be told the declared one; the public
-    # contract binds capsule identity to generator.commit, so the CLI
-    # path is exercised through verify_self directly above. Here we only
-    # check the fail-closed generator-authority message surfaces.
-    with pytest.raises(G1C4Error, match="generator"):
+def test_cli_self_verify_fail_closed(tmp_path):
+    """CLI entry point surfaces fail-closed errors — malformed declared
+    generator commit rejects before any explain work."""
+    env = _basic_env(tmp_path, mutate_manifest=lambda m: {
+        **m, "generator": {**m["generator"], "code_commit": "x"}})
+    with pytest.raises(G1C4Error, match=r"generator"):
         c4_main([str(env["tape"])])
 
 
@@ -562,40 +652,106 @@ def test_reproducibility_two_roots(tmp_path):
             == env_b["manifest"]["capsule_fixtures"])
 
 
+def _rebuild_for(env):
+    """Injectable universe-rebuild for synthetic replays: writes the
+    env's synthetic authority artifacts into the replay work dir and
+    returns digests — the same contract `_rebuild_universe` fulfils
+    with real g1a/g1b builders."""
+    def _rb(bundle_dir, fitrs_paths, firds_paths, gleif_dir, window,
+            work_dir, *, date, generated_utc, expected_g1a_digest):
+        work_dir.mkdir(parents=True, exist_ok=True)
+        a = work_dir / "g1a.yaml"
+        b_rows = work_dir / "g1b_rows.jsonl"
+        b_links = work_dir / "g1b_links.jsonl"
+        b_rep = work_dir / "g1b_report.yaml"
+        a.write_bytes(env["g1a"].read_bytes())
+        b_rows.write_bytes(env["g1b_rows"].read_bytes())
+        b_links.write_bytes(env["g1b_links"].read_bytes())
+        b_rep.write_bytes(env["g1b_report"].read_bytes())
+        return {
+            "g1a_path": a,
+            "g1a_semantic_digest":
+                env["c1_expected"]["expected_g1a_digest"],
+            "g1b_rows_path": b_rows,
+            "g1b_links_path": b_links,
+            "g1b_report_path": b_rep,
+            "g1b_rows_digest":
+                env["c1_expected"]["expected_g1b_digest"],
+            "g1b_links_sha256":
+                env["explain_kw"]["expected_g1b_links_sha256"],
+            "g1b_report_sha256":
+                env["explain_kw"]["expected_g1b_report_sha256"],
+            "g1b_basis_id": env["basis"],
+        }
+    return _rb
+
+
+def _anchors(env):
+    return {
+        "g1a_semantic_digest": env["c1_expected"]["expected_g1a_digest"],
+        "g1b_rows_digest": env["c1_expected"]["expected_g1b_digest"],
+        "g1b_links_sha256":
+            env["explain_kw"]["expected_g1b_links_sha256"],
+        "g1b_basis_id": env["basis"],
+    }
+
+
 def test_reproducibility_gate_synthetic(tmp_path):
-    """§4.5: two independent materializations of the same sealed corpus
-    must produce identical semantic digests + byte-identical capsules."""
+    """§4.5 end-to-end: two independent replays — each rebuilding the
+    universe chain from the same sealed corpus — must produce identical
+    digests, identical manifests and byte-identical capsules."""
     env = _basic_env(tmp_path / "src")
     subjects = [{"type": "publication",
                  "publication_id": env["pub_id"]},
-                {"type": "chain", "chain_id": env["chain_id"]},
-                {"type": "chain", "chain_id": env["chain_id"],
-                 "at": T_ASOF}]
+                {"type": "chain", "chain_id": env["chain_id"]}]
     res = reproducibility_check(
-        env["runs"], env["raw"],
-        g1a_artifact=env["g1a"], g1b_rows=env["g1b_rows"],
-        g1b_report=env["g1b_report"], window=WINDOW,
-        tape_roots=[tmp_path / "mA", tmp_path / "mB"],
+        env["bundle"],
+        fitrs_paths=sorted(env["fitrs_dir"].iterdir()),
+        firds_paths=sorted(env["firds_dir"].iterdir()),
+        gleif_dir=env["gleif_dir"], window=WINDOW,
+        replay_roots=[tmp_path / "mA", tmp_path / "mB"],
         capsule_subjects=subjects, date="d", generated_utc="t",
-        explain_kw=env["explain_kw"], c1_expected=env["c1_expected"])
+        anchors=_anchors(env), rebuild_universe=_rebuild_for(env),
+        c2_authority={
+            "report_path": env["explain_kw"]["c2_report_path"],
+            "expected_sha256":
+                env["explain_kw"]["expected_c2_report_sha256"]},
+        code_commit=PIN)
     assert res["tape_reproducible"] is True
     assert res["dataset_semantic_digest_equal"] is True
     assert res["capsule_bytes_byte_identical"] is True
+    # every build emits its manifest (§4.4) — and they are identical
+    for root in (tmp_path / "mA", tmp_path / "mB"):
+        assert (root / "tape" / MANIFEST_NAME).is_file()
+
+
+def test_replay_anchor_divergence_fails(tmp_path):
+    """A replay whose rebuilt upstream digests diverge from the
+    canonical anchors is NOT a reproduction — fail before the tape."""
+    env = _basic_env(tmp_path / "src")
+    anchors = _anchors(env)
+    anchors["g1a_semantic_digest"] = "0" * 64
+    with pytest.raises(G1C4Error, match=r"upstream replay diverged"):
+        replay_materialization(
+            env["bundle"],
+            fitrs_paths=sorted(env["fitrs_dir"].iterdir()),
+            firds_paths=sorted(env["firds_dir"].iterdir()),
+            gleif_dir=env["gleif_dir"], window=WINDOW,
+            tape_dir=tmp_path / "t", work_dir=tmp_path / "w",
+            date="d", generated_utc="t", anchors=anchors,
+            rebuild_universe=_rebuild_for(env))
 
 
 def test_reproducibility_diverged_digest_fails(tmp_path):
     """A materialization producing a different dataset digest fails the
     gate rather than being reported as reproducible."""
     env = _basic_env(tmp_path / "src")
-    subjects = [{"type": "publication",
-                 "publication_id": env["pub_id"]}]
-    # poison one replay root so its tape digests must diverge
     with pytest.raises(Exception):  # noqa: B017 - fail-closed, any error
         reproducibility_check(
-            env["runs"], tmp_path / "empty_raw_root",
-            g1a_artifact=env["g1a"], g1b_rows=env["g1b_rows"],
-            g1b_report=env["g1b_report"], window=WINDOW,
-            tape_roots=[tmp_path / "x1", tmp_path / "x2"],
-            capsule_subjects=subjects, date="d", generated_utc="t",
-            explain_kw=env["explain_kw"],
-            c1_expected=env["c1_expected"])
+            tmp_path / "empty_bundle",
+            fitrs_paths=sorted(env["fitrs_dir"].iterdir()),
+            firds_paths=sorted(env["firds_dir"].iterdir()),
+            gleif_dir=env["gleif_dir"], window=WINDOW,
+            replay_roots=[tmp_path / "x1", tmp_path / "x2"],
+            date="d", generated_utc="t",
+            anchors=_anchors(env), rebuild_universe=_rebuild_for(env))

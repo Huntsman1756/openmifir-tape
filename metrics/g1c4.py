@@ -45,15 +45,19 @@ byte-identical. Parquet physical byte-equality is NOT required (writer
 metadata may vary).
 
 Capsule fixtures embed the generator code_commit (C3 capsule design):
-their capsule_sha256 is only reproducible under the manifest's declared
-generator commit. ``verify`` therefore fails closed when the running
-commit differs from ``generator.code_commit`` — generator authority
-mismatch. Verify at the manifest's declared commit.
+their declared capsule_sha256 is only byte-reproducible when verify runs
+at the manifest's declared commit. ``generator.code_commit`` is a
+provenance record, not a runtime constraint — verify never requires a
+particular checkout; when commits differ, fixtures are verified at
+determinism + internal-consistency level and the report records
+``code_commit_match: false``.
 
-Fail-closed on: missing/malformed/wrong-schema manifest, row-count or
-digest mismatch, dataset digest mismatch, capsule fixture mismatch,
-generator/schema authority mismatch, mutated input/reference bytes,
-missing or unexpected pinned artifact, any structural inconsistency.
+Fail-closed on: missing/malformed/wrong-schema manifest, physical
+schema drift (extra/missing/typed columns), row-count or digest
+mismatch, dataset digest mismatch, reference-set/basis inconsistency,
+capsule non-determinism or fixture mismatch at the declared commit,
+malformed generator authority, mutated input/reference bytes, missing
+or unexpected pinned artifact, any structural inconsistency.
 
 Metadata-only: no provider payload bytes are ever parsed or emitted.
 """
@@ -63,11 +67,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import yaml
 
 from universe._paths import repo_file
@@ -78,13 +84,22 @@ from universe.reference import (
 )
 
 from .evidence import _git_head
-from .g1b import reference_basis_id
+from .g1b import (
+    G1BError,
+    canonical_links_bytes,
+    canonical_rows_bytes,
+    reference_basis_id,
+)
 from .g1c1 import (
     CHAIN_COLUMNS,
+    CHAIN_DUCK_TYPES,
     CHAIN_PARQUET,
+    EXPECTED_G1A_SEMANTIC_DIGEST,
     EXPECTED_G1B_BASIS_ID,
     EXPECTED_G1B_REPORT_SHA256,
+    EXPECTED_G1B_ROWS_DIGEST,
     PUB_COLUMNS,
+    PUB_DUCK_TYPES,
     PUB_PARQUET,
     TAPE_SCHEMA_VERSION,
     canonical_table_bytes,
@@ -93,6 +108,8 @@ from .g1c1 import (
     pub_sort_key,
 )
 from .g1c3 import (
+    EXPECTED_C2_REPORT_SHA256,
+    EXPECTED_G1B_LINKS_SHA256,
     G1B_LINKS_LOGICAL_ID,
     G1B_REPORT_LOGICAL_ID,
     G1B_ROWS_LOGICAL_ID,
@@ -461,6 +478,7 @@ def build_tape_manifest(
             "fitrs": fitrs_set,
             "firds": firds_set,
             "gleif": gleif_set,
+            "basis_id": basis,
         },
         "generator": {
             "module": "metrics.g1c4 (materialization: metrics.g1c1)",
@@ -519,10 +537,39 @@ def _explain_subject(tape_dir: Path, subject: dict[str, Any],
                     f"{subject!r}")
 
 
+def _table_schema_ok(tape_dir: Path, parquet: str, columns: list[str],
+                     duck_types: dict[str, str]) -> None:
+    """Physical schema check: the Parquet file's column NAMES, ORDER and
+    TYPES must equal the declared schema exactly — an unexpected extra
+    column is as much a tamper as a missing one."""
+    path = tape_dir / parquet
+    con = duckdb.connect()
+    try:
+        lit = str(path).replace("'", "''")
+        got = con.execute(
+            f"DESCRIBE SELECT * FROM '{lit}'"  # noqa: S608
+        ).fetchall()
+    finally:
+        con.close()
+    actual = [(r[0], r[1]) for r in got]
+    expected = [(c, duck_types.get(c, "VARCHAR")) for c in columns]
+    if actual != expected:
+        an = {n for n, _ in actual}
+        en = {n for n, _ in expected}
+        raise G1C4Error(
+            f"{parquet} physical schema mismatch — "
+            f"missing={sorted(en - an)} extra={sorted(an - en)} "
+            f"actual={actual}")
+
+
+_HEX40 = re.compile(r"^[0-9a-f]{40}$")
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+
 def verify_self(
     tape_dir: Path,
     *,
-    code_commit: str | None = None,
+    running_commit: str | None = None,
     explain_kw: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Tape self-verification (§4.4 layer A).
@@ -531,26 +578,70 @@ def verify_self(
     explain API; verifies internal consistency. Does NOT prove input
     bytes — that is the --bundle layer. ``full_provenance`` is always
     NOT_RUN here by construction.
+
+    Generator-commit semantics: ``generator.code_commit`` is a PROVENANCE
+    record (which commit generated this tape), not a runtime requirement.
+    Verification does not require checking out the declared commit — but
+    capsule-fixture digests embed code_commit, so strict fixture-digest
+    equality only holds when the declared commit equals the running one;
+    otherwise fixtures are verified at determinism level (explain twice
+    -> byte-identical) plus capsule internal digest consistency, and the
+    result records ``generator.code_commit_match``.
     """
     tape_dir = Path(tape_dir)
     manifest = load_manifest(tape_dir)
     checks: list[dict[str, Any]] = []
 
-    def ok(name: str) -> None:
-        checks.append({"check": name, "result": "PASS"})
-
     gen = manifest["generator"]
-    head = code_commit if code_commit is not None else _git_head()
-    if gen.get("code_commit") != head:
+    declared_commit = gen.get("code_commit")
+    if not (isinstance(declared_commit, str)
+            and _HEX40.match(declared_commit)):
         raise G1C4Error(
-            f"generator.code_commit {gen.get('code_commit')!r} != running "
-            f"commit {head!r} — generator authority mismatch; verify at "
-            "the manifest's declared commit")
+            f"generator.code_commit {declared_commit!r} is not a "
+            "well-formed commit record — generator authority malformed")
     if gen.get("tape_schema_version") != TAPE_SCHEMA_VERSION:
         raise G1C4Error(
             f"generator.tape_schema_version "
             f"{gen.get('tape_schema_version')!r} != {TAPE_SCHEMA_VERSION}")
-    ok("generator_authority")
+    running = running_commit if running_commit is not None \
+        else _git_head()
+    commit_match = declared_commit == running
+    checks.append({"check": "generator_authority", "result": "PASS",
+                   "declared_commit": declared_commit,
+                   "running_commit": running,
+                   "code_commit_match": commit_match})
+
+    for parquet, cols, dt in (
+            (PUB_PARQUET, PUB_COLUMNS, PUB_DUCK_TYPES),
+            (CHAIN_PARQUET, CHAIN_COLUMNS, CHAIN_DUCK_TYPES)):
+        _table_schema_ok(tape_dir, parquet, cols, dt)
+    checks.append({"check": "table_physical_schema", "result": "PASS"})
+
+    # References internal consistency: the declared pinned-entry lists
+    # must recompute to their declared set_digests and the declared
+    # basis — mutating references metadata alone MUST fail here.
+    refs = manifest["references"]
+    set_digests: dict[str, str] = {}
+    for fam in ("fitrs", "firds", "gleif"):
+        declared_set = refs.get(fam) or {}
+        entries = declared_set.get("entries") or []
+        try:
+            recomputed = canonical_reference_set(entries)
+        except G1BError as exc:
+            raise G1C4Error(
+                f"references.{fam} malformed: {exc}") from exc
+        if recomputed["set_digest"] != declared_set.get("set_digest"):
+            raise G1C4Error(
+                f"references.{fam}.set_digest "
+                f"{declared_set.get('set_digest')!r} does not recompute "
+                "from declared entries — reference metadata tampered")
+        set_digests[fam] = recomputed["set_digest"]
+    if reference_basis_id(set_digests) != refs.get("basis_id"):
+        raise G1C4Error(
+            "references.basis_id does not recompute from the declared "
+            "family set digests — reference authority inconsistent")
+    checks.append({"check": "references_internal_consistency",
+                   "result": "PASS"})
 
     actual = tape_outputs(tape_dir)
     declared = manifest["outputs"]
@@ -561,28 +652,41 @@ def verify_self(
             raise G1C4Error(
                 f"outputs.{key} declared {declared.get(key)!r} != "
                 f"recomputed {actual[key]!r} — tape content mismatch")
-    ok("table_row_counts")
-    ok("publications_semantic_digest")
-    ok("chains_semantic_digest")
-    ok("dataset_semantic_digest")
+    checks.extend({"check": n, "result": "PASS"} for n in (
+        "table_row_counts", "publications_semantic_digest",
+        "chains_semantic_digest", "dataset_semantic_digest"))
     _disposition_counts_ok(declared.get("disposition_counts") or {},
                            actual["disposition_counts"])
-    ok("disposition_counts")
+    checks.append({"check": "disposition_counts", "result": "PASS"})
 
-    # Capsule fixtures: recompute each declared subject — capsule_sha256
-    # must match byte-for-byte (determinism is part of the tape claim).
     for fx in manifest["capsule_fixtures"]:
-        cap = _explain_subject(tape_dir, fx["subject"],
-                               explain_kw or {})
-        got = capsule_sha256(cap)
-        if got != fx["capsule_sha256"]:
+        declared_sha = fx.get("capsule_sha256")
+        if not (isinstance(declared_sha, str)
+                and _HEX64.match(declared_sha)):
+            raise G1C4Error(
+                f"capsule fixture {fx.get('subject')!r}: declared "
+                "capsule_sha256 malformed")
+        kw = explain_kw or {}
+        cap_a = _explain_subject(tape_dir, fx["subject"], kw)
+        cap_b = _explain_subject(tape_dir, fx["subject"], kw)
+        if capsule_bytes(cap_a) != capsule_bytes(cap_b):
+            raise G1C4Error(
+                f"capsule fixture {fx['subject']!r}: explain not "
+                "deterministic — repeated call produced different bytes")
+        if cap_a["capsule_sha256"] != capsule_sha256(cap_a):
+            raise G1C4Error("capsule internal digest inconsistency")
+        if commit_match and cap_a["capsule_sha256"] != declared_sha:
             raise G1C4Error(
                 f"capsule fixture {fx['subject']!r}: capsule_sha256 "
-                f"{got!r} != declared {fx['capsule_sha256']!r} — "
-                "capsule evidence tampered or non-deterministic")
-        if got != cap["capsule_sha256"]:
-            raise G1C4Error("capsule internal digest inconsistency")
-    ok("capsule_fixtures")
+                f"{cap_a['capsule_sha256']!r} != declared "
+                f"{declared_sha!r} — capsule evidence tampered")
+    checks.append({
+        "check": "capsule_fixtures", "result": "PASS",
+        "mode": "strict_declared_digest"
+        if commit_match
+        else "determinism_plus_internal_consistency"
+        " (declared digests attest the declared generator commit)",
+        "fixtures": len(manifest["capsule_fixtures"])})
 
     return {
         "tape": str(tape_dir),
@@ -602,12 +706,12 @@ def verify_full(
     fitrs_paths: list[Path],
     firds_paths: list[Path],
     gleif_dir: Path,
-    code_commit: str | None = None,
+    running_commit: str | None = None,
     explain_kw: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Full provenance verification (§4.4 layer B): self-verification
     plus byte-level authentication of every declared input."""
-    result = verify_self(tape_dir, code_commit=code_commit,
+    result = verify_self(tape_dir, running_commit=running_commit,
                          explain_kw=explain_kw)
     manifest = load_manifest(tape_dir)
     declared = manifest["input"]
@@ -648,97 +752,241 @@ def verify_full(
 
 # ----------------------------------------------------- reproducibility --
 
-def replay_materialization(
-    runs_dir: Path,
-    raw_root: Path,
-    *,
-    g1a_artifact: Path,
-    g1b_rows: Path,
-    g1b_report: Path,
+def _rebuild_universe(
+    bundle_dir: Path,
+    fitrs_paths: list[Path],
+    firds_paths: list[Path],
+    gleif_dir: Path,
     window: dict[str, str],
-    tape_dir: Path,
+    work_dir: Path,
+    *,
     date: str,
     generated_utc: str,
-    **c1_expected: Any,
+    expected_g1a_digest: str,
 ) -> dict[str, Any]:
-    """Independent §4.5 materialization replay: full G1-C1 build into a
-    fresh root. Returns the computed output digests (metadata only)."""
+    """End-to-end universe rebuild for a §4.5 replay: G1-A observed set
+    from the sealed bundle, then G1-B dispositions + reference links from
+    that rebuilt G1-A and the pinned FITRS/FIRDS/GLEIF snapshots. Writes
+    the rebuilt artifacts under ``work_dir`` and returns their paths and
+    digests."""
+    from . import g1a as _g1a
+    from . import g1b as _g1b
+
+    bundle_dir = Path(bundle_dir)
+    work_dir = Path(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    a_report = _g1a.build_report(
+        bundle_dir / "raw", bundle_dir / "runs", window=window,
+        bundle_dir=bundle_dir, date=date, generated_utc=generated_utc)
+    a_path = work_dir / "g1a_observed_instrument_set.yaml"
+    a_path.write_bytes(yaml.safe_dump(
+        {"observed_instrument_set":
+         a_report["observed_instrument_set"]}).encode("utf-8"))
+    g1a_digest = a_report["observed_instrument_set"]["semantic_digest"]
+
+    b_report, b_rows, b_links = _g1b.build_report(
+        a_path, fitrs_paths, firds_paths, gleif_dir,
+        date=date, generated_utc=generated_utc,
+        expected_g1a_digest=expected_g1a_digest)
+    b_rows_path = work_dir / "g1b_rows.jsonl"
+    b_links_path = work_dir / "g1b_reference_links.jsonl"
+    b_report_path = work_dir / "g1b_report.yaml"
+    b_rows_path.write_bytes(canonical_rows_bytes(b_rows))
+    b_links_path.write_bytes(canonical_links_bytes(b_links))
+    b_report_path.write_bytes(yaml.safe_dump(
+        b_report, sort_keys=False).encode("utf-8"))
+
+    return {
+        "g1a_path": a_path,
+        "g1a_semantic_digest": g1a_digest,
+        "g1b_rows_path": b_rows_path,
+        "g1b_links_path": b_links_path,
+        "g1b_report_path": b_report_path,
+        "g1b_rows_digest": _sha(b_rows_path.read_bytes()),
+        "g1b_links_sha256": _sha(b_links_path.read_bytes()),
+        "g1b_report_sha256": _sha(b_report_path.read_bytes()),
+        "g1b_basis_id": b_report["reference_basis_id"],
+    }
+
+
+DEFAULT_ANCHORS: dict[str, str] = {
+    "g1a_semantic_digest": EXPECTED_G1A_SEMANTIC_DIGEST,
+    "g1b_rows_digest": EXPECTED_G1B_ROWS_DIGEST,
+    "g1b_links_sha256": EXPECTED_G1B_LINKS_SHA256,
+    "g1b_basis_id": EXPECTED_G1B_BASIS_ID,
+}
+
+
+def replay_materialization(
+    bundle_dir: Path,
+    *,
+    fitrs_paths: list[Path],
+    firds_paths: list[Path],
+    gleif_dir: Path,
+    window: dict[str, str],
+    tape_dir: Path,
+    work_dir: Path,
+    date: str,
+    generated_utc: str,
+    anchors: dict[str, str] | None = None,
+    capsule_subjects: list[dict[str, Any]] | None = None,
+    code_commit: str | None = None,
+    rebuild_universe: Any | None = None,
+    c2_authority: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Independent §4.5 replay — the FULL pipeline, indivisible:
+
+    sealed bundle -> G1-A rebuild -> G1-B rebuild (pinned snapshots)
+    -> C1 materialization -> TAPE_MANIFEST emission.
+
+    ``anchors`` pins the rebuilt upstream artifacts to the verified
+    canonical digests (defaults = production constants). The rebuilt
+    G1-B report's own bytes carry build metadata (date/code_commit), so
+    its sha256 is self-derived, while rows/links/basis digests are
+    canonical anchors. ``c2_authority`` supplies the C2 report that
+    capsule-fixture explains authenticate against
+    ``{report_path, expected_sha256}`` — default = the verified repo
+    artifact at ``EXPECTED_C2_REPORT_SHA256``.
+    """
+    bundle_dir = Path(bundle_dir)
+    tape_dir = Path(tape_dir)
+    anchors = dict(anchors or DEFAULT_ANCHORS)
+
+    rebuilt = (rebuild_universe or _rebuild_universe)(
+        bundle_dir, fitrs_paths, firds_paths, gleif_dir, window,
+        work_dir, date=date, generated_utc=generated_utc,
+        expected_g1a_digest=anchors["g1a_semantic_digest"])
+
+    # Anchors: a replay that cannot re-derive the canonical upstream
+    # digests is NOT a reproduction — fail before materializing.
+    for key, name in (("g1a_semantic_digest", "G1-A semantic digest"),
+                      ("g1b_rows_digest", "G1-B rows digest"),
+                      ("g1b_links_sha256", "G1-B reference links"),
+                      ("g1b_basis_id", "G1-B reference basis")):
+        if rebuilt[key] != anchors[key]:
+            raise G1C4Error(
+                f"rebuilt {name} {rebuilt[key]!r} != canonical anchor "
+                f"{anchors[key]!r} — upstream replay diverged")
+
     from .g1c1 import build_report as _c1_build  # local: heavy import
     report, _pub_bytes, _chain_bytes = _c1_build(
-        Path(raw_root), Path(runs_dir), Path(g1a_artifact),
-        Path(g1b_rows), Path(g1b_report), window=window,
-        tape_dir=Path(tape_dir), date=date, generated_utc=generated_utc,
-        **c1_expected)
+        bundle_dir / "raw", bundle_dir / "runs",
+        rebuilt["g1a_path"], rebuilt["g1b_rows_path"],
+        rebuilt["g1b_report_path"], window=window, tape_dir=tape_dir,
+        date=date, generated_utc=generated_utc,
+        expected_g1a_digest=anchors["g1a_semantic_digest"],
+        expected_g1b_digest=anchors["g1b_rows_digest"],
+        expected_g1b_report_sha256=rebuilt["g1b_report_sha256"],
+        expected_g1b_basis_id=anchors["g1b_basis_id"])
+
+    dataset = report["dataset_semantic_digest"]
+    c2 = c2_authority or {}
+    explain_kw = {
+        "c2_report_path": c2.get("report_path") or repo_file(
+            "evidence/g1-c2/G1-C2_as_of_reconstruction.yaml"),
+        "g1b_rows_path": rebuilt["g1b_rows_path"],
+        "g1b_report_path": rebuilt["g1b_report_path"],
+        "g1b_links_path": rebuilt["g1b_links_path"],
+        "expected_c2_report_sha256": c2.get(
+            "expected_sha256", EXPECTED_C2_REPORT_SHA256),
+        "expected_dataset_digest": dataset,
+        "expected_g1b_digest": anchors["g1b_rows_digest"],
+        "expected_g1b_report_sha256": rebuilt["g1b_report_sha256"],
+        "expected_g1b_basis_id": anchors["g1b_basis_id"],
+        "expected_g1b_links_sha256": anchors["g1b_links_sha256"],
+    }
+
+    # Every tape build emits its manifest — indivisible (§4.4).
+    manifest = build_tape_manifest(
+        tape_dir, runs_dir=bundle_dir / "runs", raw_root=bundle_dir / "raw",
+        bundle_dir=bundle_dir, fitrs_paths=fitrs_paths,
+        firds_paths=firds_paths, gleif_dir=gleif_dir,
+        g1b_report_path=rebuilt["g1b_report_path"], window=window,
+        capsule_subjects=capsule_subjects, code_commit=code_commit,
+        expected_g1b_report_sha256=rebuilt["g1b_report_sha256"],
+        expected_g1b_basis_id=anchors["g1b_basis_id"],
+        explain_kw=explain_kw)
+    manifest_path = write_manifest(tape_dir, manifest)
+
+    tables = report["tables"]
     return {
         "tape_dir": str(tape_dir),
-        "publications_rows":
-            report["tables"]["publications"]["row_count"],
-        "trade_chains_rows":
-            report["tables"]["trade_chains"]["row_count"],
+        "g1a_semantic_digest": rebuilt["g1a_semantic_digest"],
+        "g1b_rows_digest": rebuilt["g1b_rows_digest"],
+        "g1b_links_sha256": rebuilt["g1b_links_sha256"],
+        "g1b_basis_id": rebuilt["g1b_basis_id"],
+        "publications_rows": tables["publications"]["row_count"],
+        "trade_chains_rows": tables["trade_chains"]["row_count"],
         "publications_semantic_digest":
-            report["tables"]["publications"]["semantic_digest"],
+            tables["publications"]["semantic_digest"],
         "chains_semantic_digest":
-            report["tables"]["trade_chains"]["semantic_digest"],
-        "dataset_semantic_digest": report["dataset_semantic_digest"],
+            tables["trade_chains"]["semantic_digest"],
+        "dataset_semantic_digest": dataset,
+        "tape_manifest_sha256": _sha(manifest_path.read_bytes()),
     }
 
 
 def reproducibility_check(
-    runs_dir: Path,
-    raw_root: Path,
+    bundle_dir: Path,
     *,
-    g1a_artifact: Path,
-    g1b_rows: Path,
-    g1b_report: Path,
+    fitrs_paths: list[Path],
+    firds_paths: list[Path],
+    gleif_dir: Path,
     window: dict[str, str],
-    tape_roots: list[Path],
-    capsule_subjects: list[dict[str, Any]],
+    replay_roots: list[Path],
+    capsule_subjects: list[dict[str, Any]] | None = None,
     date: str,
     generated_utc: str,
-    explain_kw: dict[str, Any] | None = None,
-    c1_expected: dict[str, Any] | None = None,
+    anchors: dict[str, str] | None = None,
+    rebuild_universe: Any | None = None,
+    c2_authority: dict[str, Any] | None = None,
+    code_commit: str | None = None,
 ) -> dict[str, Any]:
-    """§4.5 gate: N independent materializations from identical sealed
-    inputs MUST produce identical semantic digests and byte-identical
-    representative capsules. Parquet byte-identity is NOT required."""
-    if len(tape_roots) < 2:
+    """§4.5 gate: N independent END-TO-END replays — each rebuilds G1-A
+    from the sealed bundle, G1-B from the rebuilt G1-A + pinned
+    reference snapshots, materializes the tape, and emits its
+    TAPE_MANIFEST — MUST produce identical semantic digests and
+    byte-identical representative capsules. Parquet byte-identity is NOT
+    required."""
+    if len(replay_roots) < 2:
         raise G1C4Error(
             "reproducibility requires at least two independent roots")
     runs: list[dict[str, Any]] = []
-    for root in tape_roots:
+    for root in replay_roots:
+        root = Path(root)
         runs.append(replay_materialization(
-            runs_dir, raw_root, g1a_artifact=g1a_artifact,
-            g1b_rows=g1b_rows, g1b_report=g1b_report, window=window,
-            tape_dir=root, date=date, generated_utc=generated_utc,
-            **(c1_expected or {})))
+            bundle_dir, fitrs_paths=fitrs_paths, firds_paths=firds_paths,
+            gleif_dir=gleif_dir, window=window,
+            tape_dir=root / "tape", work_dir=root / "rebuild",
+            date=date, generated_utc=generated_utc, anchors=anchors,
+            capsule_subjects=capsule_subjects, code_commit=code_commit,
+            rebuild_universe=rebuild_universe,
+            c2_authority=c2_authority))
     ref = runs[0]
     for r in runs[1:]:
-        for key in ("publications_rows", "trade_chains_rows",
-                    "publications_semantic_digest",
-                    "chains_semantic_digest", "dataset_semantic_digest"):
+        for key in r:
+            if key == "tape_dir":
+                continue
             if r[key] != ref[key]:
                 raise G1C4Error(
                     f"materialization {r['tape_dir']} diverged on "
                     f"{key}: {r[key]!r} != {ref[key]!r}")
 
-    kw = explain_kw or {}
-    capsule_sets: list[list[bytes]] = []
-    for root in tape_roots:
-        capsule_sets.append([
-            capsule_bytes(_explain_subject(root, s, kw))
-            for s in capsule_subjects])
-    for i, got in enumerate(capsule_sets[1:], start=1):
-        if got != capsule_sets[0]:
-            raise G1C4Error(
-                f"capsule bytes for materialization {i} diverge from "
-                "root 0 — byte-identical capsule requirement failed")
-
     return {
         "materializations": runs,
+        "g1a_semantic_digest_equal": True,
+        "g1b_rows_digest_equal": True,
+        "g1b_links_equal": True,
+        "g1b_basis_id_equal": True,
         "publications_semantic_digest_equal": True,
         "chains_semantic_digest_equal": True,
         "dataset_semantic_digest_equal": True,
+        "tape_manifests_identical": True,
         "capsule_bytes_byte_identical": True,
+        "capsule_identity_note":
+            "byte-identity across roots proven via identical "
+            "capsule_fixtures in each emitted TAPE_MANIFEST",
         "parquet_byte_equality_required": False,
         "tape_reproducible": True,
     }
@@ -769,9 +1017,9 @@ def generate_report(
     """
     tape_dir = Path(tape_dir)
     manifest = load_manifest(tape_dir)
-    self_res = verify_self(tape_dir, code_commit=code_commit,
+    self_res = verify_self(tape_dir, running_commit=code_commit,
                            explain_kw=explain_kw)
-    full_res = (verify_full(tape_dir, code_commit=code_commit,
+    full_res = (verify_full(tape_dir, running_commit=code_commit,
                             explain_kw=explain_kw, **full_args)
                 if full_args else None)
     repro = reproducibility_check(**repro_args) if repro_args else None
@@ -791,7 +1039,7 @@ def generate_report(
         },
         "generator": {
             "module": "metrics.g1c4",
-            "code_commit": code_commit or _git_head(),
+            "code_commit": _git_head(),
             "deterministic": True,
         },
         "baseline": {
@@ -806,9 +1054,7 @@ def generate_report(
         "reference_set_digests": {
             fam: refs[fam]["set_digest"] for fam in
             ("fitrs", "firds", "gleif")},
-        "reference_basis_id": reference_basis_id(
-            {fam: refs[fam]["set_digest"] for fam in
-             ("fitrs", "firds", "gleif")}),
+        "reference_basis_id": refs["basis_id"],
         "outputs": manifest["outputs"],
         "capsule_fixtures": manifest["capsule_fixtures"],
         "self_verification": self_res,
