@@ -744,7 +744,106 @@ def reproducibility_check(
     }
 
 
-# ----------------------------------------------------------------- CLI --
+# ------------------------------------------------------------ evidence --
+
+REPORT_NAME = "G1-C4_manifest_verify.yaml"
+
+
+def generate_report(
+    tape_dir: Path,
+    *,
+    evidence_dir: Path,
+    date: str,
+    generated_utc: str,
+    code_commit: str | None = None,
+    explain_kw: dict[str, Any] | None = None,
+    full_args: dict[str, Any] | None = None,
+    repro_args: dict[str, Any] | None = None,
+) -> Path:
+    """Emit the G1-C4 evidence report + the TAPE_MANIFEST copy.
+
+    Executes the layers live at generation time: self-verification,
+    full provenance (when ``full_args`` supplies bundle + snapshots),
+    and the §4.5 reproducibility replay (when ``repro_args`` supplies
+    the materialization inputs). Metadata only.
+    """
+    tape_dir = Path(tape_dir)
+    manifest = load_manifest(tape_dir)
+    self_res = verify_self(tape_dir, code_commit=code_commit,
+                           explain_kw=explain_kw)
+    full_res = (verify_full(tape_dir, code_commit=code_commit,
+                            explain_kw=explain_kw, **full_args)
+                if full_args else None)
+    repro = reproducibility_check(**repro_args) if repro_args else None
+
+    refs = manifest["references"]
+    report: dict[str, Any] = {
+        "gate": "G1",
+        "issue_id": "G1-C4",
+        "report": "TAPE_MANIFEST_VERIFY",
+        "date": date,
+        "generated_utc": generated_utc,
+        "frozen_authority": {
+            "spec": "docs/gates/G1.md §4.4/§4.5",
+            "freeze_tag": "g1-freeze-v0",
+            "freeze_commit":
+                "2a5e4684b9a3f6066e6d2a53cbc37b920e2c9ffa",
+        },
+        "generator": {
+            "module": "metrics.g1c4",
+            "code_commit": code_commit or _git_head(),
+            "deterministic": True,
+        },
+        "baseline": {
+            "note": "verified G1-C3 merge on main",
+        },
+        "tape_manifest": {
+            "file": MANIFEST_NAME,
+            "sha256": self_res["tape_manifest_sha256"],
+            "schema_version": manifest["tape_manifest_schema_version"],
+        },
+        "input": manifest["input"],
+        "reference_set_digests": {
+            fam: refs[fam]["set_digest"] for fam in
+            ("fitrs", "firds", "gleif")},
+        "reference_basis_id": reference_basis_id(
+            {fam: refs[fam]["set_digest"] for fam in
+             ("fitrs", "firds", "gleif")}),
+        "outputs": manifest["outputs"],
+        "capsule_fixtures": manifest["capsule_fixtures"],
+        "self_verification": self_res,
+        "full_provenance": full_res or {
+            "status": "NOT_RUN — --bundle/--fitrs/--firds/"
+                      "--gleif-dir not supplied at generation"},
+        "reproducibility": repro or {"status": "NOT_RUN"},
+        "semantics": {
+            "parquet_byte_equality_required": False,
+            "identity_basis":
+                "canonical JSONL semantic digests + canonical capsule "
+                "bytes; physical Parquet bytes are non-authoritative",
+            "self_verify_vs_provenance":
+                "self-verification proves the tape matches its own "
+                "manifest; full provenance authenticates the input "
+                "BYTES (sealed bundle + pinned reference sets)",
+        },
+        "hygiene": {
+            "provider_payloads_in_repo": False,
+            "provider_payloads_in_capsules_or_manifest": False,
+        },
+    }
+    ev = Path(evidence_dir) / "g1-c4"
+    ev.mkdir(parents=True, exist_ok=True)
+    path = ev / REPORT_NAME
+    path.write_bytes(yaml.safe_dump(
+        report, sort_keys=False, allow_unicode=True).encode("utf-8"))
+    sha = _sha(path.read_bytes())
+    (ev / f"{path.stem}.sha256.txt").write_text(
+        f"{sha} *{path.name}\n", encoding="utf-8")
+    # commit a copy of the tape-local manifest (metadata only)
+    (ev / MANIFEST_NAME).write_bytes(
+        (tape_dir / MANIFEST_NAME).read_bytes())
+    return path
+
 
 def _default_authority() -> dict[str, Path]:
     return {
