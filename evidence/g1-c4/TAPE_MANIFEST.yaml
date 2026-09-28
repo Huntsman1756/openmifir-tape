@@ -5465,7 +5465,7 @@ references:
   basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
 generator:
   module: 'metrics.g1c4 (materialization: metrics.g1c1)'
-  code_commit: c8c4a42d386c1872d2ac3d03700a1b23a388890e
+  code_commit: 73c7ef666278d9726d0472477a4245a7d5f824dd
   tape_schema_version: 2
 outputs:
   publications_rows: 52008
@@ -5485,14 +5485,14 @@ capsule_fixtures:
 - subject:
     type: publication
     publication_id: 3b7e5feb3f4a7b2a9e06cfee8d08f24ee16b67138959a29d4ba4502a4ae85c01
-  capsule_sha256: 580226633e2e6d638fb7d079b900a623642920527a571c50f7d3f65293afce20
+  capsule_sha256: 0e1c3c989952c551e93c46320cfea1949183adda9054b16befe75b8648f03ddb
 - subject:
     type: chain
     chain_id: blb_apae|128b6c15-4bde-4a13-ae7b-5cd32ae3b15b
     at: null
-  capsule_sha256: dbba338173f1ba5d2e150eb637d99986af7d1729da2119889ed2c66b941e03cd
+  capsule_sha256: afebace04347106572fcc1c17e212a83082f95221415e12f5c819d70d99b0432
 - subject:
     type: chain
     chain_id: blb_apae|0fce0c7d-3f6f-4259-b62a-369498f19fd3
     at: '2026-09-23T00:00:00Z'
-  capsule_sha256: d2538f053231c44e56840dcbded164dc65a964ac1c390e0249f8a1bdce82b1c5
+  capsule_sha256: 5d7f43122958bd00b134b952303c06da5b6aa2844af32a71276fb1471aea5219
