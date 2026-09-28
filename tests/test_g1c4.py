@@ -198,15 +198,21 @@ def _c4_env(tmp_path, populate, isin_specs, *, mutate_manifest=None,
         subs.append({"type": "chain", "chain_id": chain_id,
                      "at": T_ASOF})
 
-    manifest = build_tape_manifest(
-        tape, runs_dir=runs, raw_root=raw, bundle_dir=bundle,
-        fitrs_paths=sorted(fitrs_dir.iterdir()),
-        firds_paths=sorted(firds_dir.iterdir()),
-        gleif_dir=gleif_dir, g1b_report_path=g1b_report,
-        window=WINDOW, capsule_subjects=subs, code_commit=PIN,
-        expected_g1b_report_sha256=explain_kw[
-            "expected_g1b_report_sha256"],
-        expected_g1b_basis_id=basis, explain_kw=explain_kw)
+    # Pin generator commits INSIDE the artifacts: capsule fixtures and
+    # the manifest's declared code_commit are all computed under PIN, so
+    # the declared fixture digests attest commit PIN.
+    from unittest import mock
+    with mock.patch("metrics.g1c3._git_head", lambda: PIN), \
+            mock.patch("metrics.g1c4._git_head", lambda: PIN):
+        manifest = build_tape_manifest(
+            tape, runs_dir=runs, raw_root=raw, bundle_dir=bundle,
+            fitrs_paths=sorted(fitrs_dir.iterdir()),
+            firds_paths=sorted(firds_dir.iterdir()),
+            gleif_dir=gleif_dir, g1b_report_path=g1b_report,
+            window=WINDOW, capsule_subjects=subs, code_commit=PIN,
+            expected_g1b_report_sha256=explain_kw[
+                "expected_g1b_report_sha256"],
+            expected_g1b_basis_id=basis, explain_kw=explain_kw)
     if mutate_manifest:
         manifest = mutate_manifest(manifest)
     write_manifest(tape, manifest)
@@ -362,11 +368,11 @@ def test_malformed_generator_commit_fails(tmp_path):
                     explain_kw=env2["explain_kw"])
 
 
-def test_verify_at_different_commit_uses_determinism_mode(tmp_path):
+def test_verify_at_different_commit_still_verifies_fixtures(tmp_path):
     """Design fix: the verifier does NOT require HEAD ==
-    declared code_commit. At a different commit, strict fixture-digest
-    equality is not attestable — fixtures fall back to determinism +
-    internal-consistency checks and the result says so."""
+    declared code_commit — but the DECLARED fixture digests are still
+    verified via commit normalization. An intact fixture passes with
+    code_commit_match=false."""
     env = _basic_env(tmp_path)
     res = verify_self(env["tape"], running_commit="cd" * 20,
                       explain_kw=env["explain_kw"])
@@ -376,7 +382,21 @@ def test_verify_at_different_commit_uses_determinism_mode(tmp_path):
     assert gen["code_commit_match"] is False
     fx = next(c for c in res["checks"]
               if c["check"] == "capsule_fixtures")
-    assert "determinism" in fx["mode"]
+    assert "normalized" in fx["mode"]
+
+
+def test_tampered_fixture_at_other_commit_fails(tmp_path):
+    """Mandated adversarial: running_commit B != declared generator A,
+    declared capsule digest = syntactically valid but wrong -> MUST
+    FAIL. The declared digest is always verified."""
+    def flip(m):
+        fx = [dict(f) for f in m["capsule_fixtures"]]
+        fx[0]["capsule_sha256"] = "a" * 64
+        return {**m, "capsule_fixtures": fx}
+    env = _basic_env(tmp_path, mutate_manifest=flip)
+    with pytest.raises(G1C4Error, match=r"declared capsule_sha256"):
+        verify_self(env["tape"], running_commit="cd" * 20,
+                    explain_kw=env["explain_kw"])
 
 
 def test_references_metadata_tampering_fails(tmp_path):

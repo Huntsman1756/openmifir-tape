@@ -44,18 +44,18 @@ semantic digests MUST be identical and representative capsules
 byte-identical. Parquet physical byte-equality is NOT required (writer
 metadata may vary).
 
-Capsule fixtures embed the generator code_commit (C3 capsule design):
-their declared capsule_sha256 is only byte-reproducible when verify runs
-at the manifest's declared commit. ``generator.code_commit`` is a
-provenance record, not a runtime constraint — verify never requires a
-particular checkout; when commits differ, fixtures are verified at
-determinism + internal-consistency level and the report records
-``code_commit_match: false``.
+Capsule fixtures embed the generator code_commit (C3 capsule design).
+The declared capsule_sha256 is verified at ANY commit: the recomputed
+capsule is normalized — ``generator.code_commit`` set to the declared
+commit — before hashing, so declared digests are always checked while
+any other semantic capsule drift still diverges the digest.
+``generator.code_commit`` is a provenance record, not a runtime
+constraint.
 
 Fail-closed on: missing/malformed/wrong-schema manifest, physical
 schema drift (extra/missing/typed columns), row-count or digest
 mismatch, dataset digest mismatch, reference-set/basis inconsistency,
-capsule non-determinism or fixture mismatch at the declared commit,
+capsule non-determinism or fixture declared-digest mismatch,
 malformed generator authority, mutated input/reference bytes, missing
 or unexpected pinned artifact, any structural inconsistency.
 
@@ -65,6 +65,7 @@ Metadata-only: no provider payload bytes are ever parsed or emitted.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import re
@@ -659,6 +660,12 @@ def verify_self(
                            actual["disposition_counts"])
     checks.append({"check": "disposition_counts", "result": "PASS"})
 
+    # Capsule fixtures: the declared capsule_sha256 is verified at ANY
+    # commit — the only commit-dependent field in a C3 capsule is
+    # generator.code_commit, so we recompute under the CURRENT code and
+    # normalize that field to the declared generator commit before
+    # hashing. Any other semantic drift in the capsule still diverges
+    # the digest; tampering the declared digest always fails.
     for fx in manifest["capsule_fixtures"]:
         declared_sha = fx.get("capsule_sha256")
         if not (isinstance(declared_sha, str)
@@ -675,17 +682,18 @@ def verify_self(
                 "deterministic — repeated call produced different bytes")
         if cap_a["capsule_sha256"] != capsule_sha256(cap_a):
             raise G1C4Error("capsule internal digest inconsistency")
-        if commit_match and cap_a["capsule_sha256"] != declared_sha:
+        normalized = copy.deepcopy(cap_a)
+        normalized["generator"]["code_commit"] = declared_commit
+        if capsule_sha256(normalized) != declared_sha:
             raise G1C4Error(
-                f"capsule fixture {fx['subject']!r}: capsule_sha256 "
-                f"{cap_a['capsule_sha256']!r} != declared "
-                f"{declared_sha!r} — capsule evidence tampered")
+                f"capsule fixture {fx['subject']!r}: declared "
+                f"capsule_sha256 {declared_sha!r} does not recompute "
+                "(capsule normalized to the declared generator commit) "
+                "— capsule evidence tampered")
     checks.append({
         "check": "capsule_fixtures", "result": "PASS",
-        "mode": "strict_declared_digest"
-        if commit_match
-        else "determinism_plus_internal_consistency"
-        " (declared digests attest the declared generator commit)",
+        "mode": "declared_digest_verified_at_"
+        f"{'generator' if commit_match else 'normalized'}_commit",
         "fixtures": len(manifest["capsule_fixtures"])})
 
     return {
