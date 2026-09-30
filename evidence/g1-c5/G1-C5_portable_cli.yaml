@@ -1,0 +1,21 @@
+﻿issue_id: G1-C5
+authority: docs/gates/G1.md sections 4.3, 4.4 and 6
+validation:
+  installed_wheel_smoke: PASS
+  isolated_python: true
+  cwd: empty_temporary_directory
+  synthetic_authority: in_memory_test_pins_only
+  explicit_missing_authority: FAIL_CLOSED
+  mutated_reference_links: FAIL_CLOSED
+  focused_existing_tests_passed: 2
+  lint: PASS
+  hygiene: PASS
+  wheel_sha256: 2a35a9e71cb0627d75b8eb6efa9ad42c1dd2f7a276c4a4853d1a4f5625977e61
+performance:
+  default_process_temp_fixture_seconds: 7.773
+  runner_temp_fixture_seconds: 0.051
+  duckdb_default_open_seconds_warm: 0.008
+  change: runner_temp_per_run_and_python_version
+  tests_removed: 0
+packaging: regular_Python_packages_only; no namespace traversal into local_data
+rollback: remove authority-root flags, wheel smoke and CI temp changes; prior tape semantics and artifacts remain valid

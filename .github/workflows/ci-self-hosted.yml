@@ -79,7 +79,7 @@ jobs:
         run: python tools/check_hygiene.py
       - name: Test (offline)
         shell: bash
-        run: python -m pytest
+        run: python -m pytest --basetemp "${{ runner.temp }}/omt-pytest-${{ github.run_id }}-${{ matrix.python-version }}" --durations=10
       - name: Workspace cleanup
         if: always()
         shell: bash
@@ -128,7 +128,7 @@ jobs:
       - name: Repository hygiene (no provider payloads, no secrets)
         run: python tools/check_hygiene.py
       - name: Test (offline)
-        run: python -m pytest
+        run: python -m pytest --basetemp "${{ runner.temp }}/omt-pytest-${{ github.run_id }}-${{ matrix.python-version }}" --durations=10
       - name: Workspace cleanup
         if: always()
         run: |
@@ -177,7 +177,7 @@ jobs:
             print('wheel contents ok')"
       - name: Install wheel (non-editable)
         shell: bash
-        run: pip install dist/openmifir_tape-*.whl
+        run: pip install --force-reinstall dist/openmifir_tape-*.whl
       - name: Smoke — packaged descriptors load from an empty cwd
         shell: bash
         run: |
@@ -192,6 +192,11 @@ jobs:
           printf 'source_id: smoke\nallowed_hosts: [smoke.test]\n' > "$d/smoke.yaml"
           cd "$(mktemp -d)"
           omt-g0a1 --config-dir "$d" --list-sources | grep -qx smoke
+      - name: Audit CLI wheel smoke (offline, explicit portable authority)
+        if: hashFiles('tools/smoke_audit_wheel.py') != ''
+        run: |
+          python -m pip install "pytest>=8"
+          python -I tools/smoke_audit_wheel.py
       - name: Workspace cleanup
         if: always()
         shell: bash
@@ -239,7 +244,7 @@ jobs:
         run: |
           $whl = Get-ChildItem -Path dist -Filter *.whl | Select-Object -First 1
           if (-not $whl) { throw "no wheel built in dist/" }
-          python -m pip install $whl.FullName
+          python -m pip install --force-reinstall $whl.FullName
       - name: Smoke — packaged descriptors load from an empty cwd
         run: |
           $tmp = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ("omt-smoke-" + [guid]::NewGuid().ToString("N")))
@@ -262,6 +267,11 @@ jobs:
             if (-not ($out2 -contains "smoke")) { throw "config-dir override failed: $out2" }
             Write-Output "config-dir override ok"
           } finally { Pop-Location }
+      - name: Audit CLI wheel smoke (offline, explicit portable authority)
+        if: hashFiles('tools/smoke_audit_wheel.py') != ''
+        run: |
+          python -m pip install "pytest>=8"
+          python -I tools/smoke_audit_wheel.py
       - name: Workspace cleanup
         if: always()
         run: |

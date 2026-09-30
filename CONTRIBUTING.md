@@ -2,13 +2,13 @@
 
 Thanks for your interest. This project is specification-driven: before
 changing behavior, read [`AGENTS.md`](AGENTS.md) (permanent project rules) and
-the relevant section of [`docs/gates/G0.md`](docs/gates/G0.md) (frozen
-authority).
+the issue's relevant frozen authority: [`G0`](docs/gates/G0.md) for capture
+baseline work, [`G1`](docs/gates/G1.md) for the active audit-tape gate.
 
 ## Authority hierarchy
 
 ```
-docs/gates/G0.md  (frozen specification)
+docs/gates/G<gate>.md  (frozen specification for the active work item)
         >
 GitHub Issue / task contract
         >
@@ -16,7 +16,7 @@ implementation detail
 ```
 
 Issues define *scope*, not *semantics*. If a change would alter behavior
-frozen by G0.md, that is a spec discussion first — not a PR. Deviations must
+frozen by the applicable gate, that is a spec discussion first — not a PR. Deviations must
 be recorded explicitly in the PR description; silent deviation is not allowed.
 
 ## Ground rules (enforced in CI)
@@ -53,6 +53,12 @@ python tools/check_hygiene.py # repository hygiene guard
 - Inject HTTP via the `HttpGetter` callable; never call real endpoints.
 - Test failure modes and fail-closed behavior, not just happy paths.
 - Do not add tests purely for coverage metrics.
+- CI uses a unique directory under `runner.temp` for synthetic test files,
+  and reports the ten slowest cases. This avoids expensive Windows process-temp
+  filesystem operations without changing test assertions.
+- Installed-wheel audit smoke runs with `python -I`: runtime imports must
+  come from the wheel, synthetic tests supply fixtures only, and explicit
+  missing/mutated metadata authority must fail closed.
 
 ## Pull requests
 

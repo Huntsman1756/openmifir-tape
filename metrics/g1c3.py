@@ -1174,17 +1174,21 @@ def generate_report(
 # ----------------------------------------------------------------- CLI --
 
 def main(argv: list[str] | None = None) -> int:
+    from .authority import audit_paths
+
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--tape-dir", type=Path,
                     default=Path("data/g1/tape"))
+    ap.add_argument("--authority-dir", type=Path,
+                    help="portable root containing curated evidence/ metadata")
     ap.add_argument("--c2-report", type=Path,
-                    default=_DEFAULTS["c2_report_path"])
+                    default=None)
     ap.add_argument("--g1b-rows", type=Path,
-                    default=_DEFAULTS["g1b_rows_path"])
+                    default=None)
     ap.add_argument("--g1b-report", type=Path,
-                    default=_DEFAULTS["g1b_report_path"])
+                    default=None)
     ap.add_argument("--g1b-links", type=Path,
-                    default=_DEFAULTS["g1b_links_path"])
+                    default=None)
     ap.add_argument("--row", help="stable publication id to explain")
     ap.add_argument("--chain", help="chain id to explain")
     ap.add_argument("--at", default=None,
@@ -1205,10 +1209,11 @@ def main(argv: list[str] | None = None) -> int:
                          "the cross-root byte-identity proof (repeatable)")
     args = ap.parse_args(argv)
 
-    kw = {"c2_report_path": args.c2_report,
-          "g1b_rows_path": args.g1b_rows,
-          "g1b_report_path": args.g1b_report,
-          "g1b_links_path": args.g1b_links}
+    paths = audit_paths(args.authority_dir)
+    kw = {"c2_report_path": args.c2_report or paths["c2_report_path"],
+          "g1b_rows_path": args.g1b_rows or paths["g1b_rows_path"],
+          "g1b_report_path": args.g1b_report or paths["g1b_report_path"],
+          "g1b_links_path": args.g1b_links or paths["g1b_links_path"]}
 
     if args.out is not None:
         for name in ("date", "generated_utc", "representatives"):

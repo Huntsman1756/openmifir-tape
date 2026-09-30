@@ -18,8 +18,9 @@ claims market completeness it cannot demonstrate.
 
 ## What it does
 
-The pipeline is organized around the frozen G0 gate specification
-([`docs/gates/G0.md`](docs/gates/G0.md)):
+The verified capture baseline follows frozen [`docs/gates/G0.md`](docs/gates/G0.md).
+The active gate is [`G1`](docs/gates/G1.md): the Explainable Audit Tape over
+the sealed observed corpus, with the same regulatory and lifecycle semantics.
 
 - **Acquisition (G0-A)** — discover, fetch, and persist the *exact* source
   bytes, write-once, with SHA-256 recorded at capture.
@@ -38,6 +39,18 @@ The pipeline is organized around the frozen G0 gate specification
   chains with explicit `supersedes_entry_id` links.
 - **Legal classification (G0-L)** — terms-of-use snapshot classification per
   source (`docs/legal/`).
+
+G1 adds a local Parquet tape queried through embedded DuckDB, point-in-time
+reconstruction, metadata evidence capsules, two-layer offline verification,
+and [source-divergence/observed-fragmentation reports](docs/g1-divergence.md).
+`known_at` is the first eligible observation, distinct from trading and
+publication time. `as_of(T)` rebuilds the ledger; it never filters final heads.
+Reference classification remains the declared frozen `BUILD_SNAPSHOT`.
+
+G1's corpus is one sealed September 2026 window, not a continuously updated
+market dataset. The tape contains all observed regulatory dispositions;
+fragmentation metrics use only INCLUDE instruments. UI, API, historical
+backfill and market-total estimation are outside this gate.
 
 ## Hard rules
 
@@ -94,12 +107,35 @@ loads them without a checkout and regardless of the working directory.
 `--config-dir` overrides the packaged descriptors explicitly; a missing or
 invalid descriptor set fails closed with `ConfigError`.
 
+### Audit the local tape (offline)
+
+```bash
+python -m metrics.g1c2 --tape-dir data/g1/tape --at 2026-09-23T00:00:00Z
+omt-explain --tape-dir data/g1/tape --authority-dir . --chain '<chain-id>'
+omt-verify data/g1/tape --authority-dir .
+omt-fragmentation --tape-dir data/g1/tape --authority-dir . \
+    --at 2026-09-24T07:00:00Z --out evidence/g1-d2
+```
+
+`--authority-dir` points to a root containing the curated `evidence/` layout.
+For an installed wheel outside a checkout, provide that root and the local
+tape explicitly. Missing or changed pinned metadata fails closed; it never
+falls back to another authority root. The wheel contains code and source
+descriptors, not evidence or provider data.
+
+Self-verification checks the tape and declared metadata; it emits full
+provenance `NOT_RUN`. To authenticate original input bytes as well, supply
+`--bundle`, `--fitrs`, `--firds` and `--gleif-dir` to `omt-verify`.
+Two equivalent materializations are required separately for reproducibility.
+
 ### Scheduling
 
 Reference systemd units live in [`ops/systemd/`](ops/systemd); the operator
 runbook is [`ops/A3-runbook.md`](ops/A3-runbook.md). A3 serializes concurrent
 runs with an on-disk lock (`fcntl` on POSIX, `msvcrt` on Windows) and records
 `SKIPPED_LOCKED` events in `data/a3/journal.jsonl`.
+Operational A3 manifests default to `data/a3/evidence/g0-a3/runs/`;
+versioned `evidence/` holds curated gate artifacts only.
 
 ## Development
 
@@ -120,6 +156,7 @@ collectors/     acquisition: sources/, storage, harness, A1/A2/A3 runners
 normalization/  lossless source->normalized mapping, timestamps, quantities
 universe/       es_legal_issuer_v1 resolution, FITRS/FIRDS/GLEIF parsers
 lifecycle/      append-only event ledger, duplicates, evidence
+metrics/        authenticated tape, as-of/explain/verify, observed fragmentation
 fixtures/       synthetic fixtures (no provider payloads)
 config/sources/ per-source endpoints and retrieval intervals
 evidence/       metadata-only gate evidence (manifests, hashes, logs)
