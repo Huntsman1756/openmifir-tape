@@ -77,6 +77,15 @@ Every job validates the SHA format (`^[0-9a-f]{40}$`), checks out
 `git rev-parse HEAD == target_sha` before running anything. The
 `run-name` records the tested SHA.
 
+Tests use a run/version-specific `runner.temp` directory and print slow-case
+durations. On the Windows operator host, the same three-publication fixture
+took 7.773s in the default process temp versus 0.051s under runner temp; mkdir/open dominated
+the slow profile. No test scope or assertion was removed. Wheel jobs force
+a non-editable reinstall before isolated audit-CLI smoke, so an earlier
+editable install cannot make packaging checks pass accidentally. Legacy
+target commits without the audit smoke tool retain their original wheel
+checks; targets containing the tool must pass it.
+
 ## Removing a runner
 
 ```bash

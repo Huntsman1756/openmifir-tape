@@ -582,12 +582,10 @@ def verify_self(
 
     Generator-commit semantics: ``generator.code_commit`` is a PROVENANCE
     record (which commit generated this tape), not a runtime requirement.
-    Verification does not require checking out the declared commit — but
-    capsule-fixture digests embed code_commit, so strict fixture-digest
-    equality only holds when the declared commit equals the running one;
-    otherwise fixtures are verified at determinism level (explain twice
-    -> byte-identical) plus capsule internal digest consistency, and the
-    result records ``generator.code_commit_match``.
+    Verification does not require checking out the declared commit.
+    Capsule fixture digests are always verified after normalizing ONLY
+    generator.code_commit to declared provenance; all other semantic
+    drift still fails. The result records generator.code_commit_match.
     """
     tape_dir = Path(tape_dir)
     manifest = load_manifest(tape_dir)
@@ -1114,6 +1112,8 @@ def _emit_result(result: dict[str, Any]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .authority import audit_paths
+
     ap = argparse.ArgumentParser(
         prog="omt verify",
         description="G1-C4 — tape self-verification + full provenance + "
@@ -1124,6 +1124,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bundle", type=Path, default=None,
                     help="sealed A3 bundle dir (full provenance layer)")
     ap.add_argument("--gleif-dir", type=Path, default=None)
+    ap.add_argument("--authority-dir", type=Path,
+                    help="portable root containing curated evidence/ metadata")
     ap.add_argument("--emit-manifest", action="store_true",
                     help="emit TAPE_MANIFEST.yaml into tape_dir instead "
                          "of verifying")
@@ -1138,6 +1140,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--subjects", default=None,
                     help="JSON capsule_fixtures subjects list")
     args = ap.parse_args(argv)
+    explain_kw = audit_paths(args.authority_dir) if args.authority_dir else None
 
     if args.tape_dir is None:
         ap.error("tape_dir is required")
@@ -1149,6 +1152,8 @@ def main(argv: list[str] | None = None) -> int:
                 ap.error(f"--{name.replace('_', '-')} is required for "
                          "--emit-manifest")
         auth = _default_authority()
+        if explain_kw:
+            auth["g1b_report"] = explain_kw["g1b_report_path"]
         manifest = build_tape_manifest(
             args.tape_dir, runs_dir=args.runs_dir, raw_root=args.raw_root,
             bundle_dir=args.bundle, fitrs_paths=args.fitrs,
@@ -1157,7 +1162,8 @@ def main(argv: list[str] | None = None) -> int:
             window=json.loads(args.window),
             capsule_subjects=json.loads(args.subjects or "[]"),
             expected_g1b_report_sha256=EXPECTED_G1B_REPORT_SHA256,
-            expected_g1b_basis_id=EXPECTED_G1B_BASIS_ID)
+            expected_g1b_basis_id=EXPECTED_G1B_BASIS_ID,
+            explain_kw=explain_kw)
         path = write_manifest(args.tape_dir, manifest)
         print(path)
         return 0
@@ -1175,8 +1181,8 @@ def main(argv: list[str] | None = None) -> int:
     result = (verify_full(args.tape_dir, bundle_dir=args.bundle,
                           fitrs_paths=args.fitrs,
                           firds_paths=args.firds,
-                          gleif_dir=args.gleif_dir)
-              if full else verify_self(args.tape_dir))
+                          gleif_dir=args.gleif_dir, explain_kw=explain_kw)
+              if full else verify_self(args.tape_dir, explain_kw=explain_kw))
     _emit_result(result)
     return 0
 

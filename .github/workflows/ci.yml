@@ -34,7 +34,7 @@ jobs:
       - name: Repository hygiene (no provider payloads, no secrets)
         run: python tools/check_hygiene.py
       - name: Test (offline)
-        run: python -m pytest
+        run: python -m pytest --basetemp "${{ runner.temp }}/omt-pytest-${{ github.run_id }}-${{ matrix.python-version }}" --durations=10
 
   wheel-smoke:
     # The console scripts are a supported surface: the wheel must carry its
@@ -65,7 +65,7 @@ jobs:
             print('wheel contents ok')"
       - name: Install wheel (non-editable)
         shell: bash
-        run: pip install dist/openmifir_tape-*.whl
+        run: pip install --force-reinstall dist/openmifir_tape-*.whl
       - name: Smoke — packaged descriptors load from an empty cwd
         shell: bash
         run: |
@@ -80,3 +80,7 @@ jobs:
           printf 'source_id: smoke\nallowed_hosts: [smoke.test]\n' > "$d/smoke.yaml"
           cd "$(mktemp -d)"
           omt-g0a1 --config-dir "$d" --list-sources | grep -qx smoke
+      - name: Audit CLI wheel smoke (offline, explicit portable authority)
+        run: |
+          python -m pip install "pytest>=8"
+          python -I tools/smoke_audit_wheel.py

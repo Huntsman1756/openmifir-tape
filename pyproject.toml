@@ -49,6 +49,7 @@ omt-verify = "metrics.g1c4:main"
 omt-fragmentation = "metrics.g1d:main"
 
 [tool.setuptools.packages.find]
+namespaces = false
 # `config` is a real package: config/sources/*.yaml are runtime resources
 # (source descriptors) and must travel inside the wheel — a valid install
 # must be able to run the collectors without a checkout. A regular package
