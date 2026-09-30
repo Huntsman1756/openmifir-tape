@@ -99,6 +99,20 @@ Migration after #16 closes:
 A deployment does not declare another verified capture window. A new gate
 window needs its own sealed profile and operational adjudication.
 
+## Verified deployment transport
+
+If the operator cannot authenticate an origin fetch, transfer a git bundle
+from an authenticated workstation. Create it from the verified ref, compare
+its SHA-256 after transfer, fetch the bundle by the exact 40-character SHA,
+and assert FETCH_HEAD equals that SHA before checkout. Record the transport
+and digest in deployment evidence. A bundle transfers repository code and
+metadata; provider storage remains local. It requires no copied login token.
+
+The 2026-09-30 deployment and migration readback are recorded in
+`evidence/g0-a3-h2/`. Both timers remained active after migration, and the
+post-deploy poll wrote only beneath `data/a3/evidence/`; legacy manifests and
+the sealed September bundle were preserved.
+
 ## Exit status / monitoring
 
 Exit 0 = every source SUCCEEDED; exit 1 = any PARTIAL/FAILED/NOT_RUN or a

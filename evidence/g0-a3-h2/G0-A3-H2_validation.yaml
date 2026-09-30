@@ -1,0 +1,38 @@
+issue_id: G0-A3-H2
+authority: docs/gates/G0.md sections 2/8; docs/gates/G1.md section 2 prerequisite
+  hygiene
+prerequisite:
+  issue: 16
+  state: CLOSED
+  verified: true
+  closed_at: '2026-09-30T16:22:42Z'
+tested_revision: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+deployed_revision: 2cedea5525664c4dc0cae513f18d833908ce5688
+runtime_fixtures_workflows_unchanged_from_tested_revision: true
+ci: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828
+python_314_preflight:
+  python: 3.14.4
+  tests_passed: 488
+  test_seconds: 481.27
+  installed_audit_smoke: PASS
+  lint: PASS
+  hygiene: PASS
+  completed_utc: '2026-09-30T15:54:47.414737+00:00'
+transport:
+  kind: authenticated_workstation_git_bundle
+  bundle_sha256: 4753925fced67d8b62496bd7849374fa2f5eb37324c0aacd8d256194bd82a21b
+  remote_digest_equal: true
+  reason: operator origin fetch has no available authentication; no login token copied
+migration:
+  per_file_sha256_verified: true
+  unique_source_and_destination_count: 1402
+  ledger_digest_matches_receipt: true
+  journal_unchanged: true
+  originals_preserved: true
+post_deploy:
+  both_sources: SUCCEEDED
+  new_runtime_root: data/a3/evidence
+  legacy_manifest_set_unchanged: true
+  both_timers_active: true
+capture_window_verification: NOT_CLAIMED
+verdict: PASS

@@ -10,3 +10,4 @@ tests/fixtures/efd2268_descriptors/*.yaml text eol=lf
 # renormalizing those would churn their recorded sidecar hashes — out of scope.)
 evidence/**/*.jsonl text eol=lf
 evidence/g1-*/** text eol=lf
+evidence/g0-a3-h2/** text eol=lf

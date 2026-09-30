@@ -1,0 +1,22 @@
+{
+  "issue_id": "G0-A3-H2",
+  "old_commit": "efd2268cfd9b120df9c89818d778e5813247a0c1",
+  "new_commit": "2cedea5525664c4dc0cae513f18d833908ce5688",
+  "started_utc": "2026-09-30T16:26:37.083818+00:00",
+  "verdict": "PASS",
+  "journal_sha256_before": "dbbd2ed0341e44ab6f0a2d8cf4a6b31cd500fc9bae46d1eb6ef5d80e7e1821fd",
+  "migrated_manifests": 1402,
+  "tracked_manifests_excluded": 3,
+  "all_copies_sha256_verified": true,
+  "originals_preserved": true,
+  "installed_module": "/opt/openmifir-tape/.venv/lib/python3.14/site-packages/collectors/a3.py",
+  "installed_runtime_default": "data/a3/evidence",
+  "journal_sha256_after_migration": "dbbd2ed0341e44ab6f0a2d8cf4a6b31cd500fc9bae46d1eb6ef5d80e7e1821fd",
+  "python": "Python 3.14.4",
+  "timers_active": {
+    "omt-a3-poll.timer": true,
+    "omt-a3-rolling.timer": true
+  },
+  "finished_utc": "2026-09-30T16:26:43.674517+00:00",
+  "migration_ledger_sha256": "de595c03fc990e1e0067df19c1eab0975681d90d17ecc2a879cc18a373ea451d"
+}
