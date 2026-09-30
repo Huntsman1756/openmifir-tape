@@ -1,0 +1,54 @@
+{
+  "code_commit": "bbdce3a2d5dda7edcff361eebd0fa30a5f23e185",
+  "tape": "data\\g1\\tape",
+  "tape_manifest_sha256": "c83eca8be81312a815dca09875f029ff6012f884eefbb86d48bdfd90d668e659",
+  "self_verification": "PASS",
+  "full_provenance": "NOT_RUN \u2014 supply --bundle and reference snapshot dirs to authenticate input bytes",
+  "checks": [
+    {
+      "check": "generator_authority",
+      "result": "PASS",
+      "declared_commit": "73c7ef666278d9726d0472477a4245a7d5f824dd",
+      "running_commit": "bbdce3a2d5dda7edcff361eebd0fa30a5f23e185",
+      "code_commit_match": false
+    },
+    {
+      "check": "table_physical_schema",
+      "result": "PASS"
+    },
+    {
+      "check": "references_internal_consistency",
+      "result": "PASS"
+    },
+    {
+      "check": "table_row_counts",
+      "result": "PASS"
+    },
+    {
+      "check": "publications_semantic_digest",
+      "result": "PASS"
+    },
+    {
+      "check": "chains_semantic_digest",
+      "result": "PASS"
+    },
+    {
+      "check": "dataset_semantic_digest",
+      "result": "PASS"
+    },
+    {
+      "check": "disposition_counts",
+      "result": "PASS"
+    },
+    {
+      "check": "capsule_fixtures",
+      "result": "PASS",
+      "mode": "declared_digest_verified_at_normalized_commit",
+      "fixtures": 3
+    }
+  ],
+  "every_publication_trace_fields_valid": true,
+  "publication_rows": 52008,
+  "distinct_ledger_entries": 52008,
+  "seconds": 53.92
+}

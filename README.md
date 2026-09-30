@@ -19,7 +19,7 @@ claims market completeness it cannot demonstrate.
 ## What it does
 
 The verified capture baseline follows frozen [`docs/gates/G0.md`](docs/gates/G0.md).
-The active gate is [`G1`](docs/gates/G1.md): the Explainable Audit Tape over
+The audit gate is [`G1`](docs/gates/G1.md): the Explainable Audit Tape over
 the sealed observed corpus, with the same regulatory and lifecycle semantics.
 
 - **Acquisition (G0-A)** — discover, fetch, and persist the *exact* source
@@ -51,6 +51,9 @@ G1's corpus is one sealed September 2026 window, not a continuously updated
 market dataset. The tape contains all observed regulatory dispositions;
 fragmentation metrics use only INCLUDE instruments. UI, API, historical
 backfill and market-total estimation are outside this gate.
+
+See the [project status and continuation decisions](docs/project-status.md) and
+the [formal G1 evaluation](evidence/g1-d3/G1-D3_gate_evaluation.yaml).
 
 ## Hard rules
 
