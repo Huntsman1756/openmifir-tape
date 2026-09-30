@@ -1,0 +1,18 @@
+{
+  "issue_id": "G2-A4",
+  "parent_issue": 47,
+  "authority": "docs/gates/G2.md#G2-A",
+  "frozen_tag": "g2-freeze-v0",
+  "state": "LOCAL_CHECKS_PASSED_CI_PENDING",
+  "checks": {
+    "command": "python -m pytest tests/g2 --basetemp <local-C-drive-temp>",
+    "passed": 18,
+    "ruff": "passed"
+  },
+  "runtime_harness": "N/A: pure offline library boundary, exercised with authenticated synthetic files",
+  "rollback": "Remove metrics/g2_authority.py, tests/g2 and this unit evidence; no existing runtime call sites or data migrations.",
+  "limitations": [
+    "Not full G2-A1; no admission registry yet",
+    "No acquisition or operational completeness claim"
+  ]
+}
