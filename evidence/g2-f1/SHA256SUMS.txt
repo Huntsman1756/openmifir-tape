@@ -1,1 +1,2 @@
 28b215dfdeb9391413bb2ae49e359eb9d8653ad3aa6aa6d5c16f1c02c5541eb6  G2-F1_specification_review.yaml
+f2dc5864a6c2413b0bd1297e6e3885889071d4f513a83cd9651e467378cfdfac  G2-F1_work_contracts.yaml

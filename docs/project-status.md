@@ -60,6 +60,10 @@ Su congelación habilita contratos de trabajo; G2 sigue pendiente de
 implementación y evidencia operativa. El primer trabajo es G2-A1; los
 dependientes avanzan tras verificar sus predecesores. La adjudicación A3
 se abre cuando el operador ya haya acumulado los días requeridos.
+Los [contratos registrados](../evidence/g2-f1/G2-F1_work_contracts.yaml)
+parten de [G2-A1 #47](https://github.com/Huntsman1756/openmifir-tape/issues/47),
+que está listo para comenzar. Referencias #48, builds #49, auditoría #50,
+perfil #51 y evaluación #52 esperan verificación de sus dependencias.
 
 La evidencia de CI comprueba código y fixtures; la salud del VPS requiere su
 propio readback. El [despliegue verificado](../evidence/g0-a3-h2/G0-A3-H2_deployment.json)
