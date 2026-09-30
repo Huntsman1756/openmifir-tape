@@ -3,7 +3,8 @@
 Thanks for your interest. This project is specification-driven: before
 changing behavior, read [`AGENTS.md`](AGENTS.md) (permanent project rules) and
 the issue's relevant frozen authority: [`G0`](docs/gates/G0.md) for capture
-baseline work, [`G1`](docs/gates/G1.md) for the active audit-tape gate.
+baseline work, [`G1`](docs/gates/G1.md) for the verified audit tape,
+and [`G2`](docs/gates/G2.md) for successor temporal/history work.
 
 ## Authority hierarchy
 

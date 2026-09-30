@@ -1,0 +1,49 @@
+issue_id: G2-F1
+scope: SPECIFICATION_FREEZE_ONLY
+specification_sha256: f947b3d7e95b1d3ccca1438e075abf172ad68b1ce420691fcd6e9d14ea7c94b2
+baseline_spec_git_blobs_unchanged:
+  g0-freeze-v1: 75c451bab63d1046066af70f9e0e1be19e1d541a
+  g1-freeze-v0: 6bd44d6d8a55286571a41dc53ad1a49fa6ff1e16
+documentation_validation:
+  local_links_checked: 30
+  explicit_unique_anchors:
+  - G2-A
+  - G2-B
+  - G2-C
+  - G2-D
+  - G2-F
+  pass_criteria: 10
+  balanced_fences: true
+  result: PASS
+review:
+  method: sequential self-review against frozen authority and implementation; not
+    independent review
+  counterexamples_addressed:
+  - duplicate/conflicting run attestation
+  - backdating admission
+  - future/untimed/missing reference basis
+  - reference-only reclassification
+  - G0-D occurrence-ID instability
+  - late publication and cancellation
+  - full versus incremental build identity
+  - future build context versus historical view digest
+  - source-bound gaps versus market completeness
+  - interruption and second-ingest atomicity
+  status: CONTRACT_REVIEWED_NOT_RUNTIME_IMPLEMENTED
+ci:
+  runtime_files_unchanged_from_tested_revision: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+  reference: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828
+  matrix_jobs_passed: 8
+  fresh_runtime_matrix: NOT_RUN; documentation-only changes
+runtime_harness: N/A; no runtime behavior, provider request, deployment or operating
+  profile changed
+new_design_choices:
+- prospective half-open windows with unchanged inclusive G1 origin
+- observed reference knowledge, not inferred legal effective-time history
+- stable capture publication identities with scoped unchanged G0-D ledger reconstruction
+- 'strict additional-window outcome: no unrecoverable in-window gaps'
+- parent execution lineage excluded from semantic build identity
+gate_status: G2_NOT_IMPLEMENTED_NOT_PASS
+freeze_tag: g2-freeze-v0 after reviewed PR merge
+rollback: remove the new specification, its links and planning receipts; retire derived
+  contracts; do not rewrite issued freeze tags

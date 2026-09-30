@@ -11,3 +11,5 @@ tests/fixtures/efd2268_descriptors/*.yaml text eol=lf
 evidence/**/*.jsonl text eol=lf
 evidence/g1-*/** text eol=lf
 evidence/g0-a3-h2/** text eol=lf
+evidence/g2-f1/** text eol=lf
+docs/gates/G2.md text eol=lf
