@@ -18,4 +18,21 @@ records through G0-D. Materialized heads cannot supply historical authority.
 Reference classification is explicitly BUILD_SNAPSHOT. Economic keys are
 hashed in emitted metadata; no prices, quantities or raw records are emitted.
 
-The report/CLI and real-corpus evidence are the next work unit (G1-D2).
+## Authenticated full-window report
+
+```bash
+omt-fragmentation --tape-dir data/g1/tape --at 2026-09-24T07:00:00Z \
+    --out evidence/g1-d2
+```
+
+This emits observed aggregates, a metadata JSONL ledger and SHA256SUMS.
+The tape, G1-B disposition/reference authority, C4 manifest and C1 input
+census are authenticated before use. It does not repeat full byte-level
+input provenance verification: use `omt-verify` with the original bundle
+and reference files for that layer.
+
+The census covers the full sealed window, so the report requires T at or
+after its evidence tail. Historical reconstructions use the divergence
+core; the full-window census must not become historical observation evidence.
+Installed packages can supply `--authority-dir <root>` pointing to the
+curated `evidence/` layout, independently of the working directory.
