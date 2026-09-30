@@ -1,0 +1,571 @@
+issue_id: G1-D2
+report: OBSERVED_FRAGMENTATION_MEASURED
+authority: docs/gates/G1.md sections 4.2/5; g1-freeze-v0
+known_at: '2026-09-24T07:00:00.000000Z'
+reference_basis: BUILD_SNAPSHOT
+generator:
+  module: metrics.g1d
+  code_commit: 969e53115a13da761e62925939f61d30368cab1b
+input:
+  a3_bundle_sha256: d9efcfd9f62758ca8d967f4a3e799542b5e64306e98a3575813a8382a37fb611
+  a3_bundle_sums_file: SHA256SUMS.txt
+  eligible_manifest_digest: 6012480a7d7d2be932239d34222ba27a7e9aaa9411f0155d72459d3c1a8b4169
+  eligible_manifests: 776
+  capture_window_utc:
+    operational_start: '2026-09-16T09:42:46Z'
+    evidence_tail_end: '2026-09-24T07:00:00Z'
+  census:
+    manifests_total: 825
+    manifests_eligible: 776
+    object_observations_eligible: 12029
+    unique_capture_versions_eligible: 8268
+    pre_window_manifests_excluded: 3
+    post_tail_manifests_excluded: 46
+    malformed_out_of_window_manifests: 0
+  unparseable_capture_versions:
+  - source_id: bme_apa
+    source_object_id: 2026-09-21-bmea-posttrade.json
+    capture_version: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    reason: JSONDecodeError
+dataset_semantic_digest: ecb1cd7bca5a645783ae6053e57c8a0af0b98421c810111e61117678abbbcee8
+reference_basis_id: 9374a21cea087416378c7685d89501b3d49fa7af2728375422dce9fb6287beb8
+reference_set_digests:
+  fitrs: 80988c859fcb0334a1bb793b50d12fac396c7e2f15db6d9cec95a09074db6468
+  firds: 80a40e4aafffb96aad112de72ac1773283ebc5f3074927f69ee962fb3becef8b
+  gleif: 9fa654e6fdf6646f10ffe7e7121d35d38266ff176ff255f2f46b8341137d6772
+authority_hashes:
+  tape_manifest: c83eca8be81312a815dca09875f029ff6012f884eefbb86d48bdfd90d668e659
+  c1_census_report: 35b4dbea5b829d9e91882e9e03f9d7cc8beb24467ed385d5e6b3c93f7d2d99c8
+  g1b_rows: 1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8
+  g1b_links: 6fc07be6952ac48f7820af1286ead636222113c048ac8b0e624ee5167ecc51c1
+regulatory_dispositions:
+  basis: ALL_OBSERVED_IDENTIFIERS_BUILD_SNAPSHOT
+  branch_counts:
+    CONFLICT: 4418
+    EXCLUDE: 2764
+    INCLUDE: 135
+    QUARANTINE: 760
+  quarantine_conflict_reasons:
+    MISSING_BOND_TYPE: 71
+    MISSING_ISSUER_LEI: 4
+    MISSING_MIFIR_ID: 685
+    NON_ES_LEGAL_JURISDICTION: 4418
+metrics:
+  scope:
+    basis: OBSERVED_INCLUDE_INSTRUMENT_SET
+    observed_include_isins:
+    - AU3CB0334902
+    - AU3CB0336857
+    - AU3CB0336865
+    - ES0213679OP3
+    - ES0224244139
+    - ES0243307024
+    - ES0244251056
+    - ES0265936064
+    - ES0265936080
+    - ES0280907033
+    - ES0344251022
+    - ES0380907073
+    - ES0505223570
+    - ES0505531402
+    - ES0505548505
+    - ES0505548588
+    - ES0505628588
+    - ES0505769333
+    - ES0530625310
+    - ES05329456O9
+    - ES05329456S0
+    - ES05329456Z5
+    - ES05329457G3
+    - ES05329457K5
+    - ES05329457N9
+    - ES0840609020
+    - ES0840609038
+    - ES0840609061
+    - ES0865936035
+    - US05946KAF84
+    - US05946KAN19
+    - US05946KAX90
+    - US05946KBA88
+    - US05964HAS40
+    - US05964HAU95
+    - US05964HAY18
+    - US05964HBC88
+    - US05964HBE45
+    - US05971KAG40
+    - US05971KAT60
+    - US05971KAV17
+    - US05971KAW99
+    - US05971KAY55
+    - US12803RAP91
+    - US87938WAW38
+    - US88087AAA60
+    - USE0R75RAB28
+    - USE4181LAA91
+    - USE7S78BAB82
+    - USE90508AA52
+    - XS1512827095
+    - XS1627343186
+    - XS1684805556
+    - XS1725678194
+    - XS2063247915
+    - XS2078692105
+    - XS2079713322
+    - XS2081500907
+    - XS2083976139
+    - XS2101349723
+    - XS2112289207
+    - XS2113889351
+    - XS2120087452
+    - XS2298304499
+    - XS2300292963
+    - XS2300293003
+    - XS2355632584
+    - XS2355632667
+    - XS2383811424
+    - XS2385393405
+    - XS2393518597
+    - XS2430998893
+    - XS2468952879
+    - XS2484587048
+    - XS2534785865
+    - XS2553801502
+    - XS2555187801
+    - XS2558916693
+    - XS2558978883
+    - XS2573712044
+    - XS2575952697
+    - XS2579493037
+    - XS2580221658
+    - XS2582860909
+    - XS2588884481
+    - XS2630417124
+    - XS2634826031
+    - XS2648498371
+    - XS2652072864
+    - XS2699159278
+    - XS2705604077
+    - XS2722162315
+    - XS2726256113
+    - XS2743029253
+    - XS2745719000
+    - XS2747065030
+    - XS2751667150
+    - XS2762369549
+    - XS2784661675
+    - XS2790910272
+    - XS2805351843
+    - XS2817323749
+    - XS2837803928
+    - XS2905583014
+    - XS2908177145
+    - XS2908735504
+    - XS2933536034
+    - XS2947089012
+    - XS2949317676
+    - XS2978779176
+    - XS2979643991
+    - XS2984222989
+    - XS3007624417
+    - XS3029358317
+    - XS3029558676
+    - XS3071245644
+    - XS3071337847
+    - XS3089767183
+    - XS3090080733
+    - XS3103589670
+    - XS3107209259
+    - XS3168187576
+    - XS3171675393
+    - XS3192216540
+    - XS3193932699
+    - XS3195078251
+    - XS3224600232
+    - XS3226545617
+    - XS3277147834
+    - XS3285006634
+    - XS3359635391
+    - XS3382738600
+    - XS3385893956
+    - XS3396961289
+    - XS3429140398
+    count: 135
+  records_by_source:
+    bme_apa: 647
+    blb_apae: 143
+  observed_publication_utc_range_by_source:
+    blb_apae:
+      min: '2026-09-15T08:33:31.802790+00:00'
+      max: '2026-09-23T16:31:56.106417+00:00'
+    bme_apa:
+      min: '2026-09-10T10:45:37.693466+00:00'
+      max: '2026-09-24T06:18:04.392281+00:00'
+  unique_trades:
+    by_source:
+      bme_apa: 118
+      blb_apae: 127
+    definition: G0-D ledger chain (build_ledger + reconstruct_chains); chain head
+      = chain[-1] under ledger ordering including entry_id tie-break. Records without
+      a transaction id are UNCHAINABLE singletons. Rescans of the same publication
+      collapse into one chain.
+    unchainable_singletons_by_source:
+      bme_apa: 0
+      blb_apae: 0
+    head_state_distribution_by_source:
+      bme_apa:
+        CANCELLED: 1
+        DEFERRED: 6
+        FULLY_PUBLISHED: 110
+        PARTIALLY_PUBLISHED: 1
+      blb_apae:
+        AMENDED: 8
+        FULLY_PUBLISHED: 55
+        PARTIALLY_PUBLISHED: 64
+  unique_isins:
+    by_source:
+      bme_apa:
+      - ES0213679OP3
+      - ES0224244139
+      - ES0243307024
+      - ES0244251056
+      - ES0265936080
+      - ES0280907033
+      - ES0344251022
+      - ES0380907073
+      - ES0505223570
+      - ES0505531402
+      - ES0505548505
+      - ES0505548588
+      - ES0505628588
+      - ES0505769333
+      - ES0530625310
+      - ES05329456O9
+      - ES05329456S0
+      - ES05329456Z5
+      - ES05329457G3
+      - ES05329457K5
+      - ES05329457N9
+      - ES0840609020
+      - ES0840609038
+      - ES0865936035
+      - XS1512827095
+      - XS1684805556
+      - XS1725678194
+      - XS2079713322
+      - XS2081500907
+      - XS2112289207
+      - XS2113889351
+      - XS2298304499
+      - XS2300292963
+      - XS2383811424
+      - XS2385393405
+      - XS2430998893
+      - XS2468952879
+      - XS2534785865
+      - XS2553801502
+      - XS2555187801
+      - XS2558978883
+      - XS2573712044
+      - XS2580221658
+      - XS2588884481
+      - XS2630417124
+      - XS2634826031
+      - XS2699159278
+      - XS2745719000
+      - XS2751667150
+      - XS2762369549
+      - XS2784661675
+      - XS2905583014
+      - XS2978779176
+      - XS2979643991
+      - XS3007624417
+      - XS3029358317
+      - XS3071245644
+      - XS3071337847
+      - XS3089767183
+      - XS3171675393
+      - XS3193932699
+      - XS3195078251
+      - XS3226545617
+      - XS3277147834
+      - XS3382738600
+      - XS3385893956
+      - XS3396961289
+      - XS3429140398
+      blb_apae:
+      - AU3CB0334902
+      - AU3CB0336857
+      - AU3CB0336865
+      - ES0265936064
+      - ES0840609061
+      - US05946KAF84
+      - US05946KAN19
+      - US05946KAX90
+      - US05946KBA88
+      - US05964HAS40
+      - US05964HAU95
+      - US05964HAY18
+      - US05964HBC88
+      - US05964HBE45
+      - US05971KAG40
+      - US05971KAT60
+      - US05971KAV17
+      - US05971KAW99
+      - US05971KAY55
+      - US12803RAP91
+      - US87938WAW38
+      - US88087AAA60
+      - USE0R75RAB28
+      - USE4181LAA91
+      - USE7S78BAB82
+      - USE90508AA52
+      - XS1627343186
+      - XS2063247915
+      - XS2078692105
+      - XS2079713322
+      - XS2083976139
+      - XS2101349723
+      - XS2120087452
+      - XS2300293003
+      - XS2355632584
+      - XS2355632667
+      - XS2393518597
+      - XS2484587048
+      - XS2558916693
+      - XS2575952697
+      - XS2579493037
+      - XS2582860909
+      - XS2648498371
+      - XS2652072864
+      - XS2705604077
+      - XS2722162315
+      - XS2726256113
+      - XS2743029253
+      - XS2747065030
+      - XS2790910272
+      - XS2805351843
+      - XS2817323749
+      - XS2837803928
+      - XS2908177145
+      - XS2908735504
+      - XS2933536034
+      - XS2947089012
+      - XS2949317676
+      - XS2978779176
+      - XS2984222989
+      - XS3029358317
+      - XS3029558676
+      - XS3090080733
+      - XS3103589670
+      - XS3107209259
+      - XS3168187576
+      - XS3192216540
+      - XS3224600232
+      - XS3285006634
+      - XS3359635391
+      - XS3429140398
+    intersection:
+    - XS2079713322
+    - XS2978779176
+    - XS3029358317
+    - XS3429140398
+    source_exclusive:
+      bme_apa:
+      - ES0213679OP3
+      - ES0224244139
+      - ES0243307024
+      - ES0244251056
+      - ES0265936080
+      - ES0280907033
+      - ES0344251022
+      - ES0380907073
+      - ES0505223570
+      - ES0505531402
+      - ES0505548505
+      - ES0505548588
+      - ES0505628588
+      - ES0505769333
+      - ES0530625310
+      - ES05329456O9
+      - ES05329456S0
+      - ES05329456Z5
+      - ES05329457G3
+      - ES05329457K5
+      - ES05329457N9
+      - ES0840609020
+      - ES0840609038
+      - ES0865936035
+      - XS1512827095
+      - XS1684805556
+      - XS1725678194
+      - XS2081500907
+      - XS2112289207
+      - XS2113889351
+      - XS2298304499
+      - XS2300292963
+      - XS2383811424
+      - XS2385393405
+      - XS2430998893
+      - XS2468952879
+      - XS2534785865
+      - XS2553801502
+      - XS2555187801
+      - XS2558978883
+      - XS2573712044
+      - XS2580221658
+      - XS2588884481
+      - XS2630417124
+      - XS2634826031
+      - XS2699159278
+      - XS2745719000
+      - XS2751667150
+      - XS2762369549
+      - XS2784661675
+      - XS2905583014
+      - XS2979643991
+      - XS3007624417
+      - XS3071245644
+      - XS3071337847
+      - XS3089767183
+      - XS3171675393
+      - XS3193932699
+      - XS3195078251
+      - XS3226545617
+      - XS3277147834
+      - XS3382738600
+      - XS3385893956
+      - XS3396961289
+      blb_apae:
+      - AU3CB0334902
+      - AU3CB0336857
+      - AU3CB0336865
+      - ES0265936064
+      - ES0840609061
+      - US05946KAF84
+      - US05946KAN19
+      - US05946KAX90
+      - US05946KBA88
+      - US05964HAS40
+      - US05964HAU95
+      - US05964HAY18
+      - US05964HBC88
+      - US05964HBE45
+      - US05971KAG40
+      - US05971KAT60
+      - US05971KAV17
+      - US05971KAW99
+      - US05971KAY55
+      - US12803RAP91
+      - US87938WAW38
+      - US88087AAA60
+      - USE0R75RAB28
+      - USE4181LAA91
+      - USE7S78BAB82
+      - USE90508AA52
+      - XS1627343186
+      - XS2063247915
+      - XS2078692105
+      - XS2083976139
+      - XS2101349723
+      - XS2120087452
+      - XS2300293003
+      - XS2355632584
+      - XS2355632667
+      - XS2393518597
+      - XS2484587048
+      - XS2558916693
+      - XS2575952697
+      - XS2579493037
+      - XS2582860909
+      - XS2648498371
+      - XS2652072864
+      - XS2705604077
+      - XS2722162315
+      - XS2726256113
+      - XS2743029253
+      - XS2747065030
+      - XS2790910272
+      - XS2805351843
+      - XS2817323749
+      - XS2837803928
+      - XS2908177145
+      - XS2908735504
+      - XS2933536034
+      - XS2947089012
+      - XS2949317676
+      - XS2984222989
+      - XS3029558676
+      - XS3090080733
+      - XS3103589670
+      - XS3107209259
+      - XS3168187576
+      - XS3192216540
+      - XS3224600232
+      - XS3285006634
+      - XS3359635391
+    unobserved_in_capture: []
+  trades:
+    economic_candidate_groups: []
+    source_exclusive_chains:
+      blb_apae: 127
+      bme_apa: 118
+  notional_by_source:
+    bme_apa:
+      chains_with_parseable_notional: 117
+      unparseable_notional_heads: 1
+      heads_with_ambiguous_or_missing_currency: 0
+      sum_by_currency:
+        EUR: '107766143.84'
+      cancelled_heads: 1
+      sum_by_currency_excluding_cancelled_heads:
+        EUR: '105766143.84'
+    blb_apae:
+      chains_with_parseable_notional: 127
+      unparseable_notional_heads: 0
+      heads_with_ambiguous_or_missing_currency: 0
+      sum_by_currency:
+        AUD: '703500000'
+        EUR: '100540000'
+        GBP: '22500000'
+        USD: '198073669.2916'
+      cancelled_heads: 0
+      sum_by_currency_excluding_cancelled_heads:
+        AUD: '703500000'
+        EUR: '100540000'
+        GBP: '22500000'
+        USD: '198073669.2916'
+  interpretation_limits:
+    no_completeness_inference: Metrics describe observations inside one intact capture
+      only; nothing here estimates or bounds market completeness.
+    no_market_share_inference: Source-exclusive sets and intersections are relations
+      between two observed sets of publications; they are not market share and do
+      not support share-like reasoning.
+    no_absence_of_trading_inference: An unobserved sample ISIN means 'not observed
+      in an intact capture'; it never means the instrument did not trade.
+    no_low_n_generalization: Low-count source-exclusive observations describe this
+      sample only and must not be generalized.
+  no_coverage_claim: true
+source_divergence:
+  file: G1-D2_source_divergence.jsonl
+  rows: 245
+  sha256: 8b65a298a5d5fa00d9d2d48353d51f9a5657368c66a05b9643b08d8ad7566f4c
+  semantic_digest: 8e67e084e40bc877ca3cd15aa8955fde95bf9188691ab53ce9b9050abb500d2d
+  membership_basis: observed INCLUDE instrument source set at known_at
+  candidate_basis: G0-E economic head key; candidates never merged
+  class_counts: {}
+interpretation_limits:
+  labels:
+  - NO_COVERAGE_CLAIM
+  - NO_MARKET_SHARE_INFERENCE
+  - NO_ABSENCE_OF_TRADING_INFERENCE
+  no_completeness_inference: Metrics describe observations inside one intact capture
+    only; nothing here estimates or bounds market completeness.
+  no_market_share_inference: Source-exclusive sets and intersections are relations
+    between two observed sets of publications; they are not market share and do not
+    support share-like reasoning.
+  no_absence_of_trading_inference: An unobserved sample ISIN means 'not observed in
+    an intact capture'; it never means the instrument did not trade.
+  no_low_n_generalization: Low-count source-exclusive observations describe this sample
+    only and must not be generalized.
+full_provenance: NOT_RUN; use omt-verify with the sealed bundle and reference files
+semantic_digest: 3134d48f02f9f2145ee7e90a7a2fe19bff2a33c2ca3a004d289700345167529b
