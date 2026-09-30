@@ -15,7 +15,7 @@ python -m metrics.g1_gate --ci evidence/g1-d3/CI_verified.json \
 G0 dispone de una ventana sellada y verificada. G1 completa el laboratorio
 local de auditoría sobre ese corpus: universo observado, disposiciones,
 tape Parquet, reconstrucción temporal, cápsulas y divergencia entre fuentes.
-El cierre formal se registra en
+El cierre formal `PASS` se registra en
 [la evaluación de los diez criterios](../evidence/g1-d3/G1-D3_gate_evaluation.yaml).
 
 | Área | Estado comprobado | Continuación útil |
@@ -55,5 +55,10 @@ G4 requiere una decisión de producto; una interfaz ahora no resolvería las
 limitaciones temporales ni los permisos pendientes.
 
 La evidencia de CI comprueba código y fixtures; la salud del VPS requiere su
-propio readback. Esta revisión no constituye un pentest ni una auditoría de
+propio readback. El [despliegue verificado](../evidence/g0-a3-h2/G0-A3-H2_deployment.json)
+del 30 de septiembre instaló `2cedea5`, migró 1.402 manifiestos con SHA-256,
+conservó originales y journal, y mantuvo ambos timers activos. La primera
+ronda posterior terminó `SUCCEEDED` para ambas fuentes y escribió en
+`data/a3/evidence/`. Este readback no declara otra ventana de captura verificada.
+Esta revisión no constituye un pentest ni una auditoría de
 seguridad exhaustiva.

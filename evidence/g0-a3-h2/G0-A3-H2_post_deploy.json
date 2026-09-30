@@ -1,0 +1,47 @@
+{
+  "issue_id": "G0-A3-H2",
+  "code_commit": "2cedea5525664c4dc0cae513f18d833908ce5688",
+  "started_utc": "2026-09-30T16:28:05.146052+00:00",
+  "finished_utc": "2026-09-30T16:28:08.818062+00:00",
+  "verdict": "PASS",
+  "service_start_exit": 0,
+  "service": {
+    "ActiveState": "inactive",
+    "Result": "success",
+    "ExecMainStartTimestamp": "Wed 2026-09-30 18:28:05 CEST",
+    "ExecMainExitTimestamp": "Wed 2026-09-30 18:28:08 CEST",
+    "ExecMainStatus": "0"
+  },
+  "timers_active": {
+    "omt-a3-poll.timer": true,
+    "omt-a3-rolling.timer": true
+  },
+  "legacy_evidence_unchanged": true,
+  "new_runtime_manifests": [
+    {
+      "file": "data/a3/evidence/g0-a3/runs/20260930T162805Z__blb_apae__manifest.yaml",
+      "sha256": "6538f69d1fb290397b28290cb4855a3aa9f5733b4d4a6f054a57be5e1b9ba10a",
+      "run_id": "20260930T162805Z",
+      "source_id": "blb_apae",
+      "status": "SUCCEEDED",
+      "observed_at": "2026-09-30T16:28:05.348218+00:00",
+      "object_count": 1,
+      "created_count": 1,
+      "already_present_count": 0,
+      "error_count": 0
+    },
+    {
+      "file": "data/a3/evidence/g0-a3/runs/20260930T162805Z__bme_apa__manifest.yaml",
+      "sha256": "dac4a6b9df0e13ea641cd9ad190eec3f2fd44adbb5b0271c810b788994b5ba86",
+      "run_id": "20260930T162805Z",
+      "source_id": "bme_apa",
+      "status": "SUCCEEDED",
+      "observed_at": "2026-09-30T16:28:05.348218+00:00",
+      "object_count": 1,
+      "created_count": 0,
+      "already_present_count": 1,
+      "error_count": 0
+    }
+  ],
+  "capture_window_verification": "NOT_CLAIMED"
+}
