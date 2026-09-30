@@ -5,7 +5,9 @@ from metrics.g1_gate import EXPECTED_JOBS, ci_ready, evaluate
 
 def receipt():
     return {"status": "completed", "conclusion": "success",
-            "jobs": [{"name": name, "conclusion": "success"} for name in sorted(EXPECTED_JOBS)]}
+            "target_sha": "a" * 40,
+            "jobs": [{"name": name, "conclusion": "success", "checkout_assertion": "success",
+                      "checkout_sha": "a" * 40} for name in sorted(EXPECTED_JOBS)]}
 
 
 def test_pending_failed_or_missing_matrix_leg_cannot_verify_gate():
@@ -15,6 +17,8 @@ def test_pending_failed_or_missing_matrix_leg_cannot_verify_gate():
     assert not ci_ready([{**good, "status": "queued"}])
     assert not ci_ready([{**good, "conclusion": "failure"}])
     assert not ci_ready([{**good, "jobs": good["jobs"][:-1]}])
+    assert not ci_ready([{**good, "target_sha": "b" * 40}])
+    assert not ci_ready([{**good, "jobs": good["jobs"] + good["jobs"][:1]}])
 
 
 def test_empty_evidence_cannot_pass_even_with_green_ci(tmp_path):

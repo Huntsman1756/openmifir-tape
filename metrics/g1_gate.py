@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import yaml
@@ -34,8 +35,12 @@ EXPECTED_JOBS = {f"test-{platform} ({version})" for platform in ("linux", "windo
 def ci_ready(receipts: list[dict]) -> bool:
     return bool(receipts) and all(
         r.get("status") == "completed" and r.get("conclusion") == "success"
+        and re.fullmatch(r"[0-9a-f]{40}", r.get("target_sha", "")) is not None
         and {j["name"] for j in r.get("jobs", [])} == EXPECTED_JOBS
-        and all(j.get("conclusion") == "success" for j in r["jobs"])
+        and len(r["jobs"]) == len(EXPECTED_JOBS)
+        and all(j.get("conclusion") == "success"
+                and j.get("checkout_assertion") == "success"
+                and j.get("checkout_sha") == r["target_sha"] for j in r["jobs"])
         for r in receipts)
 
 
