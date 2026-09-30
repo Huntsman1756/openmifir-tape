@@ -1,0 +1,55 @@
+issue_id: G2-F1
+freeze_tag: g2-freeze-v0
+freeze_pr: 46
+freeze_commit: 1ef54a33fcc8ef6123b6308648d95c13469bfafb
+contracts:
+- id: G2-A1
+  number: 47
+  url: https://github.com/Huntsman1756/openmifir-tape/issues/47
+  authority: docs/gates/G2.md#G2-A
+  dependency_issues: []
+  state_at_creation: ready-for-agent
+- id: G2-B1
+  number: 48
+  url: https://github.com/Huntsman1756/openmifir-tape/issues/48
+  authority: docs/gates/G2.md#G2-B
+  dependency_issues:
+  - 47
+  state_at_creation: planned
+- id: G2-C1
+  number: 49
+  url: https://github.com/Huntsman1756/openmifir-tape/issues/49
+  authority: docs/gates/G2.md#G2-C
+  dependency_issues:
+  - 47
+  - 48
+  state_at_creation: planned
+- id: G2-C2
+  number: 50
+  url: https://github.com/Huntsman1756/openmifir-tape/issues/50
+  authority: docs/gates/G2.md#G2-C
+  dependency_issues:
+  - 49
+  state_at_creation: planned
+- id: G2-A2
+  number: 51
+  url: https://github.com/Huntsman1756/openmifir-tape/issues/51
+  authority: docs/gates/G2.md#G2-A
+  dependency_issues:
+  - 47
+  - 48
+  - 49
+  - 50
+  state_at_creation: planned
+- id: G2-D1
+  number: 52
+  url: https://github.com/Huntsman1756/openmifir-tape/issues/52
+  authority: docs/gates/G2.md#G2-D
+  dependency_issues:
+  - 50
+  - 51
+  state_at_creation: planned
+operational_adjudication_A3: NOT_OPENED; scheduled evidence has not accrued under
+  a G2 profile
+gate_status: G2_NOT_IMPLEMENTED_NOT_PASS
+status_readback: PASS
