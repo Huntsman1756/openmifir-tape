@@ -312,7 +312,11 @@ def write_run_evidence(
     result: SourceRunResult,
     run_id: str,
 ) -> Path:
-    """Persist a metadata-only run manifest under evidence/g0-a3/runs/."""
+    """Persist a metadata-only manifest under the operator's evidence root.
+
+    The CLI defaults to gitignored data/a3/evidence; repository evidence/
+    contains curated gate artifacts only (G0-A3-H1, issue #16).
+    """
     runs_dir = evidence_dir / "g0-a3" / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
@@ -454,7 +458,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config-dir", type=Path, default=None,
                         help="source descriptors dir (default: packaged config/sources resource)")
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parser.add_argument("--evidence-dir", type=Path, default=Path("evidence"))
+    parser.add_argument("--evidence-dir", type=Path, default=Path("data/a3/evidence"),
+                        help="runtime metadata root, separate from versioned evidence/")
     parser.add_argument("--journal", type=Path, default=Path("data/a3/journal.jsonl"))
     parser.add_argument("--lock-file", type=Path, default=Path("data/a3/.runner.lock"))
     args = parser.parse_args(argv)

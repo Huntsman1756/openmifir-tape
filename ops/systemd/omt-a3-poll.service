@@ -8,4 +8,4 @@ Type=oneshot
 WorkingDirectory=/opt/openmifir-tape
 ExecStart=/opt/openmifir-tape/.venv/bin/python -m collectors.a3 --mode poll
 # Non-zero exit means a source run was not SUCCEEDED; journal + run manifest
-# under evidence/g0-a3/runs/ carry the failure record.
+# under data/a3/evidence/g0-a3/runs/ carry the failure record.

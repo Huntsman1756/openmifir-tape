@@ -1,0 +1,17 @@
+﻿issue_id: G0-A3-H1
+authority: docs/gates/G0.md sections 2 and 8; docs/gates/G1.md section 2
+runtime_root: data/a3/evidence
+curated_root: evidence
+validation:
+  command: python -m pytest tests/test_a3_runner.py -q --durations=5
+  tests_passed: 11
+  fresh_checkout_seeding: prevented_by_separate_default_root
+  lint: PASS
+  hygiene: PASS
+operational_readback:
+  deployed_commit: efd2268cfd9b120df9c89818d778e5813247a0c1
+  untracked_operational_manifests: 1394
+  tracked_smoke_manifests: 3
+  timers: active
+  deployment: NOT_RUN_before_issue_closure
+rollback: restore collectors/a3.py default and operator documentation; preserve all raw bytes and manifests
