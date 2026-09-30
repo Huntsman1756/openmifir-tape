@@ -231,3 +231,25 @@ def test_evidence_and_journal_are_metadata_only(tmp_path: Path):
     rec = json.loads(journal.read_text().strip())
     assert rec["source_id"] == FAKE3 and rec["mode"] == "poll"
     assert rec["status"] == "SUCCEEDED" and rec["created"] == 1
+
+
+def test_cli_runtime_default_cannot_be_seeded_by_checkout(tmp_path, monkeypatch):
+    from collectors.a3 import main
+
+    monkeypatch.chdir(tmp_path)
+    curated = tmp_path / "evidence/g0-a3/runs/smoke.yaml"
+    curated.parent.mkdir(parents=True)
+    curated.write_text("historical: true\n", encoding="utf-8")
+    _FakeA3Adapter.reset()
+    _FakeA3Adapter.objects = [_obj("o.json", None)]
+    monkeypatch.setitem(sources.ADAPTERS, "bme_apa", _FakeA3Adapter)
+    conf = _conf(allowed_hosts=["example.test"])
+    monkeypatch.setattr("collectors.a3.load_all_sources", lambda _: {"bme_apa": conf})
+
+    assert main(["--mode", "poll", "--source", "bme_apa"]) == 0
+    runtime = tmp_path / "data/a3/evidence/g0-a3/runs"
+    manifests = list(runtime.glob("*.yaml"))
+    assert len(manifests) == 1
+    assert yaml.safe_load(manifests[0].read_text())["results"]["source_id"] == "bme_apa"
+    assert curated.read_text() == "historical: true\n"
+    assert not (runtime / "smoke.yaml").exists()
