@@ -60,6 +60,13 @@ Its freeze does not mean implementation or G2 PASS. The bounded contracts
 follow G2 section 6; prospective operating windows require verified tooling
 and a frozen profile first.
 
+G2-A1 input authority is verified: sealed profiles, exact attestations,
+append-only admission planning and the pinned G1 origin import.
+See the [offline input guide](docs/g2-input-authority.md) and
+[implementation evidence](evidence/g2-a1/G2-A1_validation.json).
+Timed references, incremental builds, historical views and prospective
+operational evidence remain subsequent G2 work.
+
 ## Hard rules
 
 These are enforced, not aspirational (see [`AGENTS.md`](AGENTS.md)):

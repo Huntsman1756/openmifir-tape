@@ -1,0 +1,107 @@
+{
+  "databaseId": 36761619582,
+  "status": "completed",
+  "conclusion": "success",
+  "displayTitle": "self-hosted \u00b7 6c070834ea10fec8b60a089bbda8f23673a03e9a \u00b7 G2-A1-calendar-corrected",
+  "headSha": "7e67ecf6e0c2912d8aaf08f4c28ae78db33de79f",
+  "url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36761619582",
+  "target_sha": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+  "jobs": [
+    {
+      "name": "wheel-smoke-windows",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36761619582/job/110045350272",
+      "startedAt": "2026-09-30T18:52:31Z",
+      "completedAt": "2026-09-30T18:52:57Z",
+      "checkout_sha": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+      "installed_g1_audit_smoke": "PASS",
+      "installed_g2_authority_smoke": "PASS"
+    },
+    {
+      "name": "test-windows (3.12)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36761619582/job/110045350530",
+      "startedAt": "2026-09-30T18:52:59Z",
+      "completedAt": "2026-09-30T19:01:34Z",
+      "checkout_sha": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+      "tests_passed": 536,
+      "test_seconds": 476.25
+    },
+    {
+      "name": "test-linux (3.13)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36761619582/job/110045350537",
+      "startedAt": "2026-09-30T18:52:17Z",
+      "completedAt": "2026-09-30T18:56:38Z",
+      "checkout_sha": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+      "tests_passed": 536,
+      "test_seconds": 244.89
+    },
+    {
+      "name": "wheel-smoke-linux",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36761619582/job/110045350540",
+      "startedAt": "2026-09-30T18:52:02Z",
+      "completedAt": "2026-09-30T18:52:15Z",
+      "checkout_sha": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+      "installed_g1_audit_smoke": "PASS",
+      "installed_g2_authority_smoke": "PASS"
+    },
+    {
+      "name": "test-linux (3.12)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36761619582/job/110045350568",
+      "startedAt": "2026-09-30T18:56:40Z",
+      "completedAt": "2026-09-30T19:01:10Z",
+      "checkout_sha": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+      "tests_passed": 536,
+      "test_seconds": 254.54
+    },
+    {
+      "name": "test-linux (3.11)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36761619582/job/110045350625",
+      "startedAt": "2026-09-30T19:01:12Z",
+      "completedAt": "2026-09-30T19:05:16Z",
+      "checkout_sha": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+      "tests_passed": 536,
+      "test_seconds": 228.97
+    },
+    {
+      "name": "test-windows (3.13)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36761619582/job/110045350710",
+      "startedAt": "2026-09-30T19:01:35Z",
+      "completedAt": "2026-09-30T19:10:01Z",
+      "checkout_sha": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+      "tests_passed": 536,
+      "test_seconds": 461.53
+    },
+    {
+      "name": "test-windows (3.11)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36761619582/job/110045350754",
+      "startedAt": "2026-09-30T19:10:02Z",
+      "completedAt": "2026-09-30T19:19:24Z",
+      "checkout_sha": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+      "tests_passed": 536,
+      "test_seconds": 518.86
+    }
+  ],
+  "covered_work_units": [
+    "33ba21dd6a11195fce52e814100d7d591d84a699",
+    "793c53aab20bef194396cdae22dce6ebc187c68c",
+    "436519323ca12c4a3de084ae650c84af57caf392",
+    "36fa325487ba02d8b2661e31043627539799041c",
+    "0d29e1c68b354eb4a907f76357aa9dc04baf1d14",
+    "6c070834ea10fec8b60a089bbda8f23673a03e9a"
+  ]
+}

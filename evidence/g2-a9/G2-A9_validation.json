@@ -1,0 +1,12 @@
+{
+  "issue_id": "G2-A9",
+  "authority": "docs/gates/G2.md#G2-A",
+  "implementation_verdict": "VERIFIED",
+  "parent_receipt": "../g2-a1/G2-A1_validation.json",
+  "ci_target": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+  "documentation_leaf_runtime_changes": "NONE",
+  "focused_tests": 48,
+  "matrix_tests_per_combination": 536,
+  "runtime_harness": "Two authenticated real G1 imports with exact same digest/census; synthetic missing-identifier counterexample.",
+  "rollback": "Remove this documentation/evidence leaf; runtime unchanged."
+}

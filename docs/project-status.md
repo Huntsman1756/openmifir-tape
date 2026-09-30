@@ -20,7 +20,7 @@ El cierre formal `PASS` se registra en
 
 | Área | Estado comprobado | Continuación útil |
 | --- | --- | --- |
-| Backend y datos | Python, Parquet y DuckDB; ledger append-only y reconstrucción as-of | Conservar esta base; diseñar G2 antes de incorporar ventanas nuevas o referencias temporales |
+| Backend y datos | Python, Parquet y DuckDB; ledger append-only y reconstrucción as-of | Conservar esta base; implementar G2 bajo su contrato congelado antes de incorporar ventanas nuevas o referencias temporales |
 | Auditoría | Explain, verificación propia, replay de procedencia y divergencia offline | Utilizar las CLI con autoridad explícita y conservar los insumos privados que permiten el replay |
 | Frontend y API | Fuera del alcance de G1 | Definir usuarios, consultas y gate G4 antes de construir una superficie de producto |
 | Infraestructura | Captura local con dos timers; evidencia operativa separada de la versionada | Desplegar sólo revisiones verificadas y registrar cada migración; las capturas nuevas no heredan la verificación de septiembre |
@@ -48,7 +48,7 @@ Antes de una publicación de datos derivados habría que resolver los permisos
 aplicables y definir el producto autorizado.
 
 Conviene mantener lo construido y continuar por gates. La siguiente línea
-con más utilidad es especificar G2: nuevas ventanas selladas, conservación de
+con más utilidad es implementar G2: nuevas ventanas selladas, conservación de
 referencias por fecha, continuidad y tratamiento explícito de gaps. G3 puede
 añadir comparaciones cuando exista una fuente y un contrato verificables.
 G4 requiere una decisión de producto; una interfaz ahora no resolvería las
@@ -57,13 +57,22 @@ limitaciones temporales ni los permisos pendientes.
 La especificación de [G2](gates/G2.md) define ventanas prospectivas,
 referencias observadas por fecha, builds inmutables y consultas históricas.
 Su congelación habilita contratos de trabajo; G2 sigue pendiente de
-implementación y evidencia operativa. El primer trabajo es G2-A1; los
+verificación de implementación y evidencia operativa. El primer trabajo es G2-A1; los
 dependientes avanzan tras verificar sus predecesores. La adjudicación A3
 se abre cuando el operador ya haya acumulado los días requeridos.
 Los [contratos registrados](../evidence/g2-f1/G2-F1_work_contracts.yaml)
 parten de [G2-A1 #47](https://github.com/Huntsman1756/openmifir-tape/issues/47),
-que está listo para comenzar. Referencias #48, builds #49, auditoría #50,
-perfil #51 y evaluación #52 esperan verificación de sus dependencias.
+que está verificado. Referencias #48 es la siguiente línea habilitada;
+builds #49, auditoría #50, perfil #51 y evaluación #52 esperan sus dependencias.
+
+G2-A1 cuenta con validación de perfiles y bundles, selección exacta de
+atestaciones, registro de admisión append-only, importación del origen G1
+y reconciliación de descriptores/journal. Las [funciones offline](g2-input-authority.md)
+se comprueban con 48 pruebas sintéticas locales. El origen real se ha importado
+dos veces con el mismo digest y censo. La [evidencia A1](../evidence/g2-a1/G2-A1_validation.json)
+registra 536 pruebas en cada combinación Linux/Windows y Python 3.11–3.13,
+además de los controles del wheel instalado en ambos sistemas.
+No se ha iniciado una nueva ventana prospectiva ni desplegado este código.
 
 La evidencia de CI comprueba código y fixtures; la salud del VPS requiere su
 propio readback. El [despliegue verificado](../evidence/g0-a3-h2/G0-A3-H2_deployment.json)

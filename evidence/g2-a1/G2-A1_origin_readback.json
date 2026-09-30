@@ -1,0 +1,100 @@
+{
+  "report": "G2_A1_PINNED_ORIGIN_READBACK",
+  "runs": [
+    {
+      "authority": "docs/gates/G2.md#G2-A",
+      "origin_binding": {
+        "authority": "docs/gates/G1.md#G1-A",
+        "bundle_id": "g0-a3-bundle-20260924T181127Z",
+        "bundle_manifest_sha256": "d9efcfd9f62758ca8d967f4a3e799542b5e64306e98a3575813a8382a37fb611",
+        "selection_rule": "[operational_start, evidence_tail_end]",
+        "reference_classification": "LEGACY_BUILD_SNAPSHOT"
+      },
+      "original_selection_census": {
+        "manifests_total": 825,
+        "manifests_eligible": 776,
+        "object_observations_eligible": 12029,
+        "unique_capture_versions_eligible": 8268,
+        "pre_window_manifests_excluded": 3,
+        "post_tail_manifests_excluded": 46,
+        "malformed_out_of_window_manifests": 0
+      },
+      "g2_selection_census": {
+        "manifests_total": 825,
+        "manifests_eligible": 776,
+        "manifests_excluded": 49,
+        "object_attestations": 12029,
+        "unique_captures": 8268,
+        "parse_failures": 1,
+        "records_total": 52008,
+        "records_without_identifier": 0
+      },
+      "admission_verdict": "ADMITTED_WITH_PARSE_DIAGNOSTICS",
+      "registry_semantic_digest": "1518e2280ccf880cabbd2ef1abeb78099db3cd42c34092ff30ee0eab03ea634f",
+      "attestations": 12029,
+      "captures": 8268,
+      "memberships": 12029,
+      "elapsed_seconds": 1395.16,
+      "verified_at": "2026-09-30T18:54:47.979955+00:00",
+      "limits": [
+        "Read-only import; no new acquisition",
+        "Original inclusive observation basis compared exactly",
+        "Legacy references remain untimed; no G2 PASS"
+      ],
+      "code_commit": "0d29e1c68b354eb4a907f76357aa9dc04baf1d14",
+      "authenticated_original_files": 24500
+    },
+    {
+      "authority": "docs/gates/G2.md#G2-A",
+      "origin_binding": {
+        "authority": "docs/gates/G1.md#G1-A",
+        "bundle_id": "g0-a3-bundle-20260924T181127Z",
+        "bundle_manifest_sha256": "d9efcfd9f62758ca8d967f4a3e799542b5e64306e98a3575813a8382a37fb611",
+        "selection_rule": "[operational_start, evidence_tail_end]",
+        "reference_classification": "LEGACY_BUILD_SNAPSHOT"
+      },
+      "original_selection_census": {
+        "manifests_total": 825,
+        "manifests_eligible": 776,
+        "object_observations_eligible": 12029,
+        "unique_capture_versions_eligible": 8268,
+        "pre_window_manifests_excluded": 3,
+        "post_tail_manifests_excluded": 46,
+        "malformed_out_of_window_manifests": 0
+      },
+      "g2_selection_census": {
+        "manifests_total": 825,
+        "manifests_eligible": 776,
+        "manifests_excluded": 49,
+        "object_attestations": 12029,
+        "unique_captures": 8268,
+        "parse_failures": 1,
+        "records_total": 52008,
+        "records_without_identifier": 0
+      },
+      "admission_verdict": "ADMITTED_WITH_PARSE_DIAGNOSTICS",
+      "registry_semantic_digest": "1518e2280ccf880cabbd2ef1abeb78099db3cd42c34092ff30ee0eab03ea634f",
+      "attestations": 12029,
+      "captures": 8268,
+      "memberships": 12029,
+      "elapsed_seconds": 58.62,
+      "verified_at": "2026-09-30T18:56:02.855229+00:00",
+      "limits": [
+        "Read-only import; no new acquisition",
+        "Original inclusive observation basis compared exactly",
+        "Legacy references remain untimed; no G2 PASS"
+      ],
+      "code_commit": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+      "authenticated_original_files": 24500,
+      "phase_seconds": {
+        "sealed_entries": 16.05,
+        "g1_selection": 12.58,
+        "g2_selection": 29.75,
+        "admission": 0.2
+      },
+      "phase_instrumentation": "Metadata timing wrappers; no semantic modification"
+    }
+  ],
+  "semantic_comparison": "EXACT_MATCH",
+  "performance_limit": "Elapsed time varied between these local Windows runs; cause not established; no throughput or freshness SLA inferred."
+}

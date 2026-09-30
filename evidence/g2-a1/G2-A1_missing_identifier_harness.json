@@ -1,0 +1,18 @@
+{
+  "scenario": "SYNTHETIC_MISSING_IDENTIFIER",
+  "result": "PASS",
+  "census": {
+    "manifests_total": 1,
+    "manifests_eligible": 1,
+    "manifests_excluded": 0,
+    "object_attestations": 1,
+    "unique_captures": 1,
+    "parse_failures": 0,
+    "records_total": 1,
+    "records_without_identifier": 1
+  },
+  "admission_verdict": "ADMITTED_WITH_PARSE_DIAGNOSTICS",
+  "limits": [
+    "Synthetic fixture only; no provider payload or acquisition"
+  ]
+}
