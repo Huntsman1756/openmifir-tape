@@ -38,7 +38,8 @@ margin — the runner errs toward over-capture, never under-capture.
 |-----------------------------|-------------------------------------------------|
 | `data/raw/`                 | immutable raw payloads (gitignored, write-once) |
 | `data/a3/journal.jsonl`     | one JSON record per source run (catch-up log)   |
-| `evidence/g0-a3/runs/`      | metadata-only per-run manifests (committable)   |
+| `data/a3/evidence/g0-a3/runs/` | operational run manifests (gitignored) |
+| `evidence/` | curated, metadata-only gate artifacts (committable) |
 
 ## VPS install (systemd)
 
@@ -74,20 +75,29 @@ schtasks /create /tn "omt-a3-rolling" /sc daily /st 06:15 `
   /tr "\"<repo>\\.venv\\Scripts\\python.exe\" -m collectors.a3 --mode rolling" /ru <user>
 ```
 
-## Version pinning — active G0-A3 window
+## Evidence isolation and deployment
 
-For the G0-A3 capture window started on 2026-09-16,
-`vpro-prod` is pinned to `efd2268`.
+The September G0-A3 window is closed; its sealed bundle remains immutable.
+The deployed collector stays at `efd2268` until issue #16 is verified and
+closed. The new runtime metadata root is `data/a3/evidence/`; manifests
+are written beneath it at `g0-a3/runs/`. Never use the tracked `evidence/`
+root for operational capture. Historical smoke artifacts remain in git.
 
-The hardening merge on `main` (`ee32fe8`) is intentionally not deployed
-during this window.
+Migration after #16 closes:
 
-Do not change the deployed collector before A3 verification closes.
-If an emergency deploy is required, record the exact deployed commit SHA
-and UTC deployment timestamp in A3 evidence.
+1. Stop both timers; wait for active collector services to finish.
+2. Preserve raw objects, the journal and the existing evidence directory.
+3. Copy only untracked operational manifests from the old runs directory
+   into `data/a3/evidence/g0-a3/runs/`. Obtain that list using
+   `git ls-files --others --exclude-standard -- evidence/g0-a3/runs/`.
+   Do not copy tracked smoke artifacts. Refuse different existing targets;
+   verify each copied file's SHA-256. Keep the originals.
+4. Install the exact verified commit. Check the runtime root with
+   `omt-g0a3 --help`, restart the timers, and record old/new SHAs, UTC
+   deployment time, migrated manifest count and hashes in curated evidence.
 
-After A3 closes, update `vpro-prod` to the then-current `main` and update
-or remove this active-window note.
+A deployment does not declare another verified capture window. A new gate
+window needs its own sealed profile and operational adjudication.
 
 ## Exit status / monitoring
 
@@ -100,7 +110,7 @@ Inspect:
 ## End of window
 
 After 5 trading days accrue, open the G0-A3 verification issue. Evidence =
-`evidence/g0-a3/runs/` manifests + `data/a3/journal.jsonl` (no unexplained
+`data/a3/evidence/g0-a3/runs/` manifests + `data/a3/journal.jsonl` (no unexplained
 gaps; outages must have catch-up evidence or be classified as unrecoverable
 source-bound gaps). For Bloomberg specifically, verify poll continuity against
 the effective historical depth observed in rolling manifests; do not assume a
