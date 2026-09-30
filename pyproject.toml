@@ -46,6 +46,7 @@ omt-g0a3 = "collectors.a3:main"
 omt-sample-validation = "universe.sample_validation:main"
 omt-explain = "metrics.g1c3:main"
 omt-verify = "metrics.g1c4:main"
+omt-fragmentation = "metrics.g1d:main"
 
 [tool.setuptools.packages.find]
 # `config` is a real package: config/sources/*.yaml are runtime resources
