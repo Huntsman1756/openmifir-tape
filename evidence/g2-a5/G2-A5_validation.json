@@ -1,0 +1,17 @@
+{
+  "issue_id": "G2-A5",
+  "parent_issue": 47,
+  "authority": "docs/gates/G2.md#G2-A",
+  "state": "LOCAL_CHECKS_PASSED_CI_PENDING",
+  "checks": {
+    "focused_total": 29,
+    "new_selection_tests": 11,
+    "ruff": "passed"
+  },
+  "runtime_harness": "Offline synthetic RawStore + authenticated YAML selection; no network.",
+  "rollback": "Remove metrics/g2_selection.py, tests/g2/test_selection.py and unit receipts; predecessor profile validation stays callable.",
+  "limits": [
+    "No operational PASS",
+    "Admission registry and G1 pinned origin adapter pending"
+  ]
+}
