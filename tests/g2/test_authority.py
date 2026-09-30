@@ -21,7 +21,7 @@ def test_profile_copy_and_canonical_digest(window):
     ("start", "2026-10-01T00:00:00"),
     ("end", "2026-10-03T01:00:00+01:00"),
     ("sources", ["bme_apa", "bme_apa"]),
-    ("expected_trading_dates", ["2026-10-04"]),
+    ("expected_trading_dates", ["2026-13-04"]),
     ("expected_trading_dates", ["20261001"]),
     ("schedule_authority", "guessed retry policy"),
 ])
@@ -66,3 +66,8 @@ def test_timing_and_tail_are_independent(window):
     with pytest.raises(AuthorityError, match="tail"):
         profile(window)
     assert utc("2026-10-01T00:00:00Z").isoformat().endswith("+00:00")
+
+
+def test_expected_trading_dates_are_not_an_observation_filter(window):
+    window["expected_trading_dates"] = ["2026-09-30"]
+    assert profile(window)["expected_trading_dates"] == ["2026-09-30"]

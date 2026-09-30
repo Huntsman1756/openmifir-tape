@@ -94,9 +94,8 @@ def profile(value: Any) -> dict:
         parsed_dates = [date.fromisoformat(d) for d in dates]
     except ValueError as exc:
         raise AuthorityError("invalid trading date") from exc
-    if (dates != sorted(set(dates)) or any(d.isoformat() != s for d, s in zip(parsed_dates, dates, strict=True))
-            or any(not start.date() <= d <= subject_end.date() for d in parsed_dates)):
-        raise AuthorityError("trading dates must be canonical, unique and in subject interval")
+    if dates != sorted(set(dates)) or any(d.isoformat() != s for d, s in zip(parsed_dates, dates, strict=True)):
+        raise AuthorityError("trading dates must be canonical and unique")
     if doc["schedule_authority"] != "docs/gates/G0.md#G0-A":
         raise AuthorityError("schedule/rescan/retry authority must remain G0-A")
     text(doc["profile_version"], "profile_version")

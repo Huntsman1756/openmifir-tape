@@ -1,0 +1,11 @@
+{
+  "authority": "docs/gates/G2.md#G2-A",
+  "issue_id": "G2-A10",
+  "parent_issue": 47,
+  "state": "LOCAL_CHECKS_PASSED_CI_PENDING",
+  "focused_tests": 48,
+  "ruff": "passed",
+  "review": "Sequential self-review found an inferred calendar-containment restriction not imposed by frozen G2. Explicit trading dates may precede the observation interval.",
+  "rollback": "Revert this bounded validation/test change; no operator state touched.",
+  "runtime_harness": "Synthetic prior-day expected date accepted while UTC/profile/tail checks remain exercised."
+}
