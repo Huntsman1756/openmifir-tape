@@ -1,0 +1,18 @@
+{
+  "issue_id": "G2-A7",
+  "parent_issue": 47,
+  "authority": "docs/gates/G2.md#G2-A",
+  "state": "LOCAL_CHECKS_PASSED_CI_PENDING",
+  "checks": {
+    "focused_total": 39,
+    "new_origin_tests": 2,
+    "ruff": "passed"
+  },
+  "runtime_harness": "Authenticated synthetic G1 bundle, original inclusive selector and exact replay; production pin never relaxed.",
+  "rollback": "Remove g2_origin and its tests/receipts; predecessor registry and G0/G1 code unchanged.",
+  "limits": [
+    "Real pinned origin readback pending",
+    "No timed-reference basis inferred from legacy snapshots",
+    "No prospective operational completeness"
+  ]
+}
