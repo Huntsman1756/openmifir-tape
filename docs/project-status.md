@@ -54,6 +54,13 @@ añadir comparaciones cuando exista una fuente y un contrato verificables.
 G4 requiere una decisión de producto; una interfaz ahora no resolvería las
 limitaciones temporales ni los permisos pendientes.
 
+La especificación de [G2](gates/G2.md) define ventanas prospectivas,
+referencias observadas por fecha, builds inmutables y consultas históricas.
+Su congelación habilita contratos de trabajo; G2 sigue pendiente de
+implementación y evidencia operativa. El primer trabajo es G2-A1; los
+dependientes avanzan tras verificar sus predecesores. La adjudicación A3
+se abre cuando el operador ya haya acumulado los días requeridos.
+
 La evidencia de CI comprueba código y fixtures; la salud del VPS requiere su
 propio readback. El [despliegue verificado](../evidence/g0-a3-h2/G0-A3-H2_deployment.json)
 del 30 de septiembre instaló `2cedea5`, migró 1.402 manifiestos con SHA-256,
