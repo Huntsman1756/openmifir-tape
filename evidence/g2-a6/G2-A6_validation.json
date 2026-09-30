@@ -1,0 +1,18 @@
+{
+  "issue_id": "G2-A6",
+  "parent_issue": 47,
+  "authority": "docs/gates/G2.md#G2-A",
+  "state": "LOCAL_CHECKS_PASSED_CI_PENDING",
+  "checks": {
+    "focused_total": 37,
+    "new_registry_tests": 8,
+    "ruff": "passed"
+  },
+  "runtime_harness": "Pure admission with pinned-origin metadata and synthetic attestations, including successful replay and rejection without mutation.",
+  "rollback": "Remove metrics/g2_registry.py, tests/g2/test_registry.py and unit receipts. No persistence or existing runtime changes.",
+  "limits": [
+    "No operational completeness",
+    "Atomic persistence deferred to G2-C1",
+    "Pinned G1 bytes adapter pending"
+  ]
+}
