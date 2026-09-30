@@ -94,6 +94,19 @@ def admit(previous: dict, window: dict, observations: list[dict]) -> dict:
     state = json.loads(json.dumps(previous))
     if state != _state(state["windows"], state["attestations"], state["memberships"]):
         raise AuthorityError("accepted registry integrity failure")
+    for aid, a in state["attestations"].items():
+        if _attestation(a) != a or _aid(a) != aid:
+            raise AuthorityError("accepted attestation identity failure")
+    by_window = {w["window_id"]: w for w in state["windows"]}
+    links = set()
+    for link in state["memberships"]:
+        key = (link["window_id"], link["attestation_id"])
+        if (key in links or key[0] not in by_window or key[1] not in state["attestations"]
+                or not _inside(state["attestations"][key[1]], by_window[key[0]])):
+            raise AuthorityError("accepted membership integrity failure")
+        links.add(key)
+    if {key[1] for key in links} != set(state["attestations"]):
+        raise AuthorityError("accepted attestation has no membership")
     w = window_record(**{k: window[k] for k in ("kind", "profile_sha256", "bundle_sha256", "start", "end", "sources")})
     if window != w:
         raise AuthorityError("window identity mismatch")
@@ -108,6 +121,9 @@ def admit(previous: dict, window: dict, observations: list[dict]) -> dict:
             raise AuthorityError("backfill before the G1 origin is outside G2")
         if accepted and accepted[-1]["kind"] == "G2_PROSPECTIVE" and utc(w["start"]) < utc(accepted[-1]["end"]):
             raise AuthorityError("prospective windows cannot overlap or reorder")
+        if (accepted and accepted[-1]["kind"] == "G2_PROSPECTIVE"
+                and utc(w["start"]) <= utc(accepted[0]["end"])):
+            raise AuthorityError("only the first prospective window may overlap the G1 origin")
     incoming = {_aid(a): a for a in map(_attestation, observations)}
     if len(incoming) != len(observations):
         raise AuthorityError("admission expects deduplicated attestation identities")

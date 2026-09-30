@@ -110,3 +110,12 @@ def test_missing_eligible_raw_rejects(tmp_path, observations):
     version.unlink()
     with pytest.raises(AuthorityError, match="raw admission failed"):
         select(tmp_path, entries, raw)
+
+
+def test_ambiguous_raw_sidecar_rejects(tmp_path, observations):
+    raw, manifest = observations
+    entries = [manifest("a")]
+    sidecar = next(raw.rglob("*.meta.yaml"))
+    sidecar.write_bytes(sidecar.read_bytes() + b"source_id: bme_apa\n")
+    with pytest.raises(AuthorityError, match="duplicate"):
+        select(tmp_path, entries, raw)

@@ -83,3 +83,10 @@ def test_backfill_and_changed_run_authority_reject():
         admit(state, prospective("2026-09-15T00:00:00Z", "2026-09-25T00:00:00Z"), [])
     with pytest.raises(AuthorityError, match="source/run"):
         admit(state, prospective(), [attestation("2026-10-01T00:00:00Z", "origin-run", "f" * 64)])
+
+
+def test_second_prospective_cannot_overlap_origin():
+    state = admit(empty_registry(), origin(), [])
+    state = admit(state, prospective("2026-09-20T00:00:00Z", "2026-09-21T00:00:00Z"), [])
+    with pytest.raises(AuthorityError, match="first prospective"):
+        admit(state, prospective("2026-09-21T00:00:00Z", "2026-09-25T00:00:00Z"), [])
