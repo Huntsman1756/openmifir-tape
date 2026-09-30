@@ -1,0 +1,20 @@
+{
+  "issue_id": "G2-A8",
+  "parent_issue": 47,
+  "authority": "docs/gates/G2.md#G2-A",
+  "state": "LOCAL_CHECKS_PASSED_CI_PENDING",
+  "checks": {
+    "focused_total": 47,
+    "new_integration_tests": 6,
+    "fresh_counterexamples": 2,
+    "ruff": "passed",
+    "tracked_hygiene": "passed"
+  },
+  "runtime_harness": "Synthetic authenticated prospective package with descriptor and journal reconciliation, exact replay and failed admission without state mutation; installed smoke pending CI.",
+  "rollback": "Remove g2_ingest and its tests; revert this unit sidecar/registry checks and installed smoke additions; no deployment or persistence.",
+  "limits": [
+    "G2-A1 CI and real-origin readback pending",
+    "Operational windows/gaps remain NOT_ASSESSED",
+    "No live acquisition or G2 gate PASS"
+  ]
+}

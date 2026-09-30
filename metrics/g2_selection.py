@@ -130,9 +130,13 @@ def select_attestations(
             path = _resolve_version(raw_index, cv_index, sid, key, cv)
             copies = raw_index[(sid, path.parent.name, cv)]
             for copy in copies:
-                if not copy.resolve().is_relative_to(raw_root.resolve()):
+                parts = copy.relative_to(raw_root).parts
+                if (len(parts) != 4 or parts[0] != sid
+                        or not copy.resolve().is_relative_to(raw_root.resolve())):
                     raise AuthorityError("raw copy escapes store")
-                reason = _meta_check(copy.with_name(copy.name + ".meta.yaml"), sid, key, cv, copy.parent.parent.name)
+                meta_path = copy.with_name(copy.name + ".meta.yaml")
+                load_metadata(meta_path)  # Reject ambiguous sidecars before G1 binding checks.
+                reason = _meta_check(meta_path, sid, key, cv, copy.parent.parent.name)
                 if reason or hashlib.sha256(copy.read_bytes()).hexdigest() != cv:
                     raise AuthorityError("raw duplicate integrity/binding failure")
             version = CaptureVersionRef(sid, key, cv, path, min(observations.values()),

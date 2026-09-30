@@ -19,6 +19,10 @@ import metrics
 import metrics.g1c3 as explain
 import metrics.g1c4 as verify
 from metrics.authority import AUDIT_FILES
+from metrics.g2_authority import AuthorityError, file_entry
+from metrics.g2_ingest import admit_window
+from metrics.g2_origin import import_origin
+from metrics.g2_registry import G1_BUNDLE_SHA256, G1_END, G1_START, admit, empty_registry, window_record
 
 checkout = Path(__file__).resolve().parents[1]
 
@@ -29,6 +33,17 @@ def require(condition, message):
 
 
 require(not Path(metrics.__file__).resolve().is_relative_to(checkout), "runtime came from checkout, not wheel")
+require(callable(admit_window) and callable(import_origin), "installed G2 input entry points missing")
+origin = window_record("G1_ORIGIN", "a" * 64, G1_BUNDLE_SHA256, G1_START, G1_END, ["bme_apa", "blb_apae"])
+registry = admit(empty_registry(), origin, [])
+require(admit(registry, origin, []) == registry, "installed G2 replay changed registry")
+try:
+    file_entry({"name": "../escape", "sha256": "a" * 64, "bytes": 0})
+except AuthorityError:
+    pass
+else:
+    raise AssertionError("installed G2 unsafe metadata name admitted")
+print("installed G2 authority smoke PASS: pinned origin metadata, exact replay, unsafe name rejected")
 sys.path.insert(0, str(checkout / "tests"))  # synthetic fixtures, not runtime packages
 sys.path.append(str(checkout))  # non-packaged tools/ compatibility fixture helper
 from test_g1c4 import _basic_env  # noqa: E402
