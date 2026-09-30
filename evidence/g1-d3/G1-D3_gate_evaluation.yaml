@@ -1,0 +1,212 @@
+issue_id: G1-D3
+authority: docs/gates/G1.md section 7; g1-freeze-v0
+generator_code_commit: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+verdict: PASS
+criteria:
+- criterion: 1
+  requirement: Exact eligible sealed input and auditable census
+  verdict: PASS
+  evidence:
+  - g1-a1/G1-A1_observed_instrument_set.yaml
+  - g1-c1/G1-C1_tape_materialization.yaml
+  - g1-c4/G1-C4_manifest_verify.yaml
+  - g1-d2/G1-D2_observed_fragmentation.yaml
+- criterion: 2
+  requirement: Exactly one explicit regulatory disposition per observed identifier
+  verdict: PASS
+  evidence:
+  - g1-a1/G1-A1_observed_instrument_set.yaml
+  - g1-b1/G1-B1_observed_universe_disposition.yaml
+- criterion: 3
+  requirement: Frozen resolver authority; no overrides or silent identifier drops
+  verdict: PASS
+  evidence:
+  - g1-b1/G1-B1_observed_universe_disposition.yaml
+  - g1-d2/G1-D2_observed_fragmentation.yaml
+- criterion: 4
+  requirement: Equivalent independent tapes and byte-identical capsules
+  verdict: PASS
+  evidence:
+  - g1-c3/G1-C3_evidence_capsule.yaml
+  - g1-c4/G1-C4_manifest_verify.yaml
+- criterion: 5
+  requirement: Every publication has source/capture/hash/observation trace
+  verdict: PASS
+  evidence:
+  - g1-c1/G1-C1_tape_materialization.yaml
+  - g1-c3/G1-C3_evidence_capsule.yaml
+  - g1-c4/G1-C4_manifest_verify.yaml
+- criterion: 6
+  requirement: G0-D authoritative chains and explicit supersession
+  verdict: PASS
+  evidence:
+  - g1-c1/G1-C1_tape_materialization.yaml
+  - g1-c2/G1-C2_asof_reconstruction.yaml
+- criterion: 7
+  requirement: Deterministic point-in-time reconstruction without future evidence
+  verdict: PASS
+  evidence:
+  - g1-c2/G1-C2_asof_reconstruction.yaml
+  - g1-c3/G1-C3_evidence_capsule.yaml
+  - g1-d2/G1-D2_observed_fragmentation.yaml
+- criterion: 8
+  requirement: Per-build manifest and full materialization replay
+  verdict: PASS
+  evidence:
+  - g1-c4/G1-C4_manifest_verify.yaml
+- criterion: 9
+  requirement: Observed fragmentation and metadata source-divergence ledger
+  verdict: PASS
+  evidence:
+  - g1-d2/G1-D2_observed_fragmentation.yaml
+- criterion: 10
+  requirement: Emission scan and mandatory interpretation limits
+  verdict: PASS
+  evidence:
+  - g1-d2/G1-D2_observed_fragmentation.yaml
+artifact_sha256:
+  g1-a1/G1-A1_observed_instrument_set.yaml: e8edda0743a23918f01a430000c43b8f3dc2736b8dae0c2a3f4a5358886c1f76
+  g1-b1/G1-B1_observed_universe_disposition.yaml: 3d75da51a3b30b4f0e1139afc8891c3983bc28bdbb134cd49d8690c348633c8f
+  g1-c1/G1-C1_tape_materialization.yaml: 35b4dbea5b829d9e91882e9e03f9d7cc8beb24467ed385d5e6b3c93f7d2d99c8
+  g1-c2/G1-C2_asof_reconstruction.yaml: 4bf02dec7c84a9e17d45fcacac3f77c6305fbd8adaf5263bd91086da5467c621
+  g1-c3/G1-C3_evidence_capsule.yaml: 1d03109e1de751251a5af072989edcdcca1620cd03fb04c7339914bce1cdab52
+  g1-c4/G1-C4_manifest_verify.yaml: 73c000bea104620c158926b3cb4729e2478738f30949b34eeef8039005311f99
+  g1-d2/G1-D2_observed_fragmentation.yaml: 73f7cc54469eca08b7cc455ca36560f8e374c26885625d1c3fc826861f7752ba
+  g1-b1/G1-B1_disposition_rows.jsonl: 1f50657ca9063e351fe05e9b653cc691431214dfd38dccc3260cf6a89d6c81d8
+  g1-d2/G1-D2_source_divergence.jsonl: 8b65a298a5d5fa00d9d2d48353d51f9a5657368c66a05b9643b08d8ad7566f4c
+errors: []
+ci_ready: true
+ci:
+- databaseId: 36738997828
+  status: completed
+  conclusion: success
+  displayTitle: self-hosted · bbdce3a2d5dda7edcff361eebd0fa30a5f23e185 · integrated-g1-and-runtime-isolation
+  headSha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+  url: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828
+  target_sha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+  jobs:
+  - name: test-linux (3.12)
+    status: completed
+    conclusion: success
+    url: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828/job/109968074928
+    startedAt: '2026-09-30T15:44:49Z'
+    completedAt: '2026-09-30T15:49:11Z'
+    checkout_assertion: success
+    checkout_sha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+    tests_passed: 488
+    test_seconds: 247.59
+  - name: wheel-smoke-windows
+    status: completed
+    conclusion: success
+    url: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828/job/109968075016
+    startedAt: '2026-09-30T15:44:52Z'
+    completedAt: '2026-09-30T15:45:36Z'
+    checkout_assertion: success
+    checkout_sha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+    installed_audit_cli_smoke: PASS
+  - name: test-linux (3.13)
+    status: completed
+    conclusion: success
+    url: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828/job/109968075031
+    startedAt: '2026-09-30T15:49:13Z'
+    completedAt: '2026-09-30T15:53:33Z'
+    checkout_assertion: success
+    checkout_sha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+    tests_passed: 488
+    test_seconds: 245.73
+  - name: test-windows (3.12)
+    status: completed
+    conclusion: success
+    url: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828/job/109968075067
+    startedAt: '2026-09-30T15:55:27Z'
+    completedAt: '2026-09-30T16:06:58Z'
+    checkout_assertion: success
+    checkout_sha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+    tests_passed: 488
+    test_seconds: 633.31
+  - name: wheel-smoke-linux
+    status: completed
+    conclusion: success
+    url: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828/job/109968075128
+    startedAt: '2026-09-30T15:57:44Z'
+    completedAt: '2026-09-30T15:57:58Z'
+    checkout_assertion: success
+    checkout_sha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+    installed_audit_cli_smoke: PASS
+  - name: test-windows (3.13)
+    status: completed
+    conclusion: success
+    url: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828/job/109968075171
+    startedAt: '2026-09-30T16:07:00Z'
+    completedAt: '2026-09-30T16:18:40Z'
+    checkout_assertion: success
+    checkout_sha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+    tests_passed: 488
+    test_seconds: 544.64
+  - name: test-linux (3.11)
+    status: completed
+    conclusion: success
+    url: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828/job/109968075216
+    startedAt: '2026-09-30T15:53:35Z'
+    completedAt: '2026-09-30T15:57:43Z'
+    checkout_assertion: success
+    checkout_sha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+    tests_passed: 488
+    test_seconds: 231.95
+  - name: test-windows (3.11)
+    status: completed
+    conclusion: success
+    url: https://github.com/Huntsman1756/openmifir-tape/actions/runs/36738997828/job/109968075217
+    startedAt: '2026-09-30T15:45:37Z'
+    completedAt: '2026-09-30T15:55:25Z'
+    checkout_assertion: success
+    checkout_sha: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+    tests_passed: 488
+    test_seconds: 478.61
+  covered_commits:
+  - e877701f959b9d48e1b020ce3fa604e9eba78bcb
+  - 6a5163b6c04ff1918b38c910cb66461799a02910
+  - f1d37fd06fb80385c0f4a9b34d7dc08c0bf301a8
+  - 2f4536631c7cc89097e8a958414d4f2ff8713a95
+  - 9aa3aa8a76536639f04724f7169c20c66c4903b1
+current_tape_verification:
+  code_commit: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+  tape: data\g1\tape
+  tape_manifest_sha256: c83eca8be81312a815dca09875f029ff6012f884eefbb86d48bdfd90d668e659
+  self_verification: PASS
+  full_provenance: NOT_RUN — supply --bundle and reference snapshot dirs to authenticate
+    input bytes
+  checks:
+  - check: generator_authority
+    result: PASS
+    declared_commit: 73c7ef666278d9726d0472477a4245a7d5f824dd
+    running_commit: bbdce3a2d5dda7edcff361eebd0fa30a5f23e185
+    code_commit_match: false
+  - check: table_physical_schema
+    result: PASS
+  - check: references_internal_consistency
+    result: PASS
+  - check: table_row_counts
+    result: PASS
+  - check: publications_semantic_digest
+    result: PASS
+  - check: chains_semantic_digest
+    result: PASS
+  - check: dataset_semantic_digest
+    result: PASS
+  - check: disposition_counts
+    result: PASS
+  - check: capsule_fixtures
+    result: PASS
+    mode: declared_digest_verified_at_normalized_commit
+    fixtures: 3
+  every_publication_trace_fields_valid: true
+  publication_rows: 52008
+  distinct_ledger_entries: 52008
+  seconds: 53.92
+limits:
+  corpus: sealed September 2026 observed window
+  reference_basis: BUILD_SNAPSHOT
+  public_data_redistribution: NOT_AUTHORIZED_BY_THIS_GATE
+  security_audit: NOT_CLAIMED
+  live_vps_health: separate operational readback
