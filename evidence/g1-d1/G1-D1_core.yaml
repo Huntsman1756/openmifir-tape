@@ -1,0 +1,12 @@
+﻿issue_id: G1-D1
+authority: docs/gates/G1.md sections 4.2 and 5
+validation:
+  command: python -m pytest tests/test_divergence.py -q
+  tests_passed: 7
+  temporal_reconstruction: G0-D_after_known_at_filter
+  candidate_identity: G0-E_head_economic_key
+  source_chains_merged: false
+  economic_payload_emitted: false
+  lint: PASS
+runtime_harness: synthetic replayed publications, original/amend/cancel timeline
+rollback: remove metrics/divergence.py and its tests/docs; existing G0 and G1-C behavior unchanged
