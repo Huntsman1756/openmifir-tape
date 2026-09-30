@@ -1,0 +1,66 @@
+{
+  "issue_id": "G2-A1",
+  "issue": 47,
+  "authority": "docs/gates/G2.md#G2-A",
+  "implementation_verdict": "VERIFIED",
+  "whole_gate_verdict": "NOT_EVALUATED",
+  "operational_verdict": "NOT_ASSESSED",
+  "code_commit": "6c070834ea10fec8b60a089bbda8f23673a03e9a",
+  "ci_receipt": "G2-A1_ci.json",
+  "focused_tests": 48,
+  "scoped_checks": {
+    "profiles_and_sealed_metadata": "PASS",
+    "relative_name_integrity_and_duplicate_copies": "PASS",
+    "half_open_G2_and_inclusive_G1": "PASS",
+    "exact_attestation_deduplication_and_membership": "PASS",
+    "second_ingest_no_semantic_changes": "PASS",
+    "reject_conflicts_backdating_and_overlap": "PASS",
+    "explicit_inter_window_spans": "PASS",
+    "capture_parse_census_and_missing_identifier": "PASS",
+    "journal_and_descriptor_reconciliation": "PASS",
+    "real_pinned_G1_origin": "PASS",
+    "installed_wheel_Linux_and_Windows": "PASS"
+  },
+  "preserved_authorities": {
+    "G0.md": {
+      "frozen_tag": "g0-freeze-v1",
+      "sha256": "29872bfea272fd9e5b24b91dd1a51896284399b9e203282f74ec39da53411298",
+      "result": "UNCHANGED"
+    },
+    "G1.md": {
+      "frozen_tag": "g1-freeze-v0",
+      "sha256": "eb2733cf30943789959f99b0c6a1dea8ce0e14a55aeb6fc646680f2799970040",
+      "result": "UNCHANGED"
+    },
+    "G2.md": {
+      "frozen_tag": "g2-freeze-v0",
+      "sha256": "f947b3d7e95b1d3ccca1438e075abf172ad68b1ce420691fcd6e9d14ea7c94b2",
+      "result": "UNCHANGED"
+    }
+  },
+  "existing_G1_runtime_files_unchanged": 61,
+  "existing_G1_runtime_baseline": "bbdce3a2d5dda7edcff361eebd0fa30a5f23e185",
+  "origin_receipt": "G2-A1_origin_readback.json",
+  "review": {
+    "mode": "sequential_self_review",
+    "independent_review": false,
+    "correction": "Removed inferred calendar containment before integration; expected dates and observed interval remain distinct."
+  },
+  "work_units": {
+    "G2-A4": 54,
+    "G2-A5": 56,
+    "G2-A6": 58,
+    "G2-A7": 60,
+    "G2-A8": 62,
+    "G2-A10": 65,
+    "G2-A9": 64
+  },
+  "rollback": "Revert G2 input modules, synthetic tests and integrated wheel smoke additions; no operator deployment, provider bytes, G0/G1 runtime or persistent active build changed.",
+  "limits": [
+    "A1 is tooling verification, not whole-G2 PASS",
+    "No new prospective profile/window or operational outcome",
+    "Timed references, atomic build persistence and historical capsules remain B1/C1/C2 work",
+    "Reference legacy snapshots are not assigned inferred observation times",
+    "Local elapsed times varied; no cause, freshness or throughput SLA claimed"
+  ]
+}
