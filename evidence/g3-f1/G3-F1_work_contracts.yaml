@@ -4,17 +4,17 @@ freeze_pr: 74
 freeze_commit: 35c9a75a0b24ebf453362cf9ed318388de71e207
 contracts:
 - id: G3-A1
-  number: null
-  url: null
+  number: 76
+  url: https://github.com/Huntsman1756/openmifir-tape/issues/76
   authority: docs/gates/G3.md#G3-A
   dependency_refs: []
-  state_at_creation: not_created
+  state_at_creation: ready-for-agent
 - id: G3-L1
-  number: null
-  url: null
+  number: 77
+  url: https://github.com/Huntsman1756/openmifir-tape/issues/77
   authority: docs/gates/G3.md#G3-L
   dependency_refs: []
-  state_at_creation: not_created
+  state_at_creation: ready-for-agent
 - id: G3-B1
   number: null
   url: null
@@ -57,9 +57,10 @@ contracts:
   - G3-D1
   - G3-L1
   state_at_creation: not_created
-contract_series_status: DECLARED_NOT_ISSUED; the series is drafted in g3-issue-series.md
-  and may be issued only now that g3-freeze-v0 exists. A1 and L1 are independent
-  of the tape and may become ready-for-agent first; the rest stay planned.
+contract_series_status: PARTIALLY_ISSUED; A1 (#76) and L1 (#77) are ready-for-agent.
+  The tape-dependent contracts (B1, B2, C1, D1) and E1 remain declared in
+  g3-issue-series.md and stay planned until a verified G2-C1 build and a verified
+  A1 snapshot exist. Issued after g3-freeze-v0 (readback 2026-10-17).
 operational_adjudication: N/A; G3 has no accrued-live-evidence stage because no
   bonds CTP is authorised
 gate_status: G3_NOT_IMPLEMENTED_NOT_PASS
