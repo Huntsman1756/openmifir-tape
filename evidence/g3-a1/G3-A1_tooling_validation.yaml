@@ -1,0 +1,42 @@
+issue_id: G3-A1
+slice: schema snapshot tooling and offline fixtures
+authority: docs/gates/G3.md#G3-A
+module: metrics/g3_schema.py
+module_sha256: 30c160eef7350291f6e5f1902849c09789679aac27a853c16f3f7faba2675286
+schemas:
+  snapshot: g3-schema-snapshot-v1
+  timeline: g3-schema-timeline-v1
+implementation:
+  snapshot_validation: a single declared direction; definitions sorted, unique and
+    byte-authenticated
+  set_digest: definition_set_sha256 over {name, sha256, bytes}
+  admission: append-only, increasing schema_known_at, exact replay is a no-op
+  selection: latest snapshot knowable at a cutoff; never a future or absent snapshot
+  census: definition counts, draft labels and referenced code sets
+fixtures_proven:
+- a hybrid snapshot (mixed INPUT/OUTPUT direction) is rejected
+- a snapshot that does not declare exactly one direction is rejected
+- tampered definition bytes are rejected by hash/byte authentication
+- duplicate or unsorted definition names are rejected
+- duplicate code-set references are rejected
+- DRAFT definitions are pinned and labelled, never claimed structurally compatible
+- exact replay is a no-op; distinct snapshots at equal knowledge time are ambiguous
+- an older snapshot requires a versioned correction proposal
+- a tampered accepted snapshot and a reordered timeline are rejected even if rehashed
+tests:
+  suite: tests/g3/test_schema.py
+  cases: 13
+  command: python -m pytest tests/g3
+  result: PASS
+acquisition:
+  real_snapshot: NOT_ACQUIRED
+  reason: ISO 20022 artifacts are operator-environment work; the agent performs no
+    schema retrieval
+  operator_step: acquire the pinned CTP message definitions and referenced code sets,
+    then validate with schema_snapshot and admit with plan_snapshot_admission
+claim_limits:
+- STRUCTURAL_COMPATIBILITY_ONLY
+- no schema bytes in the repository; only digests and provenance
+- schema vendoring stays UNRESOLVED until G3-L1 records a status
+- no live CTP consumption and no coverage or conformance claim
+gate_status: G3-A1_NOT_COMPLETE
