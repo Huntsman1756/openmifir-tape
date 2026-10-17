@@ -74,6 +74,14 @@ registra 536 pruebas en cada combinación Linux/Windows y Python 3.11–3.13,
 además de los controles del wheel instalado en ambos sistemas.
 No se ha iniciado una nueva ventana prospectiva ni desplegado este código.
 
+La [G3](gates/G3.md) es un **borrador**, no una autoridad congelada: define la
+compatibilidad estructural con los mensajes ISO 20022 de la cinta (perfil de
+bonos) y el contrato de benchmark para la futura cinta oficial, sin consumirla
+ni afirmar cobertura o conformidad. La verificación de acceso y de las
+condiciones de reutilización, y la superficie de producto (G4), siguen
+pendientes. La [nota de admisibilidad](ctp-lab-proposal-admissibility.md)
+clasifica qué partes de la propuesta son admisibles hoy.
+
 La evidencia de CI comprueba código y fixtures; la salud del VPS requiere su
 propio readback. El [despliegue verificado](../evidence/g0-a3-h2/G0-A3-H2_deployment.json)
 del 30 de septiembre instaló `2cedea5`, migró 1.402 manifiestos con SHA-256,
