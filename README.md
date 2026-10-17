@@ -67,6 +67,15 @@ See the [offline input guide](docs/g2-input-authority.md) and
 Timed references, incremental builds, historical views and prospective
 operational evidence remain subsequent G2 work.
 
+[`G3`](docs/gates/G3.md) is a **draft** specification for ISO 20022
+consolidated-tape compatibility: project an admitted tape into the CTP
+message model, validate it structurally and in round-trip against a pinned,
+timed schema snapshot, and declare an offline benchmark interface for the
+future official EU bonds tape. It does not consume a live CTP and claims no
+coverage or conformance. Its freeze (`g3-freeze-v0`) is pending review and
+merge. The interactive screen and discrepancy monitor belong to G4, not G3;
+see the [proposal admissibility note](docs/ctp-lab-proposal-admissibility.md).
+
 ## Hard rules
 
 These are enforced, not aspirational (see [`AGENTS.md`](AGENTS.md)):
