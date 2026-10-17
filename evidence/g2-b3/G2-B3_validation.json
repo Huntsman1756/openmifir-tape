@@ -2,10 +2,15 @@
   "issue_id": "G2-B3",
   "parent_issue": 48,
   "authority": "docs/gates/G2.md#G2-B",
-  "state": "LOCAL_CHECKS_PASSED_CI_PENDING",
+  "state": "CI_VERIFIED",
   "focused_total": 59,
   "new_observation_tests": 11,
   "ruff": "passed",
+  "ci": {
+    "run_url": "https://github.com/Huntsman1756/openmifir-tape/actions/runs/36770343765",
+    "sha": "8673129d657f5fefda2832a9d9f0b1351d7cb229",
+    "matrix_jobs_passed": 8
+  },
   "runtime_harness": "Authenticated synthetic files/receipts; local time survives changed mtime and old source revision; explicit failed/unavailable/not-found outcomes retained.",
   "rollback": "Remove g2_reference_observation and its tests/receipts; no existing runtime callers or operator data.",
   "limits": [
