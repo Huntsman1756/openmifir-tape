@@ -9,20 +9,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .g2_authority import AuthorityError, checked_file, digest, profile, sealed_bundle, text, timestamp, utc
+from .g2_authority import (
+    AuthorityError,
+    checked_file,
+    digest,
+    profile,
+    sealed_bundle,
+    strict_pairs,
+    text,
+    timestamp,
+    utc,
+)
 from .g2_registry import admit, window_record
 from .g2_selection import load_metadata, select_attestations
 
 DESCRIPTOR_NAMES = {"bme_apa": "bme_apa.yaml", "blb_apae": "bloomberg_apae.yaml"}
-
-
-def _pairs(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise AuthorityError("duplicate journal key")
-        result[key] = value
-    return result
 
 
 def _journal(root: Path, bundle: dict, window: dict) -> dict:
@@ -43,7 +44,7 @@ def _journal(root: Path, bundle: dict, window: dict) -> dict:
         for line in content.splitlines():
             if not line.strip():
                 continue
-            row = json.loads(line, object_pairs_hook=_pairs)
+            row = json.loads(line, object_pairs_hook=strict_pairs)
             if not isinstance(row, dict):
                 raise AuthorityError("journal row must be an object")
             observed = utc(row.get("observed_at"))
