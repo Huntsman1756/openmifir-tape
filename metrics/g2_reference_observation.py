@@ -11,8 +11,7 @@ from pathlib import Path
 
 from universe.reference import ReferenceSetError, canonical_reference_set
 
-from .g2_authority import AuthorityError, checked_file, digest, file_entry, mapping, text, timestamp, utc
-from .g2_ingest import _pairs
+from .g2_authority import AuthorityError, checked_file, digest, file_entry, mapping, strict_pairs, text, timestamp, utc
 
 FAMILIES = {"FITRS": "ISIN", "FIRDS": "ISIN", "GLEIF": "LEI"}
 OUTCOMES = {"AVAILABLE", "NOT_FOUND", "ACQUISITION_FAILED", "UNAVAILABLE"}
@@ -77,7 +76,7 @@ def observation(root: Path, value: dict) -> dict:
     if receipt["file"]["name"] in {f["file"]["name"] for f in files}:
         raise AuthorityError("outcome receipt cannot alias a reference payload")
     try:
-        outcome = json.loads(checked_file(root, receipt["file"]).read_bytes(), object_pairs_hook=_pairs)
+        outcome = json.loads(checked_file(root, receipt["file"]).read_bytes(), object_pairs_hook=strict_pairs)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise AuthorityError("unparseable acquisition outcome receipt") from exc
     outcome = mapping(outcome, {

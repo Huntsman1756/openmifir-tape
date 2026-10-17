@@ -17,8 +17,7 @@ from universe.firds import FirdsParseError, iter_firds
 from universe.fitrs import FitrsParseError, parse_fitrs
 from universe.gleif import GleifParseError, parse_gleif
 
-from .g2_authority import AuthorityError, checked_file
-from .g2_ingest import _pairs
+from .g2_authority import AuthorityError, checked_file, strict_pairs
 from .g2_reference_timeline import prepare_bundle
 
 
@@ -33,13 +32,18 @@ def _xml_records(path: Path, family: str):
                 records = parse_fitrs(stream) if family == "FITRS" else iter_firds(stream)
                 for ordinal, record in enumerate(records):
                     count += 1
-                    yield member, ordinal, record.instrument_isin, record
+                    identifier = record.instrument_isin
+                    if identifier is None or identifier == "":
+                        raise AuthorityError(
+                            f"reference record without instrument identifier: {member}#{ordinal}"
+                        )
+                    yield member, ordinal, identifier, record
             if not count:
                 raise AuthorityError("reference XML member has no parseable records")
 
 
 def _gleif_records(path: Path):
-    doc = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_pairs)
+    doc = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=strict_pairs)
     data = doc.get("data") if isinstance(doc, dict) else None
     items = [data] if isinstance(data, dict) else data
     if not isinstance(items, list) or not items:
@@ -58,14 +62,18 @@ def open_reference_bundle(root: Path, manifest: dict, *, wanted_isins: set[str] 
 
     Optional ISIN filtering bounds retained memory, never parsing/validation.
     Every physical metadata copy is authenticated by prepare_bundle; payload
-    copies with identical hashes have identical content semantics.
+    copies with identical hashes have identical content semantics. Requested
+    identifiers absent from an AVAILABLE observation's files are reported per
+    family/observation in ``not_found`` (empty when nothing is missing).
     """
     prepared = prepare_bundle(root, manifest)
     indexes = {family: {} for family in prepared["bundle"]["observations"]}
+    not_found = {family: {} for family in prepared["bundle"]["observations"]}
     for family, observations in prepared["bundle"]["observations"].items():
         for obs in observations:
             scope = obs["scope"]
             requested = None if scope["mode"] == "ALL_FILE_RECORDS" else set(scope["identifiers"])
+            seen = set()
             for timed in obs["files"]:
                 entry = timed["file"]
                 path = checked_file(prepared["observation_roots"][obs["observation_id"]], entry)
@@ -74,6 +82,8 @@ def open_reference_bundle(root: Path, manifest: dict, *, wanted_isins: set[str] 
                     for member, ordinal, identifier, record in rows:
                         if requested is not None and identifier not in requested:
                             continue
+                        if requested is not None:
+                            seen.add(identifier)
                         if family != "GLEIF" and wanted_isins is not None and identifier not in wanted_isins:
                             continue
                         handle = {"observation_id": obs["observation_id"], "file": entry,
@@ -85,4 +95,8 @@ def open_reference_bundle(root: Path, manifest: dict, *, wanted_isins: set[str] 
                 except (ValueError, TypeError, AttributeError, OSError, zipfile.BadZipFile, RuntimeError,
                         FitrsParseError, FirdsParseError, GleifParseError, DefusedXmlException) as exc:
                     raise AuthorityError(f"unparseable declared {family} file: {entry['name']}") from exc
-    return {**prepared, "indexes": indexes}
+            if requested is not None and obs["outcome"] == "AVAILABLE":
+                missing = sorted(requested - seen)
+                if missing:
+                    not_found[family][obs["observation_id"]] = missing
+    return {**prepared, "indexes": indexes, "not_found": not_found}

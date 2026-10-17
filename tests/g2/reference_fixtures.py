@@ -41,8 +41,10 @@ def write_bundle(root, *, episode="synthetic-episode", known="2026-10-01T12:00:0
             (destination / name).write_bytes(blob)
             return {"name": name, "sha256": hashlib.sha256(blob).hexdigest(), "bytes": len(blob)}
 
-        scope = {"mode": "IDENTIFIERS", "identifier_kind": "LEI" if family == "GLEIF" else "ISIN",
-                 "identifiers": (scopes or {}).get(family, [LEI if family == "GLEIF" else ISIN])}
+        identifiers = (scopes or {}).get(family, [LEI if family == "GLEIF" else ISIN])
+        scope = {"mode": "IDENTIFIERS" if identifiers else "ALL_FILE_RECORDS",
+                 "identifier_kind": "LEI" if family == "GLEIF" else "ISIN",
+                 "identifiers": identifiers}
         receipt = {"schema": "g2-acquisition-outcome-v1", "family": family,
                    "acquisition_id": episode + family, "scope": scope,
                    "source_provenance": "https://synthetic.invalid/reference",

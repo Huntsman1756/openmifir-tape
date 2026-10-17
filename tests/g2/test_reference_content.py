@@ -50,3 +50,30 @@ def test_duplicate_lei_facts_keep_both_handles(tmp_path):
     rows = open_reference_bundle(tmp_path, manifest)["indexes"]["GLEIF"][LEI]
     assert [r["record"].legal_jurisdiction_country for r in rows] == ["ES", "FR"]
     assert [r["handle"]["ordinal"] for r in rows] == [0, 1]
+
+
+@pytest.mark.parametrize("family,content", [
+    ("FITRS", FITRS.replace(b"<ISIN>SYNTHETIC-ISIN</ISIN>", b"<ISIN></ISIN>")),
+    ("FIRDS", FIRDS.replace(f"<Id>{ISIN}</Id>".encode(), b"<Id></Id>")),
+])
+def test_record_without_instrument_identifier_fails_closed(tmp_path, family, content):
+    manifest = write_bundle(tmp_path, overrides={family: zipped([("synthetic.xml", content)])})
+    with pytest.raises(AuthorityError, match="reference record without instrument identifier"):
+        open_reference_bundle(tmp_path, manifest)
+
+
+def test_requested_identifier_missing_from_file_is_reported_not_found(tmp_path):
+    manifest = write_bundle(tmp_path, scopes={"FITRS": ["MISSING-ISIN", ISIN]})
+    loaded = open_reference_bundle(tmp_path, manifest)
+    observation_id = loaded["bundle"]["observations"]["FITRS"][0]["observation_id"]
+    assert loaded["not_found"]["FITRS"] == {observation_id: ["MISSING-ISIN"]}
+    assert ISIN in loaded["indexes"]["FITRS"]
+    assert "MISSING-ISIN" not in loaded["indexes"]["FITRS"]
+
+
+def test_whole_file_scope_reports_empty_not_found(tmp_path):
+    manifest = write_bundle(tmp_path, scopes={"FITRS": []})
+    loaded = open_reference_bundle(tmp_path, manifest)
+    assert set(loaded["not_found"]) == {"FITRS", "FIRDS", "GLEIF"}
+    assert loaded["not_found"]["FITRS"] == {}
+    assert ISIN in loaded["indexes"]["FITRS"]
