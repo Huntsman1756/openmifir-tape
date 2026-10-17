@@ -1,3 +1,17 @@
+# ARCHIVED 2026-10-17 (decision D4) — NOT EXECUTED BY GITHUB.
+#
+# This workflow was moved out of .github/workflows/ when the repository became
+# public and the self-hosted runner fleet was retired: GitHub-hosted Actions are
+# free for public repositories, so the billing-fallback no longer applies, and
+# GitHub advises against self-hosted runners on public repositories.
+#
+# GitHub only runs workflows under .github/workflows/, so this file is inert.
+# Restoring the fallback requires an explicit decision: move it back under
+# .github/workflows/, re-register a runner with the `omt-ci` + `omt-<os>-x64`
+# labels, and document the reason. See docs/ops/self-hosted-ci.md.
+#
+# Historical content follows unchanged.
+#
 # Self-hosted CI fallback — manual contingency for GitHub-hosted quota.
 #
 # Deliberately workflow_dispatch-only: repo-scoped self-hosted runners must
