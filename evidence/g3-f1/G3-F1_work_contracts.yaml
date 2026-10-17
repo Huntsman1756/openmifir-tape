@@ -1,0 +1,65 @@
+issue_id: G3-F1
+freeze_tag: g3-freeze-v0
+freeze_pr: 74
+freeze_commit: 35c9a75a0b24ebf453362cf9ed318388de71e207
+contracts:
+- id: G3-A1
+  number: null
+  url: null
+  authority: docs/gates/G3.md#G3-A
+  dependency_refs: []
+  state_at_creation: not_created
+- id: G3-L1
+  number: null
+  url: null
+  authority: docs/gates/G3.md#G3-L
+  dependency_refs: []
+  state_at_creation: not_created
+- id: G3-B1
+  number: null
+  url: null
+  authority: docs/gates/G3.md#G3-B
+  dependency_refs:
+  - G3-A1
+  - G2-C1
+  state_at_creation: not_created
+- id: G3-B2
+  number: null
+  url: null
+  authority: docs/gates/G3.md#G3-B
+  dependency_refs:
+  - G3-B1
+  state_at_creation: not_created
+- id: G3-C1
+  number: null
+  url: null
+  authority: docs/gates/G3.md#G3-C
+  dependency_refs:
+  - G3-B1
+  state_at_creation: not_created
+- id: G3-D1
+  number: null
+  url: null
+  authority: docs/gates/G3.md#G3-D
+  dependency_refs:
+  - G3-A1
+  - G3-L1
+  state_at_creation: not_created
+- id: G3-E1
+  number: null
+  url: null
+  authority: docs/gates/G3.md#G3-E
+  dependency_refs:
+  - G3-A1
+  - G3-B1
+  - G3-B2
+  - G3-C1
+  - G3-D1
+  - G3-L1
+  state_at_creation: not_created
+contract_series_status: DECLARED_NOT_ISSUED; the series is drafted in g3-issue-series.md
+  and may be issued only now that g3-freeze-v0 exists. A1 and L1 are independent
+  of the tape and may become ready-for-agent first; the rest stay planned.
+operational_adjudication: N/A; G3 has no accrued-live-evidence stage because no
+  bonds CTP is authorised
+gate_status: G3_NOT_IMPLEMENTED_NOT_PASS

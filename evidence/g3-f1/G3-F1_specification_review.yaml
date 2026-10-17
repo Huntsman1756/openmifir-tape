@@ -1,0 +1,63 @@
+issue_id: G3-F1
+scope: SPECIFICATION_FREEZE_ONLY
+specification: docs/gates/G3.md
+specification_sha256: 77d6a2dc9435fa90c5711e12d41bb19faaa1ca5bc33f47fc84ce9d6ffdbd9d7c
+specification_bytes: 14247
+baseline_spec_git_blobs_unchanged:
+  g0-freeze-v1: 75c451bab63d1046066af70f9e0e1be19e1d541a
+  g1-freeze-v0: 6bd44d6d8a55286571a41dc53ad1a49fa6ff1e16
+  g2-freeze-v0: 221f870b2f5ba7c958505e02d78a746a16b242a0
+documentation_validation:
+  local_links_checked: 7
+  local_links_resolved: 7
+  explicit_unique_anchors:
+  - G3-A
+  - G3-B
+  - G3-C
+  - G3-D
+  - G3-L
+  - G3-E
+  - G3-F
+  pass_criteria: 10
+  balanced_fences: true
+  result: PASS
+review:
+  method: sequential self-review against frozen authority and repository conventions;
+    not independent review
+  counterexamples_addressed:
+  - hybrid input/output schema snapshot that cannot separate directions
+  - ambiguous or hash-divergent snapshot at equal knowledge time
+  - draft-only schema element claiming structural compatibility
+  - unmapped internal code crossing a code boundary
+  - missing mandatory element or invalid instance silently repaired
+  - round-trip loss silently dropped instead of classified
+  - economic values leaking into repository evidence
+  - consuming a live CTP assumed from a declared interface
+  - coverage or conformance wording attached to a structural result
+  status: CONTRACT_REVIEWED_NOT_RUNTIME_IMPLEMENTED
+ci:
+  hosted_primary: BLOCKED; repo-wide account billing failure unrelated to this change
+  self_hosted_linux: success (target_sha c401dcad60b0e0d66b4a6b8fe6ac9013c84bef4b)
+  self_hosted_windows: unavailable; no omt-windows-x64 self-hosted runner registered
+  fallback_run: https://github.com/Huntsman1756/openmifir-tape/actions/runs/39031515722
+  local_checks: ruff, tools/check_hygiene.py and pytest all pass on a clean origin/main checkout
+new_design_choices:
+- projection consumes an admitted G2-C1 build; no new acquisition and no live CTP
+- timed, immutable schema snapshot with input/output separation, reusing G2-B1
+  knowledge-time semantics
+- schema-valid instances carry STRUCTURAL_COMPATIBILITY_ONLY (not a report,
+  not conformance, not authorisation)
+- versioned, digest-pinned code-mapping registry with explicit G3_UNMAPPED_<field>
+  fallback instead of coercion
+- round-trip classifies every field CARRIED / NOT_MODELLED / LOSSY; no lossless
+  claim without proof
+- benchmark interface declared without consumption; CTP status NOT_CONSUMED until
+  access and reuse conditions are verified
+- G3-L extends the G0-L discipline without changing any G0-L status
+- the product surface (interactive screen, discrepancy monitor) is assigned to
+  G4, not G3
+gate_status: G3_NOT_IMPLEMENTED_NOT_PASS
+freeze_tag: g3-freeze-v0
+rollback: delete the g3-freeze-v0 tag and remove the G3 specification, its links
+  and this receipt through a reviewed PR; issued freeze tags are not rewritten in
+  place
