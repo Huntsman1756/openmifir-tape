@@ -1,206 +1,109 @@
 # OpenMiFIR Tape
 
-Reproducible, auditable post-trade transparency laboratory for MiFIR bond
-data. First profile: `es-corporate-bonds` — Spanish corporate bonds as
-published by two independent post-trade transparency sources:
+Laboratorio reproducible y auditable de transparencia post-mercado para datos
+de bonos bajo MiFIR. Primer perfil: **bonos corporativos españoles**
+(`es-corporate-bonds`), observados a través de dos fuentes de transparencia
+independientes.
 
-| source_id  | display        | publication format |
-|------------|----------------|--------------------|
-| `bme_apa`  | BME APA        | JSON               |
-| `blb_apae` | Bloomberg APAE | CSV                |
+No es un proveedor de cinta consolidada ni compite con fairCT: cuando la CTP
+oficial de bonos de la UE esté operativa, será una fuente más y un punto de
+comparación.
 
-OpenMiFIR Tape is **not** a consolidated tape provider and does not compete
-with fairCT. When the official EU bonds CTP goes live, it becomes a source
-and a benchmark.
+## Qué ofrece
 
-The project measures **observed** fragmentation across sources. It never
-claims market completeness it cannot demonstrate.
+- **Captura verificable**: descarga los bytes exactos publicados por cada
+  fuente, write-once, con SHA-256 registrado en el momento de la captura.
+- **Reproducibilidad**: repetir la ingesta de los mismos bytes no produce
+  ningún cambio de estado no intencionado (idempotencia verificada).
+- **Clasificación del universo**: resolución determinista de los bonos
+  corporativos españoles (tipo `CRPB` + LEI de emisor con jurisdicción
+  legal `ES`) a partir de los registros oficiales de ESMA y GLEIF. Ante
+  cualquier ambigüedad, el registro se marca para revisión en lugar de
+  adivinar.
+- **Historial completo de cada operación**: reconstrucción del ciclo de vida
+  de cada trade (ejecución, publicación diferida, enmienda, cancelación) a
+  partir de las publicaciones sucesivas, sin sobrescribir nada.
+- **Medición de divergencia entre fuentes**: informe de fragmentación
+  observada entre las fuentes, sin pretender medir la completitud del
+  mercado.
 
-## What it does
+## Fuentes de datos
 
-The verified capture baseline follows frozen [`docs/gates/G0.md`](docs/gates/G0.md).
-The verified audit baseline is [`G1`](docs/gates/G1.md): the Explainable Audit Tape over
-the sealed observed corpus, with the same regulatory and lifecycle semantics.
+| Fuente | Formato | Frecuencia de publicación | Enlace |
+|---|---|---|---|
+| BME APA (transparencia post-mercado) | JSON | fichero diario | [bolsasymercados.es](https://www.bolsasymercados.es/en/other-services/regulatory-services/post-trade-data.html) |
+| Bloomberg APAE (informes diferidos de su APA europea) | CSV | fichero por intervalo de publicación | [bloombergapa.com](https://www.bloombergapa.com/) · [histórico](https://www.bloombergapa.com/historyfiles) |
 
-- **Acquisition (G0-A)** — discover, fetch, and persist the *exact* source
-  bytes, write-once, with SHA-256 recorded at capture.
-- **Idempotence (G0-A2)** — a second ingest produces zero unintended state
-  changes; verified by replaying captured bytes locally.
-- **Scheduled capture (G0-A3)** — external-trigger poll and rolling-rescan
-  runner with a serialized on-disk lock and an append-only journal.
-- **Universe (G0-B)** — deterministic, fail-closed resolution of
-  `es_legal_issuer_v1` (MiFIR ID `BOND` + Bond Type `CRPB` + issuer LEI with
-  GLEIF `LegalJurisdiction.country = ES`). No ISIN-prefix heuristics, no
-  fuzzy matching — ambiguity resolves to `QUARANTINE` or `CONFLICT`.
-- **Normalization (G0-C)** — lossless mapping of source records into a
-  normalized model; raw values are preserved and sanity checks only flag,
-  never mutate.
-- **Lifecycle (G0-D)** — append-only event ledger reconstructing trade state
-  chains with explicit `supersedes_entry_id` links.
-- **Legal classification (G0-L)** — terms-of-use snapshot classification per
-  source (`docs/legal/`).
+Los recolectores consultan cada fuente como máximo cada hora y reescanean la
+ventana de las últimas 24 h a diario (intervalos configurados en
+[`config/sources/`](config/sources)). Los endpoints viven en descriptores de
+configuración, nunca en el código.
 
-G1 adds a local Parquet tape queried through embedded DuckDB, point-in-time
-reconstruction, metadata evidence capsules, two-layer offline verification,
-and [source-divergence/observed-fragmentation reports](docs/g1-divergence.md).
-`known_at` is the first eligible observation, distinct from trading and
-publication time. `as_of(T)` rebuilds the ledger; it never filters final heads.
-Reference classification remains the declared frozen `BUILD_SNAPSHOT`.
+Para clasificar el universo se usan además tres registros oficiales, que el
+operador aporta localmente:
 
-G1's corpus is one sealed September 2026 window, not a continuously updated
-market dataset. The tape contains all observed regulatory dispositions;
-fragmentation metrics use only INCLUDE instruments. UI, API, historical
-backfill and market-total estimation are outside this gate.
+- [ESMA FITRS](https://data.esma.europa.eu/) — tipo de instrumento no
+  volumétrico (campo de transparencia no-equity).
+- [ESMA FIRDS](https://data.esma.europa.eu/) — LEI del emisor.
+- [GLEIF](https://api.gleif.org/) — jurisdicción legal del LEI.
 
-See the [project status and continuation decisions](docs/project-status.md) and
-the [formal G1 evaluation](evidence/g1-d3/G1-D3_gate_evaluation.yaml).
+## Cómo funciona
 
-[`G2`](docs/gates/G2.md) defines the successor temporal/history contract.
-Its freeze does not mean implementation or G2 PASS. The bounded contracts
-follow G2 section 6; prospective operating windows require verified tooling
-and a frozen profile first.
+```
+   BME APA ─┐
+            ├─► captura (bytes crudos inmutables + SHA-256)
+   Bloomberg APAE ┘            │
+                         ▼
+             normalización sin pérdida
+                         │
+                         ▼
+   ESMA + GLEIF ──► universo (bonos corporativos ES, fail-closed)
+                         │
+                         ▼
+        libro de eventos (ciclo de vida, append-only)
+                         │
+                         ▼
+     cinta auditable local (Parquet) ──► verificación y
+                                         divergencia entre fuentes
+```
 
-G2-A1 input authority is verified: sealed profiles, exact attestations,
-append-only admission planning and the pinned G1 origin import.
-See the [offline input guide](docs/g2-input-authority.md) and
-[implementation evidence](evidence/g2-a1/G2-A1_validation.json).
-Timed references, incremental builds, historical views and prospective
-operational evidence remain subsequent G2 work.
+Cada paso guarda en `evidence/` solo metadatos (hashes, recuentos, logs);
+los datos de las fuentes nunca se suben a este repositorio. CI es offline y
+trabaja con fixtures sintéticas.
 
-[`G3`](docs/gates/G3.md) is a **draft** specification for ISO 20022
-consolidated-tape compatibility: project an admitted tape into the CTP
-message model, validate it structurally and in round-trip against a pinned,
-timed schema snapshot, and declare an offline benchmark interface for the
-future official EU bonds tape. It does not consume a live CTP and claims no
-coverage or conformance. Its freeze (`g3-freeze-v0`) is pending review and
-merge. The interactive screen and discrepancy monitor belong to G4, not G3;
-see the [proposal admissibility note](docs/ctp-lab-proposal-admissibility.md).
+## Uso local
 
-## Hard rules
-
-These are enforced, not aspirational (see [`AGENTS.md`](AGENTS.md)):
-
-- **No provider data in this repository.** Raw payloads live only in the
-  gitignored `data/` directory. `tools/check_hygiene.py` scans tracked files
-  for payload shapes and known credential patterns in CI (best-effort
-  detection, not proof of absence).
-- **Evidence is metadata, never payload.** `evidence/` holds manifests,
-  SHA-256 hashes, counts, timestamps, and sanitized logs only.
-- **CI is offline.** Tests use synthetic fixtures and injected HTTP getters;
-  CI never contacts BME or Bloomberg.
-- **Raw is immutable.** Captured files are write-once; a hash collision on
-  an existing identity raises `WriteOnceConflict` rather than overwriting.
-
-## Installation
-
-Requires Python 3.11+.
+Requiere Python 3.11+.
 
 ```bash
-pip install -e .          # runtime only
-pip install -e ".[dev]"   # + pytest and ruff
+pip install -e ".[dev]"        # instala con pytest y ruff
+python -m pytest               # suite de tests offline
+ruff check .                   # lint
+python tools/check_hygiene.py  # guarda de higiene del repositorio
 ```
 
-## Usage
-
-All acquisition commands run in the **operator environment** (they perform
-live network requests). They write raw payloads under `data/` and metadata
-under `evidence/`.
+Los comandos de adquisición se ejecutan en el entorno del operador (hacen
+peticiones reales a las fuentes) y escriben en `data/` (gitignored) y
+`evidence/` (solo metadatos):
 
 ```bash
-# G0-A1 — one-shot acquisition smoke (latest object per source by default)
-omt-g0a1 --source all --max-objects 1
-
-# G0-A2 — idempotence: replay captured bytes, verify zero state change
-omt-g0a2
-
-# G0-A3 — scheduled capture runner (designed for cron/systemd timers)
-omt-g0a3 --mode poll
-omt-g0a3 --mode rolling
-
-# F-009 — validate the frozen universe sample against local FITRS/FIRDS/GLEIF
-omt-sample-validation evidence/g0-b1/F-009_frozen_sample_validation.yaml \
-    --fitrs <fitrs-file> --firds <firds-file> --gleif-cache <dir> \
-    --manifest fixtures/universe/universe_manifest.yaml
+omt-g0a1 --source all --max-objects 1   # captura puntual de prueba
+omt-g0a2                                # idempotencia: repetir y verificar
+omt-g0a3 --mode poll                    # captura programada (cron/systemd)
 ```
 
-Every command accepts `--help`. Source endpoints and retrieval intervals are
-configured in [`config/sources/`](config/sources), never hard-coded. The
-descriptors are a runtime resource: they ship inside the wheel (as the
-`config.sources` package), so an installed `omt-g0a1`/`omt-g0a3`
-loads them without a checkout and regardless of the working directory.
-`--config-dir` overrides the packaged descriptors explicitly; a missing or
-invalid descriptor set fails closed with `ConfigError`.
+Todo comando acepta `--help`. Para operar la captura de forma continua,
+consulta el runbook de [`ops/A3-runbook.md`](ops/A3-runbook.md) y las
+unidades de referencia de [`ops/systemd/`](ops/systemd).
 
-### Audit the local tape (offline)
+La especificación detallada del proyecto está en
+[`docs/gates/`](docs/gates); el flujo de trabajo de contribución, en
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Cuestiones de seguridad, en
+[`SECURITY.md`](SECURITY.md).
 
-```bash
-python -m metrics.g1c2 --tape-dir data/g1/tape --at 2026-09-23T00:00:00Z
-omt-explain --tape-dir data/g1/tape --authority-dir . --chain '<chain-id>'
-omt-verify data/g1/tape --authority-dir .
-omt-fragmentation --tape-dir data/g1/tape --authority-dir . \
-    --at 2026-09-24T07:00:00Z --out evidence/g1-d2
-```
+## Licencia
 
-`--authority-dir` points to a root containing the curated `evidence/` layout.
-For an installed wheel outside a checkout, provide that root and the local
-tape explicitly. Missing or changed pinned metadata fails closed; it never
-falls back to another authority root. The wheel contains code and source
-descriptors, not evidence or provider data.
-
-Self-verification checks the tape and declared metadata; it emits full
-provenance `NOT_RUN`. To authenticate original input bytes as well, supply
-`--bundle`, `--fitrs`, `--firds` and `--gleif-dir` to `omt-verify`.
-Two equivalent materializations are required separately for reproducibility.
-
-### Scheduling
-
-Reference systemd units live in [`ops/systemd/`](ops/systemd); the operator
-runbook is [`ops/A3-runbook.md`](ops/A3-runbook.md). A3 serializes concurrent
-runs with an on-disk lock (`fcntl` on POSIX, `msvcrt` on Windows) and records
-`SKIPPED_LOCKED` events in `data/a3/journal.jsonl`.
-Operational A3 manifests default to `data/a3/evidence/g0-a3/runs/`;
-versioned `evidence/` holds curated gate artifacts only.
-
-## Development
-
-```bash
-pip install -e ".[dev]"
-
-python -m pytest              # offline test suite
-ruff check .                  # lint (rule set pinned in pyproject.toml)
-python tools/check_hygiene.py # tracked-file guard: payloads, evidence shape, secret patterns
-```
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the task-contract workflow.
-
-## Repository layout
-
-```
-collectors/     acquisition: sources/, storage, harness, A1/A2/A3 runners
-normalization/  lossless source->normalized mapping, timestamps, quantities
-universe/       es_legal_issuer_v1 resolution, FITRS/FIRDS/GLEIF parsers
-lifecycle/      append-only event ledger, duplicates, evidence
-metrics/        authenticated tape, as-of/explain/verify, observed fragmentation
-fixtures/       synthetic fixtures (no provider payloads)
-config/sources/ per-source endpoints and retrieval intervals
-evidence/       metadata-only gate evidence (manifests, hashes, logs)
-ops/            operator runbook and systemd units
-tools/          repository hygiene guard
-docs/gates/     frozen gate specifications (authoritative)
-docs/legal/     per-source terms-of-use classification
-tests/          offline, fixture-based test suite
-```
-
-## Security
-
-See [`SECURITY.md`](SECURITY.md). All provider XML is parsed with
-`defusedxml`; the live transport (`collectors/net.py`) restricts fetches to
-per-source `allowed_hosts` over `http`/`https`, refuses non-public resolved
-addresses, and re-validates every redirect hop.
-
-## License
-
-MIT — see [`LICENSE`](LICENSE). The license covers the repository's code,
-fixtures, and documentation **only**. Third-party data and source materials
-(BME, Bloomberg, ESMA, GLEIF, …) remain subject to their respective terms of
-use — see [`NOTICE`](NOTICE) and [`docs/legal/`](docs/legal/).
+MIT — ver [`LICENSE`](LICENSE). La licencia cubre solo el código, las
+fixtures y la documentación de este repositorio; los datos y materiales de
+terceros (BME, Bloomberg, ESMA, GLEIF, …) están sujetos a sus propios
+términos de uso — ver [`NOTICE`](NOTICE) y [`docs/legal/`](docs/legal).
