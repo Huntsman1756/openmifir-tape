@@ -1,0 +1,85 @@
+# docs/legal/g3_artifact_classification.yaml
+# G3-L1 artifact classification table. Authority: docs/gates/G3.md#G3-L.
+# Snapshot date: 2026-10-17. Statuses: PASS | FAIL | UNRESOLVED.
+#
+# EXTENDS the G0-L discipline WITHOUT changing any G0-L status. The G0-L1 table
+# (docs/legal/artifact_classification.yaml) is frozen and untouched.
+#
+# This file contains NO provider data, NO schema bytes and NO verbatim terms
+# text: statuses, bases, URLs and dates only. Term summaries live in
+# docs/legal/g3_ctp_schema_access.md; the receipt lives in evidence/g3-l1/.
+
+issue: G3-L1
+gate: G3-L
+snapshot_date: "2026-10-17"
+authority: docs/gates/G3.md#G3-L
+terms_snapshot: docs/legal/g3_ctp_schema_access.md
+
+# Scope note that conditions the classification:
+# The public repository holds metadata only: digests, provenance, manifests and
+# documentation. Schema files stay under data/ (gitignored). CTP output is not
+# consumed. Where a class is not PASS-verified, only digests, provenance and the
+# public location are held.
+fail_closed_rule: >-
+  Where vendoring is not PASS-verified, the repository holds only digests,
+  provenance and the public location, and the schema files remain under data/.
+
+artifact_classes:
+  SCHEMA_ARTIFACT_VENDORING: >-
+    May the pinned ISO 20022 schema files be committed to the repository, or only
+    referenced by digest and public location?
+  CTP_OUTPUT_REDISTRIBUTION: >-
+    May consolidated tape output be stored and republished?
+  DERIVED_MESSAGE_PUBLICATION: >-
+    May ISO 20022 instances projected from provider-derived data be published?
+
+classes:
+  SCHEMA_ARTIFACT_VENDORING: UNRESOLVED
+  CTP_OUTPUT_REDISTRIBUTION: UNRESOLVED
+  DERIVED_MESSAGE_PUBLICATION: FAIL
+
+bases:
+  SCHEMA_ARTIFACT_VENDORING: >-
+    The ISO 20022 terms state the material is intended to be reproduced freely
+    under the ISO 20022 IPR Policy, subject to carrying a non-official /
+    sole-source statement. That points toward PASS, but three items remain open:
+    the grant is a licence to "use" with no express redistribution clause; ISO's
+    site-wide copyright (written permission required; AI/ML restriction) conflicts
+    with the ISO 20022 property; and the message-set/submission pages
+    (iso20022.org/message-set/1253, .../submission-status/2838) returned HTTP 403
+    to automated retrieval on 2026-10-17, so the artifact-specific terms were not
+    read directly. Not PASS-verified => UNRESOLVED, fail closed: only digests,
+    provenance and the public location are held; schema files stay under data/.
+  CTP_OUTPUT_REDISTRIBUTION: >-
+    No statutory prohibition and no statutory right to republish. Redistribution
+    is contemplated as commercial licensing: the access act recognises data
+    redistributors as a client category and sets per-client fee rules. Access is
+    free of charge only for retail, academics, civil society and competent
+    authorities (MiFIR Art. 27h), and free-of-charge access is not a republication
+    right. Definitive terms sit in the bonds CTP's market data policy, which is
+    not yet published (the bonds CTP is selected but not authorised). UNRESOLVED;
+    the CTP status stays NOT_CONSUMED.
+  DERIVED_MESSAGE_PUBLICATION: >-
+    Publishing ISO 20022 instances projected from observed trades would emit
+    provider-derived economic values. G0-L1 already classifies BME historical
+    archive republication as FAIL (the BME legal disclaimer prohibits
+    redistribution without prior written consent, and no authorisation is held).
+    The derived-message class inherits that prohibition regardless of the ISO 20022
+    schema question, so it is FAIL as-is. This is why the projection emits
+    structural/metadata projections only and never economic values.
+
+preserved_g0l:
+  table: docs/legal/artifact_classification.yaml
+  changed: false
+  note: >-
+    G0-L1 statuses (bme_apa PASS/UNRESOLVED/FAIL; blb_apae UNRESOLVED/UNRESOLVED/
+    UNRESOLVED) are unchanged and are not re-opened by this classification.
+
+summary:
+  classes_total: 3
+  pass: 0
+  fail: 1
+  unresolved: 2
+  unresolved_classes:
+    - SCHEMA_ARTIFACT_VENDORING
+    - CTP_OUTPUT_REDISTRIBUTION

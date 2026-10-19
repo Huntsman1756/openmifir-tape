@@ -1,0 +1,144 @@
+# evidence/g3-l1/G3-L1_summary_manifest.yaml
+# Metadata-only evidence for G3-L1 (Legal classification of schema and CTP
+# artifacts). Authority: docs/gates/G3.md#G3-L.
+# NEVER contains provider payload bytes, schema bytes or verbatim terms text:
+# URLs, dates, statuses and summaries only.
+# Snapshot date: 2026-10-17.
+
+issue:
+  id: G3-L1
+  gate: G3-L
+  authority: docs/gates/G3.md#G3-L
+
+run:
+  id: G3-L1-schema-ctp-classification
+  date: "2026-10-17"
+  terms_snapshot: docs/legal/g3_ctp_schema_access.md
+  classes_total: 3
+
+artifacts_identified:
+  iso20022_submission:
+    authority: ISO 20022 Registration Authority
+    submission_id: "266"
+    request_name: Consolidated Tape Provider Data Reporting
+    status: Registered and published
+    status_date: "2026-06-12"
+    applies_to: [bonds_ctp, shares_etfs_ctp]
+    confirmed_by: ESMA consolidated-tape page
+    source: https://www.iso20022.org/development/status-iso-20022-submissions
+  eu_act:
+    canonical_citation: Commission Delegated Regulation (EU) 2025/1155
+    commission_reference: C/2025/3102
+    repo_alias: mifir-rts-2025-3102
+    oj_reference: OJ L, 2025/1155, 3.11.2025
+    adopted: "2025-06-12"
+    eli: http://data.europa.eu/eli/reg_del/2025/1155/oj
+    companion_access_act: Commission Delegated Regulation (EU) 2025/1156
+    source: https://eur-lex.europa.eu/eli/reg_del/2025/1155/oj/eng
+
+term_snapshots:
+  iso20022:
+    snapshot_ref: docs/legal/g3_ctp_schema_access.md
+    urls_fetched:
+      - url: https://www.iso20022.org/intellectual-property-rights
+        status: 200
+      - url: https://www.iso20022.org/terms-use
+        status: 200
+      - url: https://www.iso20022.org/development/status-iso-20022-submissions
+        status: 200
+      - url: https://www.iso20022.org/message-set/1253
+        status: 403
+      - url: https://www.iso20022.org/submission-status/2838
+        status: 403
+    artifact_pages_content: UNRESOLVED
+  eu_consolidated_tape:
+    snapshot_ref: docs/legal/g3_ctp_schema_access.md
+    urls_fetched:
+      - url: https://eur-lex.europa.eu/eli/reg_del/2025/1155/oj/eng
+        status: 200
+      - url: https://eur-lex.europa.eu/eli/reg_del/2025/1156/oj/eng
+        status: 200
+      - url: https://www.esma.europa.eu/esmas-activities/markets-and-infrastructure/consolidated-tape-providers
+        status: 200
+
+classification:
+  table_ref: docs/legal/g3_artifact_classification.yaml
+  statuses:
+    SCHEMA_ARTIFACT_VENDORING: UNRESOLVED
+    CTP_OUTPUT_REDISTRIBUTION: UNRESOLVED
+    DERIVED_MESSAGE_PUBLICATION: FAIL
+  classes_total: 3
+  pass: 0
+  fail: 1
+  unresolved: 2
+  # every artifact class carries an explicit status (no blank cells)
+
+preserved_g0l:
+  table: docs/legal/artifact_classification.yaml
+  changed: false
+
+unresolved_items:
+  - id: U-001
+    item: SCHEMA_ARTIFACT_VENDORING
+    why: >-
+      ISO 20022's own terms point toward free reproduction with a non-official /
+      sole-source statement, but the licence is to "use" with no express
+      redistribution clause, ISO's site-wide copyright conflicts with it, and the
+      artifact-specific pages (message-set/1253, submission-status/2838) returned
+      HTTP 403 on 2026-10-17. Not PASS-verified, so vendoring stays UNRESOLVED.
+  - id: U-002
+    item: CTP_OUTPUT_REDISTRIBUTION
+    why: >-
+      No statutory prohibition or grant of republication; redistribution is a
+      commercial licensing activity and the bonds CTP's market data policy is not
+      yet published.
+  - id: U-003
+    item: iso20022_site_wide_ai_ml_restriction
+    why: >-
+      ISO's site-wide copyright restrictions on AI/ML use of ISO content may or
+      may not reach the freely-reproducible ISO 20022 Repository artifacts; not
+      established either way. Recorded as a limitation to track, not resolved.
+  - id: U-004
+    item: bonds_ctp_authorisation
+    why: >-
+      ESMA selected the bonds-tape applicant (Ediphy / fairCT) on 2025-07-03 but
+      the authorisation process is still ongoing; no bonds-tape authorisation has
+      been published. Selection is not authorisation.
+
+findings:
+  - id: F-001
+    title: Repo alias is not the canonical citation
+    severity: RESOLVED
+    detail: >-
+      The act called "mifir-rts-2025-3102" in this repository is Commission
+      Delegated Regulation (EU) 2025/1155 (OJ L, 2025/1155, 3.11.2025). Its
+      companion access act is (EU) 2025/1156. Use the OJ number as canonical.
+  - id: F-002
+    title: Input and output adherence to ISO 20022 is a regulatory requirement
+    severity: RESOLVED
+    detail: >-
+      Input data must adhere to the ISO 20022 methodology; output must include a
+      GUI plus at least CSV and an ISO-20022-methodology format. This grounds the
+      G3 structural-projection scope without implying any conformance
+      certification.
+  - id: F-003
+    title: Free-of-charge access is not a republication right
+    severity: RESOLVED
+    detail: >-
+      Free access applies to retail investors, academics, civil society
+      organisations and competent authorities (access, not redistribution).
+      Republication depends on the CTP's market data terms.
+  - id: F-004
+    title: Derived message publication is fail-closed
+    severity: RESOLVED
+    detail: >-
+      Projected instances would carry provider-derived economic values, already
+      FAIL under G0-L1 for the observed BME source; the class is FAIL as-is and
+      the projection emits no economic values.
+
+hygiene:
+  provider_payloads_in_repo: false
+  schema_bytes_in_repo: false
+  verbatim_terms_in_repo: false
+  g0_l_statuses_changed: false
+  notes: "docs/legal/ and evidence/g3-l1/ hold summaries, URLs, dates and statuses only."
