@@ -128,4 +128,4 @@ After 5 trading days accrue, open the G0-A3 verification issue. Evidence =
 gaps; outages must have catch-up evidence or be classified as unrecoverable
 source-bound gaps). For Bloomberg specifically, verify poll continuity against
 the effective historical depth observed in rolling manifests; do not assume a
-7-day provider archive. Then E1 may run per `g0-issue-series.md` G0-E1.
+7-day provider archive. Then E1 may run per `docs/history/g0-issue-series.md` G0-E1.

@@ -7,7 +7,7 @@ tests/fixtures/efd2268_descriptors/*.yaml text eol=lf
 # JSONL/YAML bytes are the semantic identity. Force LF checkouts everywhere so
 # autocrlf can never rewrite committed evidence bytes.
 # (Scoped to g1-* + *.jsonl: older G0 evidence was committed with CRLF blobs;
-# renormalizing those would churn their recorded sidecar hashes — out of scope.)
+# renormalizing those would churn their recorded sidecar hashes â€” out of scope.)
 evidence/**/*.jsonl text eol=lf
 evidence/g1-*/** text eol=lf
 evidence/g0-a3-h2/** text eol=lf
@@ -20,4 +20,6 @@ evidence/g2-a8/** text eol=lf
 evidence/g2-a10/** text eol=lf
 evidence/g2-a1/** text eol=lf
 evidence/g2-a9/** text eol=lf
+evidence/g2-b3/** text eol=lf
 docs/gates/G2.md text eol=lf
+evidence/g2-b4/** text eol=lf
