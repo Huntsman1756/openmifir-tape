@@ -1,0 +1,15 @@
+{
+  "issue_id": "G2-B4",
+  "parent_issue": 48,
+  "authority": "docs/gates/G2.md#G2-B",
+  "state": "LOCAL_CHECKS_PASSED_CI_PENDING",
+  "focused_total": 66,
+  "new_timeline_tests": 7,
+  "ruff": "passed",
+  "runtime_harness": "Synthetic complete bundles: exact replay, no future/family carry-forward, unavailable newer family, episode and equal-time conflicts, sealed interval and reordered-state rejection.",
+  "rollback": "Remove timeline module and tests; no persisted state or operator changes.",
+  "limits": [
+    "Metadata admission planning; content validation remains dependent B1 work",
+    "No provider acquisition or G2 PASS"
+  ]
+}

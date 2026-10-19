@@ -48,6 +48,15 @@ def text(value: Any, field: str) -> str:
     return value
 
 
+def strict_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise AuthorityError("duplicate journal key")
+        result[key] = value
+    return result
+
+
 def fingerprint(value: Any, size: int = 64) -> str:
     if not isinstance(value, str) or not re.fullmatch(f"[0-9a-f]{{{size}}}", value):
         raise AuthorityError(f"expected lowercase {size}-hex fingerprint")
